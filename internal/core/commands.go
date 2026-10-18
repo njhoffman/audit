@@ -152,11 +152,23 @@ type PackagesScanner struct {
 	Meta MetaStore
 	// Refresh, when set, updates the cache from the registries before the
 	// checks run.
-	Refresh           *RegistryRefresh
+	Refresh *RegistryRefresh
+	// Updates, when set, supplies the last update run for the report and
+	// failed update attempts for the outdated findings.
+	Updates           UpdateStore
 	UnmaintainedAfter time.Duration
 	// Now is the scan's clock; zero means time.Now.
-	Now   time.Time
-	scope string
+	Now time.Time
+	// ScanEnv is the environment the last Scan ran in, so follow-up commands
+	// (audit packages update) run against the same PATH.
+	ScanEnv *exec.Env
+	scope   string
+}
+
+// UpdateStore holds package update runs (implemented by *store.Store).
+type UpdateStore interface {
+	LastUpdate(ctx context.Context) (*packages.Update, error)
+	UpdateFailures(ctx context.Context) (map[string]packages.UpdateFailure, error)
 }
 
 // MetaStore holds cached registry data (implemented by *store.Store).
@@ -255,6 +267,7 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 			env, source = le, "login "+s.LoginShell
 		}
 	}
+	s.ScanEnv = env
 	rep.Phase("collecting packages", len(s.Managers))
 	invs := packages.CollectAll(ctx, env, s.Managers, func(inv packages.Inventory) { rep.Step(inv.Manager) })
 	if err := ctx.Err(); err != nil {
@@ -283,9 +296,23 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 		}
 		regStats = append(regStats, registryAge(invs, metas, now))
 	}
+	var failures map[string]packages.UpdateFailure
+	if s.Updates != nil {
+		last, err := s.Updates.LastUpdate(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("load last update: %w", err)
+		}
+		if last != nil {
+			regStats = append(regStats, run.Stat{Group: "update", Name: "last",
+				Value: last.FinishedAt.Local().Format("2006-01-02 15:04") + ": " + last.Summary()})
+		}
+		if failures, err = s.Updates.UpdateFailures(ctx); err != nil {
+			return nil, fmt.Errorf("load update failures: %w", err)
+		}
+	}
 	rep.Phase("checking packages", 0)
 	state := &packages.State{Ctx: ctx, Env: env, Inventories: invs, ScanDirs: s.ScanDirs,
-		Meta: metas, UnmaintainedAfter: s.UnmaintainedAfter, Now: now}
+		Meta: metas, UnmaintainedAfter: s.UnmaintainedAfter, Now: now, UpdateFailures: failures}
 	fs := packages.Analyze(state)
 	if envFinding != nil {
 		fs = append(fs, *envFinding)

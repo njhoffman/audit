@@ -80,3 +80,25 @@ func TestNopAndConcurrentSteps(t *testing.T) {
 	}
 	b.Done()
 }
+
+func TestLiner(t *testing.T) {
+	var out syncBuf
+	b := NewBar(&out, func() int { return 200 })
+	b.Phase("updating", 2)
+	Status(b, "uv:ruff 0.9.0 -> 0.9.5")
+	if line := ansi.Strip(b.Line()); !strings.Contains(line, "0/2") || !strings.Contains(line, "uv:ruff") {
+		t.Errorf("status should name the item without counting it: %q", line)
+	}
+	Println(b, nil, "ok  uv:ruff")
+	if !strings.Contains(out.String(), "\r\x1b[2Kok  uv:ruff\n") {
+		t.Errorf("line not printed above the bar: %q", out.String())
+	}
+	b.Done()
+
+	var plain syncBuf
+	Status(Nop, "ignored")
+	Println(Nop, &plain, "ok  uv:ruff")
+	if plain.String() != "ok  uv:ruff\n" {
+		t.Errorf("without a bar the line goes to the writer: %q", plain.String())
+	}
+}

@@ -39,6 +39,9 @@ type State struct {
 	UnmaintainedAfter time.Duration
 	// Now dates release ages.
 	Now time.Time
+	// UpdateFailures holds each package's last update attempt, by Key, when
+	// it failed; the outdated findings mention it.
+	UpdateFailures map[string]UpdateFailure
 }
 
 func (s *State) inv(manager string) *Inventory {

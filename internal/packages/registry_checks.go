@@ -2,6 +2,7 @@ package packages
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/njhoffman/audit/internal/finding"
@@ -57,27 +58,7 @@ func (s *State) withMeta() []metaItem {
 func subject(p Package) string { return p.Manager + ":" + p.ID() }
 
 // UpdateHint is the command that updates p to its latest release.
-func UpdateHint(p Package) string {
-	switch p.Manager {
-	case "uv":
-		return "uv tool upgrade " + p.Name
-	case "pnpm":
-		return "pnpm add -g " + p.Name + "@latest"
-	case "cargo":
-		return "cargo install --locked " + p.Name
-	case "go":
-		pkg := p.Source
-		if pkg == "" {
-			pkg = p.Ident
-		}
-		return "go install " + pkg + "@latest"
-	case "gem":
-		return "gem update --user-install " + p.Name
-	case "gh":
-		return "gh extension upgrade " + p.Name
-	}
-	return ""
-}
+func UpdateHint(p Package) string { return strings.Join(UpdateCommand(p), " ") }
 
 // ManagerUpdateHint updates every package of a manager at once.
 var ManagerUpdateHint = map[string]string{
@@ -151,6 +132,11 @@ func outdated(major bool) func(*State) []finding.Finding {
 				}
 				f.Group = &finding.Group{ID: it.Manager, Title: fmt.Sprintf("Update %d outdated %s %s", n, it.Manager, noun),
 					Hint: ManagerUpdateHint[it.Manager]}
+			}
+			// Grouped findings become one task listing their messages, so the
+			// note goes in the message rather than the details.
+			if uf, ok := s.UpdateFailures[it.Key()]; ok && uf.From == it.Version {
+				f.Message += fmt.Sprintf("; last update attempt failed on %s: %s", uf.At.UTC().Format(time.DateOnly), uf.Reason)
 			}
 			out = append(out, f)
 		}

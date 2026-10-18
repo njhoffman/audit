@@ -59,7 +59,7 @@ old it is. --tag, --find and --outdated filter the inventory and imply
 	fl.BoolVarP(&q.Outdated, "outdated", "u", false, "list only packages behind their latest release (implies --list)")
 	f.impliesList = func() bool { return !q.Empty() }
 	f.jsonExtra = func(ctx context.Context, r *run.Run) (any, error) { return a.annotated(ctx, r, q) }
-	c.AddCommand(newPackagesRegistryCmd(a), newPackagesInfoCmd(a), newPackagesTagCmd(a))
+	c.AddCommand(newPackagesRegistryCmd(a), newPackagesUpdateCmd(a), newPackagesInfoCmd(a), newPackagesTagCmd(a))
 	return c
 }
 
@@ -69,8 +69,29 @@ func (a *app) packagesScanner(managers []string) (*core.PackagesScanner, error) 
 	if err != nil {
 		return nil, err
 	}
-	s.Meta, s.Now = a.store, timeNow()
+	s.Meta, s.Updates, s.Now = a.store, a.store, timeNow()
 	return s, nil
+}
+
+// registryRefresh is the configured registry lookup, limited to refs when
+// any are given.
+func (a *app) registryRefresh(refs []packages.Ref, force bool) *core.RegistryRefresh {
+	rc := a.cfg.Packages.Registry
+	return &core.RegistryRefresh{
+		Options: registry.Options{MaxAge: rc.MaxAge, MetadataMaxAge: rc.MetadataMaxAge, Concurrency: rc.Concurrency,
+			Timeout: rc.Timeout, Force: force},
+		UserAgent: "audit/" + version.Version + " (+https://github.com/njhoffman/audit)",
+		Only:      refs,
+		Looker:    a.looker,
+	}
+}
+
+func parseRefs(args []string) []packages.Ref {
+	refs := make([]packages.Ref, len(args))
+	for i, arg := range args {
+		refs[i] = packages.ParseRef(arg)
+	}
+	return refs
 }
 
 // githubUser is the login whose repositories count as "mine": the config
@@ -180,17 +201,8 @@ removed with audit packages tag -d are not put back without --ai-retag.`,
 			if err != nil {
 				return err
 			}
-			rc := a.cfg.Packages.Registry
-			refs := make([]packages.Ref, len(args))
-			for i, arg := range args {
-				refs[i] = packages.ParseRef(arg)
-			}
-			s.Refresh = &core.RegistryRefresh{
-				Options: registry.Options{MaxAge: rc.MaxAge, MetadataMaxAge: rc.MetadataMaxAge, Concurrency: rc.Concurrency,
-					Timeout: rc.Timeout, Force: force},
-				UserAgent: "audit/" + version.Version + " (+https://github.com/njhoffman/audit)",
-				Only:      refs,
-			}
+			refs := parseRefs(args)
+			s.Refresh = a.registryRefresh(refs, force)
 			a.githubUser(ctx, true)
 			res, err := a.engine.Execute(ctx, s, a.progress(!asJSON))
 			if err != nil {

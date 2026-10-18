@@ -17,6 +17,10 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **packages** **registry** [**-M** _managers_] [**-F**] [**-a**|**-A**] [**-j**|**-l**] [_package_...]
 
+**audit** **packages** **update** [**-M** _managers_] [**-N**] [**-y**] [**-m**] [**-x**] [**-j**] [_package_...]
+
+**audit** **packages** **update** **-L** [**-j**]
+
 **audit** **packages** **info** [**-j**] _package_
 
 **audit** **packages** **tag** [**-d**] [**-j**] [_package_ [_tag_...]]
@@ -48,6 +52,11 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **packages registry** [_package_...]
 :   Looks installed packages up on PyPI, npm, crates.io, the Go module proxy, rubygems.org and GitHub (through **gh**), caches the latest version, release date, description, repository, homepage, license, keywords and deprecation, archive and yank status, then rescans so findings and tasks reflect it. Entries younger than **packages.registry.max_age** are reused unless **-F** is given; named packages are always looked up. Descriptions are refreshed after **packages.registry.metadata_max_age** where that costs extra requests. Go modules matched by **GONOPROXY**/**GOPRIVATE**, or with **GOPROXY** set to **direct** or **off**, are not looked up. Requests to crates.io are spaced one second apart, as its crawler policy asks.
+
+**packages update** [_package_...]
+:   Updates packages behind their latest release, one at a time, with each manager's own command: **uv tool upgrade**, **pnpm add -g** _name_**@latest**, **cargo install \-\-locked**, **go install** _package_**@latest** (each Go binary by its own package path), **gem update \-\-user-install** and **gh extension upgrade**. The inventory is scanned and the registry cache refreshed first, then the plan is printed and confirmed with **[y/N]**; without a terminal, **-y** is required. Without packages, every outdated package is planned except major releases (**-m** includes them), **packages.update.exclude** entries and packages installed from git or a path. Named packages are always listed, with the reason when one is skipped; a name that matches nothing is an error.
+
+    Each update prints a status line under the progress bar. A command that exits 0 counts as updated only when a fresh inventory shows a new version; one that leaves the version unchanged, or removes the package, is a failure. Commands are stopped after **packages.update.timeout**. Failures are itemized with the command and the tail of its output, and saved with the update; the exit status is 1 when any failed. The inventory is rescanned afterwards so tasks follow, a failed attempt is noted on the package's **registry.outdated** item until its version changes, and the **packages** report shows the last update's counts. **-L** shows the last update again.
 
 **packages info** _package_
 :   Shows the cached details and tags of one package from the saved inventory, without scanning.
@@ -176,6 +185,29 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 **-j**, **\-\-json** / **-l**, **\-\-list**
 :   Print the result as JSON, or as findings plus the inventory, instead of the report.
 
+# PACKAGES UPDATE OPTIONS
+
+**-M**, **\-\-manager** _names_
+:   Update only these managers.
+
+**-N**, **\-\-dry-run**
+:   Print the plan with the command each package would run, then stop.
+
+**-y**, **\-\-yes**
+:   Update without asking.
+
+**-m**, **\-\-major**
+:   Also update across major releases.
+
+**-x**, **\-\-stop-on-error**
+:   Skip the remaining updates after the first failure. By default every planned update runs.
+
+**-L**, **\-\-last**
+:   Show the last update with every result and the output of its failures; update nothing. Takes no packages, **-N** or **-y**.
+
+**-j**, **\-\-json**
+:   Print the plan (with **-N**) or the update as JSON.
+
 # PACKAGES TAG OPTIONS
 
 **-d**, **\-\-delete**
@@ -251,6 +283,9 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
         concurrency: 8
         timeout: 10s           # per package
         unmaintained_after: 26280h  # 3 years; 0 disables registry.unmaintained
+      update:
+        timeout: 15m           # per package update command
+        exclude: []            # packages never updated, e.g. [cargo:ripgrep, black]
       tags: [cli, tui, gui, library, lsp, formatter, linter, ...]  # AI tag vocabulary
     environment:
       shells: [zsh, bash]
@@ -282,6 +317,16 @@ Refresh the registry cache, tag new packages with AI, then list outdated Python 
     audit packages registry -a
     audit packages -u -t uv
 
+Preview the updates, run them, then show the failures again:
+
+    audit packages update -N
+    audit packages update
+    audit packages update -L
+
+Update one package across a major release without asking:
+
+    audit packages update -m -y cargo:ripgrep
+
 Tag a package and show it:
 
     audit packages tag ripgrep search
@@ -305,7 +350,7 @@ Mark task 12 done with a note:
 :   Configuration, created with the defaults on first run.
 
 **~/.local/share/audit/audit.db**
-:   Runs, findings, tasks, the package registry cache and tags, and the AI response cache.
+:   Runs, findings, tasks, the package registry cache and tags, saved package updates, and the AI response cache.
 
 **~/.local/share/audit/reports/**
 :   HTML reports and **index.html**.

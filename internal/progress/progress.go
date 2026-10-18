@@ -27,6 +27,31 @@ type Reporter interface {
 	Done()
 }
 
+// Liner is implemented by reporters that can show what is running before it
+// finishes and print lines above the bar.
+type Liner interface {
+	// Status names the unit in progress without counting it done.
+	Status(item string)
+	// Println prints line above the bar and redraws it.
+	Println(line string)
+}
+
+// Status calls r.Status when r is a Liner.
+func Status(r Reporter, item string) {
+	if l, ok := r.(Liner); ok {
+		l.Status(item)
+	}
+}
+
+// Println prints line above r's bar when r is a Liner, and to w otherwise.
+func Println(r Reporter, w io.Writer, line string) {
+	if l, ok := r.(Liner); ok {
+		l.Println(line)
+		return
+	}
+	_, _ = io.WriteString(w, line+"\n")
+}
+
 // Nop discards progress.
 var Nop Reporter = nop{}
 
@@ -100,6 +125,25 @@ func (b *Bar) Step(item string) {
 	b.done++
 	b.item = item
 	b.draw()
+}
+
+// Status implements Liner.
+func (b *Bar) Status(item string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.item = item
+	b.draw()
+}
+
+// Println implements Liner.
+func (b *Bar) Println(line string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	_, _ = io.WriteString(b.out, "\r\x1b[2K"+line+"\n")
+	b.drawn = false
+	if b.stop != nil {
+		b.draw()
+	}
 }
 
 // Done implements Reporter.

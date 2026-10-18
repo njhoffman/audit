@@ -112,6 +112,7 @@ type PackagesConfig struct {
 	Managers []string       `mapstructure:"managers" yaml:"managers"`
 	ScanDirs []string       `mapstructure:"scan_dirs" yaml:"scan_dirs"`
 	Registry RegistryConfig `mapstructure:"registry" yaml:"registry"`
+	Update   UpdateConfig   `mapstructure:"update" yaml:"update"`
 	// Tags is the vocabulary AI tagging chooses from.
 	Tags []string `mapstructure:"tags" yaml:"tags"`
 }
@@ -128,6 +129,14 @@ type RegistryConfig struct {
 	// UnmaintainedAfter flags packages with no release for this long; 0
 	// disables the check.
 	UnmaintainedAfter time.Duration `mapstructure:"unmaintained_after" yaml:"unmaintained_after"`
+}
+
+// UpdateConfig configures `audit packages update`.
+type UpdateConfig struct {
+	// Timeout bounds one package's update command.
+	Timeout time.Duration `mapstructure:"timeout" yaml:"timeout"`
+	// Exclude lists packages (name or manager:name) never updated.
+	Exclude []string `mapstructure:"exclude" yaml:"exclude"`
 }
 
 // EnvironmentConfig configures `audit environment`.
@@ -215,6 +224,8 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("packages.registry.concurrency", 8)
 	v.SetDefault("packages.registry.timeout", 10*time.Second)
 	v.SetDefault("packages.registry.unmaintained_after", 3*365*24*time.Hour)
+	v.SetDefault("packages.update.timeout", 15*time.Minute)
+	v.SetDefault("packages.update.exclude", []string{})
 	v.SetDefault("packages.tags", DefaultTags)
 	v.SetDefault("environment.shells", DefaultShells)
 	v.SetDefault("environment.startup_files", DefaultStartupFiles)
@@ -292,6 +303,7 @@ func (c *Config) validate() error {
 		{"packages.registry.metadata_max_age", float64(c.Packages.Registry.MetadataMaxAge)},
 		{"packages.registry.concurrency", float64(c.Packages.Registry.Concurrency)},
 		{"packages.registry.timeout", float64(c.Packages.Registry.Timeout)},
+		{"packages.update.timeout", float64(c.Packages.Update.Timeout)},
 	}
 	for _, p := range positive {
 		if p.n <= 0 {
@@ -303,6 +315,11 @@ func (c *Config) validate() error {
 	}
 	if c.Packages.Registry.UnmaintainedAfter < 0 {
 		return fmt.Errorf("packages.registry.unmaintained_after must be 0 (off) or more, got %s", c.Packages.Registry.UnmaintainedAfter)
+	}
+	for _, e := range c.Packages.Update.Exclude {
+		if strings.TrimSpace(e) == "" {
+			return errors.New("packages.update.exclude: entries must name a package")
+		}
 	}
 	for _, t := range c.Packages.Tags {
 		if t == "" || strings.Join(strings.Fields(strings.ToLower(t)), "-") != t {
@@ -461,6 +478,11 @@ packages:
     concurrency: 8
     timeout: 10s             # per package
     unmaintained_after: 26280h   # 3 years without a release; 0 disables
+  # audit packages update runs each manager's own update command per package.
+  update:
+    timeout: 15m             # per package; cargo builds from source
+    # Packages never updated, as name or manager:name (e.g. cargo:ripgrep).
+    exclude: []
   # Vocabulary that audit packages registry --ai-tags chooses from.
   tags: [cli, tui, gui, library, lsp, formatter, linter, compiler, build, testing, debugging,
          profiling, docs, git, github, http, network, database, cloud, container, kubernetes,

@@ -20,6 +20,7 @@ import (
 	"github.com/njhoffman/audit/internal/log"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
+	"github.com/njhoffman/audit/internal/registry"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/store"
@@ -52,10 +53,16 @@ type app struct {
 	opener func(path string) error
 	// interactive reports whether stdin and stdout are terminals.
 	interactive func() bool
+	// in answers confirmation prompts.
+	in io.Reader
+	// runner and looker replace the command runner and the registry client
+	// when set (tests).
+	runner exec.Runner
+	looker registry.Looker
 }
 
 func newApp(out, errOut io.Writer) *app {
-	return &app{out: out, errOut: errOut, opener: xdgOpen, interactive: func() bool {
+	return &app{out: out, errOut: errOut, in: os.Stdin, opener: xdgOpen, interactive: func() bool {
 		return isTerminal(out) && term.IsTerminal(int(os.Stdin.Fd())) // #nosec G115 -- fd fits in int
 	}}
 }
@@ -92,6 +99,9 @@ func (a *app) load() error {
 	a.store = st
 	host, _ := os.Hostname()
 	a.env = exec.FromOS()
+	if a.runner != nil {
+		a.env.Runner = a.runner
+	}
 	a.engine = &core.Engine{Store: st, Config: cfg, Host: host}
 	return nil
 }

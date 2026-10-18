@@ -112,6 +112,7 @@ func TestLoadErrors(t *testing.T) {
 		"packages: {registry: {max_age: 0s}}", "packages: {registry: {metadata_max_age: -1h}}",
 		"packages: {registry: {concurrency: 0}}", "packages: {registry: {timeout: 0s}}",
 		"packages: {registry: {unmaintained_after: -1h}}", "packages: {tags: [Has Space]}", "packages: {tags: [UPPER]}",
+		"packages: {update: {timeout: 0s}}", `packages: {update: {exclude: [""]}}`,
 	} {
 		write(t, bad, body)
 		if _, _, err := Load(bad); err == nil {

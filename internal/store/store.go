@@ -96,6 +96,29 @@ CREATE TABLE IF NOT EXISTS package_tags (
 	source TEXT NOT NULL,
 	PRIMARY KEY (manager, id, tag)
 );
+CREATE TABLE IF NOT EXISTS updates (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	host TEXT NOT NULL DEFAULT '',
+	started_at TEXT NOT NULL,
+	finished_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS update_items (
+	update_id INTEGER NOT NULL REFERENCES updates(id) ON DELETE CASCADE,
+	seq INTEGER NOT NULL,
+	manager TEXT NOT NULL,
+	id TEXT NOT NULL,
+	name TEXT NOT NULL,
+	from_version TEXT NOT NULL DEFAULT '',
+	to_version TEXT NOT NULL DEFAULT '',
+	latest TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL,
+	command TEXT NOT NULL DEFAULT '',
+	code INTEGER NOT NULL DEFAULT 0,
+	duration_ms INTEGER NOT NULL DEFAULT 0,
+	reason TEXT NOT NULL DEFAULT '',
+	output TEXT NOT NULL DEFAULT '',
+	PRIMARY KEY (update_id, seq)
+);
 CREATE TABLE IF NOT EXISTS llm_cache (
 	hash TEXT PRIMARY KEY,
 	model TEXT NOT NULL,
