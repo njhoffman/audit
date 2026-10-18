@@ -95,8 +95,17 @@ type ServicesConfig struct {
 	UnitFilePerms bool `mapstructure:"unit_file_perms" yaml:"unit_file_perms"`
 }
 
+// Sources of the packages scan environment.
+const (
+	EnvLogin   = "login"
+	EnvProcess = "process"
+)
+
 // PackagesConfig configures `audit packages`.
 type PackagesConfig struct {
+	// Env is where the scan's PATH and variables come from: "login" (a fresh
+	// login shell, the first of environment.shells) or "process" (audit's own).
+	Env      string   `mapstructure:"env" yaml:"env"`
 	Managers []string `mapstructure:"managers" yaml:"managers"`
 	ScanDirs []string `mapstructure:"scan_dirs" yaml:"scan_dirs"`
 }
@@ -170,6 +179,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("system.services.user_units", true)
 	v.SetDefault("system.services.high_restarts", 5)
 	v.SetDefault("system.services.unit_file_perms", true)
+	v.SetDefault("packages.env", EnvLogin)
 	v.SetDefault("packages.managers", DefaultManagers)
 	v.SetDefault("packages.scan_dirs", DefaultScanDirs)
 	v.SetDefault("environment.shells", DefaultShells)
@@ -252,6 +262,9 @@ func (c *Config) validate() error {
 	}
 	if c.System.Services.HighRestarts < 0 {
 		return fmt.Errorf("system.services.high_restarts must be 0 (off) or more, got %d", c.System.Services.HighRestarts)
+	}
+	if c.Packages.Env != EnvLogin && c.Packages.Env != EnvProcess {
+		return fmt.Errorf("packages.env: %q is not %s or %s", c.Packages.Env, EnvLogin, EnvProcess)
 	}
 	switch c.Environment.Shellcheck.Severity {
 	case "error", "warning", "info", "style":
@@ -382,6 +395,10 @@ system:
     unit_file_perms: true
 
 packages:
+  # Where PATH and the other variables come from: login (a fresh login shell,
+  # the first of environment.shells, so a stale terminal session does not
+  # cause false findings) or process (the environment audit was started in).
+  env: login
   managers: [uv, pnpm, cargo, go, gem, gh]
   # Directories of loose executables checked for broken interpreters.
   scan_dirs: [~/.local/bin]

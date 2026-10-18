@@ -12,7 +12,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 |---|---|
 | `audit system` | processes, systemd units, user and group accounts, the journal, dmesg and boot logs, and program configs (sshd, nginx, apache, postgres, docker, cron) |
 | `audit environment` | each configured login shell with and without a terminal: unexpected startup output, which files are sourced, startup time, PATH problems, environment variables, startup script syntax and shellcheck |
-| `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs |
+| `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs; checked against a fresh login shell's PATH and variables, not the terminal's |
 | `audit todo` | the tasks scans create, plus tasks added by hand |
 | `audit history` | saved runs |
 | `audit config` | the effective configuration; `--init` rewrites the default file |
@@ -68,7 +68,7 @@ Errors and criticals become high-priority tasks, warnings medium, notices low, a
 
 `~/.config/audit.yaml` (or `$XDG_CONFIG_HOME/audit.yaml`). The first run creates it with every default written out and commented, so the file doubles as the reference; edit or delete any key. `-c FILE` uses another file instead, and that file is never created for you. `audit config` prints the effective settings, `audit config --init --force` restores the defaults, and any key can also be set from the environment as `AUDIT_<KEY>`, dots as underscores (for example `AUDIT_STALE_WARN=12h`).
 
-Besides history, freshness thresholds, ignore rules and the AI settings, the file sets how many detail lines each finding shows (`display.details`), the system scanner's limits (log lines read, process CPU/memory/thread thresholds, service restart threshold, user units, programs checked) and the environment scanner's shells, startup files, slow-startup threshold and shellcheck severity and excludes.
+Besides history, freshness thresholds, ignore rules and the AI settings, the file sets how many detail lines each finding shows (`display.details`), the system scanner's limits (log lines read, process CPU/memory/thread thresholds, service restart threshold, user units, programs checked) which environment the packages scan uses (`packages.env`: `login` or `process`), and the environment scanner's shells, startup files, slow-startup threshold and shellcheck severity and excludes.
 
 Data lives in `$XDG_DATA_HOME/audit`: `audit.db` (runs, findings, tasks, AI cache) and `reports/` (HTML).
 

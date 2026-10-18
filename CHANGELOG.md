@@ -24,6 +24,7 @@ The project is renamed from `sysaudit` to `audit` and restructured around saved,
 - `audit config` prints the effective configuration; `--init` writes a commented starter file.
 - The first run creates `~/.config/audit.yaml` with every default written out and commented. A file passed with `-c` is never created; a missing one is an error.
 - Config keys `display.details`, `ai.max_details`, `system.log_max_lines`, `system.log_patterns`, `system.programs`, `system.procs.*`, `system.services.*` and `environment.shellcheck.{severity,exclude}`, replacing values that were hard-coded.
+- `packages` runs against the environment of a fresh login shell (`packages.env: login`, the default; `process` restores the old behaviour), so a terminal opened before a PATH change no longer reports stale problems. If the shell cannot start it falls back and reports `packages.login_env`. The summary shows which environment was used.
 - A `justfile` with `build`, `run`, `install`, `test` (runner argument), `test-one`, `cover`, `lint`, `vet`, `fmt`, `fmt-check`, `check`, `manpage` and `clean`.
 
 ### Changed

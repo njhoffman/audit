@@ -69,6 +69,16 @@ func FromOS() *Env {
 	return e
 }
 
+// WithVars returns a copy of e over vars. An OSRunner is rebound so commands
+// see the new variables; other runners (test fakes) are shared.
+func (e *Env) WithVars(vars map[string]string) *Env {
+	n := &Env{Vars: vars, Home: e.Home, Runner: e.Runner}
+	if _, ok := e.Runner.(*OSRunner); ok {
+		n.Runner = NewOSRunner(n)
+	}
+	return n
+}
+
 // Get returns an environment variable ("" when unset).
 func (e *Env) Get(k string) string { return e.Vars[k] }
 

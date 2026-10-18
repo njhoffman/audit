@@ -108,7 +108,7 @@ func TestLoadErrors(t *testing.T) {
 		"history: 0", "stale: {warn: 5h, old: 1h}", "environment: {shells: [fish]}",
 		"display: {details: 0}", "ai: {max_details: -1}", "system: {log_max_lines: 0}",
 		"system: {procs: {high_cpu: 0}}", "system: {services: {high_restarts: -1}}",
-		"environment: {shellcheck: {severity: loud}}",
+		"environment: {shellcheck: {severity: loud}}", "packages: {env: shell}",
 	} {
 		write(t, bad, body)
 		if _, _, err := Load(bad); err == nil {

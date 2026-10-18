@@ -64,6 +64,29 @@ func TestOSRunnerCapturesAndUnsets(t *testing.T) {
 	}
 }
 
+func TestWithVarsRebindsOSRunner(t *testing.T) {
+	dir := t.TempDir()
+	writeExe(t, filepath.Join(dir, "show"), "#!/bin/sh\necho \"$FOO\"\n")
+	e := testEnv(t, "/usr/bin", "/bin")
+	e.Vars["FOO"] = "old"
+	n := e.WithVars(map[string]string{"PATH": dir + ":/usr/bin:/bin", "FOO": "new"})
+	if res := n.Run(context.Background(), "show", nil, Options{}); res.Stdout != "new\n" {
+		t.Errorf("new env should find show on its PATH and pass FOO=new, got %+v", res)
+	}
+	if res := e.Run(context.Background(), "show", nil, Options{}); res.Code != ExitNotFound {
+		t.Errorf("original env must be unchanged, got %+v", res)
+	}
+	if n.Home != e.Home {
+		t.Errorf("home %q, want %q", n.Home, e.Home)
+	}
+
+	f := &Fake{}
+	e.Runner = f
+	if e.WithVars(map[string]string{}).Runner != f {
+		t.Error("a fake runner should be shared")
+	}
+}
+
 func TestOSRunnerNotFoundAndTimeout(t *testing.T) {
 	dir := t.TempDir()
 	writeExe(t, filepath.Join(dir, "slow"), "#!/bin/sh\nexec sleep 5\n")

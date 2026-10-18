@@ -2,16 +2,20 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/njhoffman/audit/internal/config"
+	"github.com/njhoffman/audit/internal/environment"
 	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/llm"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
 	"github.com/njhoffman/audit/internal/store"
 	"github.com/njhoffman/audit/internal/todo"
@@ -295,5 +299,147 @@ func TestNewSystemUsesConfig(t *testing.T) {
 	cfg.System.Programs = []string{"bogus"}
 	if _, err := NewSystem(cfg, nil); err == nil {
 		t.Error("system.programs must reach the scanner")
+	}
+}
+
+type fakeCapturer struct {
+	capture environment.Capture
+	shells  []string
+}
+
+func (f *fakeCapturer) Capture(_ context.Context, shell, mode string) environment.Capture {
+	f.shells = append(f.shells, shell+"/"+mode)
+	return f.capture
+}
+
+// envManager is installed when its binary is on PATH and reports the value
+// of MARK it was collected with as its one package.
+type envManager struct{}
+
+func (envManager) Name() string   { return "fakepm" }
+func (envManager) Binary() string { return "fakepm" }
+func (envManager) Runtime(context.Context, *exec.Env) *packages.Runtime {
+	return nil
+}
+func (envManager) ManagerVersion(context.Context, *exec.Env) string { return "" }
+func (envManager) BinDirs(context.Context, *exec.Env) []string      { return nil }
+func (envManager) Collect(_ context.Context, env *exec.Env) ([]packages.Package, error) {
+	return []packages.Package{{Name: env.Get("MARK")}}, nil
+}
+
+func scanPackages(t *testing.T, s *PackagesScanner) (*Outcome, packages.Data) {
+	t.Helper()
+	out, err := s.Scan(context.Background(), progress.Nop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data packages.Data
+	if err := json.Unmarshal(out.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	return out, data
+}
+
+func stat(out *Outcome, name string) string {
+	for _, s := range out.Stats {
+		if s.Name == name {
+			return s.Value
+		}
+	}
+	return ""
+}
+
+func TestPackagesScanUsesLoginEnvironment(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "fakepm"), []byte("#!/bin/sh\n"), 0o700); err != nil { // #nosec G306 -- test executable
+		t.Fatal(err)
+	}
+	process := &exec.Env{Vars: map[string]string{"PATH": "/nonexistent", "MARK": "process"}, Home: t.TempDir(), Runner: &exec.Fake{}}
+	c := &fakeCapturer{capture: environment.Capture{Env: map[string]string{
+		"PATH": bin, "MARK": "login", "AUDIT_ENV_OUT": "/tmp/x",
+	}}}
+	s := &PackagesScanner{Env: process, Managers: []packages.Manager{envManager{}}, LoginShell: "zsh", Capturer: c}
+
+	out, data := scanPackages(t, s)
+	if len(c.shells) != 1 || c.shells[0] != "zsh/"+environment.ModeNoTTY {
+		t.Errorf("captures %v, want one zsh without a tty", c.shells)
+	}
+	inv := data.Inventories[0]
+	if !inv.Available || len(inv.Packages) != 1 || inv.Packages[0].Name != "login" {
+		t.Errorf("manager should be found on the login PATH and see login vars: %+v", inv)
+	}
+	if got := stat(out, "environment"); got != "login zsh" {
+		t.Errorf("environment stat %q", got)
+	}
+	for _, f := range out.Findings {
+		if f.Check == CheckLoginEnv {
+			t.Errorf("unexpected %s finding: %s", CheckLoginEnv, f.Message)
+		}
+	}
+	if process.Get("MARK") != "process" {
+		t.Error("the process environment must not be modified")
+	}
+}
+
+func TestPackagesScanFallsBackWhenLoginFails(t *testing.T) {
+	for name, cp := range map[string]environment.Capture{
+		"missing": {Code: exec.ExitNotFound, Err: "zsh is not installed"},
+		"timeout": {TimedOut: true, Code: exec.ExitTimeout},
+		"no env":  {Code: 1},
+		"no PATH": {Code: 0, Env: map[string]string{"HOME": "/h"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			process := &exec.Env{Vars: map[string]string{"PATH": "/nonexistent", "MARK": "process"}, Home: t.TempDir(), Runner: &exec.Fake{}}
+			s := &PackagesScanner{Env: process, LoginShell: "zsh", Capturer: &fakeCapturer{capture: cp}}
+			out, _ := scanPackages(t, s)
+			if got := stat(out, "environment"); got != "process (login zsh failed)" {
+				t.Errorf("environment stat %q", got)
+			}
+			var hit *finding.Finding
+			for i := range out.Findings {
+				if out.Findings[i].Check == CheckLoginEnv {
+					hit = &out.Findings[i]
+				}
+			}
+			if hit == nil || hit.Severity != finding.Warning || hit.Command != packages.Command || hit.Subject != "zsh" {
+				t.Fatalf("want a %s warning, got %+v", CheckLoginEnv, out.Findings)
+			}
+		})
+	}
+}
+
+func TestPackagesScanStillUsesLoginEnvWhenStartupFails(t *testing.T) {
+	// A startup file erroring out is reported by audit environment; the
+	// variables the shell did set are still the ones a terminal gets.
+	process := &exec.Env{Vars: map[string]string{"PATH": "/nonexistent"}, Home: t.TempDir(), Runner: &exec.Fake{}}
+	cp := environment.Capture{Code: 1, Env: map[string]string{"PATH": "/usr/bin"}}
+	out, _ := scanPackages(t, &PackagesScanner{Env: process, LoginShell: "bash", Capturer: &fakeCapturer{capture: cp}})
+	if got := stat(out, "environment"); got != "login bash" {
+		t.Errorf("environment stat %q", got)
+	}
+}
+
+func TestNewPackagesEnvSource(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg, _, err := config.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := &exec.Env{Vars: map[string]string{}, Home: t.TempDir()}
+	cfg.Environment.Shells = []string{"bash", "zsh"}
+	s, err := NewPackages(cfg, env, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.LoginShell != "bash" || s.Capturer == nil {
+		t.Errorf("default should start the first configured shell, got %q", s.LoginShell)
+	}
+	cfg.Packages.Env = config.EnvProcess
+	if s, _ = NewPackages(cfg, env, nil); s.LoginShell != "" {
+		t.Errorf("env: process should not start a shell, got %q", s.LoginShell)
+	}
+	cfg.Packages.Env, cfg.Environment.Shells = config.EnvLogin, nil
+	if s, _ = NewPackages(cfg, env, nil); s.LoginShell != "" {
+		t.Errorf("no shells configured should fall back to the process, got %q", s.LoginShell)
 	}
 }

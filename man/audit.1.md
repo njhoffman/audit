@@ -36,7 +36,7 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 :   Starts each configured login shell with and without a terminal, records unexpected output and which startup files are sourced, times start-up, and checks PATH, environment variables and the startup scripts (syntax and shellcheck).
 
 **packages**
-:   Inventories uv, pnpm, cargo, go, gem and gh, and checks for broken or shadowed executables, runtime drift, stale runtime directories and misplaced installs.
+:   Inventories uv, pnpm, cargo, go, gem and gh, and checks for broken or shadowed executables, runtime drift, stale runtime directories and misplaced installs. By default it runs against the environment of a fresh login shell (the first of **environment.shells**), so a terminal opened before a PATH change does not report stale problems; if that shell cannot start, it falls back to its own environment and reports **packages.login_env**.
 
 **todo**
 :   Lists open and in-progress tasks. Subcommands: **show** _ID_, **set** _ID_ _STATUS_ [**-N** _note_], **note** _ID_ _TEXT_, **add** _TITLE_ [**-p** _priority_] [**-C** _command_] [**-H** _hint_] [**-N** _note_], **rm** _ID_ (manual tasks only).
@@ -189,6 +189,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       procs: {top: 10, high_cpu: 80, high_mem: 25, high_threads: 1000}
       services: {user_units: true, high_restarts: 5, unit_file_perms: true}
     packages:
+      env: login               # login (fresh login shell) or process
       managers: [uv, pnpm, cargo, go, gem, gh]
       scan_dirs: [~/.local/bin]
     environment:

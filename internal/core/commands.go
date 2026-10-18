@@ -3,7 +3,9 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/environment"
 	"github.com/njhoffman/audit/internal/exec"
+	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
 	"github.com/njhoffman/audit/internal/run"
@@ -137,8 +140,21 @@ type PackagesScanner struct {
 	Env      *exec.Env
 	Managers []packages.Manager
 	ScanDirs []string
-	scope    string
+	// LoginShell, when set, is started as a fresh login shell and the scan
+	// runs over its environment instead of Env's, so a terminal opened before
+	// a PATH change does not report stale problems.
+	LoginShell string
+	Capturer   ShellCapturer
+	scope      string
 }
+
+// ShellCapturer starts a shell and reports the environment it ends up with.
+type ShellCapturer interface {
+	Capture(ctx context.Context, shell, mode string) environment.Capture
+}
+
+// CheckLoginEnv is the finding raised when the login shell cannot be used.
+const CheckLoginEnv = "packages.login_env"
 
 // NewPackages builds the packages scanner. only restricts it to some of the
 // configured managers.
@@ -159,7 +175,12 @@ func NewPackages(cfg *config.Config, env *exec.Env, only []string) (*PackagesSca
 	for i, d := range cfg.Packages.ScanDirs {
 		dirs[i] = env.Expand(d)
 	}
-	return &PackagesScanner{Env: env, Managers: ms, ScanDirs: dirs, scope: scope}, nil
+	s := &PackagesScanner{Env: env, Managers: ms, ScanDirs: dirs, scope: scope}
+	if cfg.Packages.Env == config.EnvLogin && len(cfg.Environment.Shells) > 0 {
+		s.LoginShell = cfg.Environment.Shells[0]
+		s.Capturer = &environment.OSCapturer{Env: env, Timeout: cfg.Environment.StartupTimeout}
+	}
+	return s, nil
 }
 
 func sameSet(a, b []string) bool {
@@ -183,19 +204,61 @@ func (s *PackagesScanner) Scope() string { return s.scope }
 // Scan implements Scanner.
 func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Outcome, error) {
 	defer rep.Done()
+	env, source, envFinding := s.Env, "process", (*finding.Finding)(nil)
+	if s.LoginShell != "" {
+		rep.Phase("starting a login "+s.LoginShell, 0)
+		le, err := loginEnv(ctx, s.Env, s.Capturer, s.LoginShell)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if err != nil {
+			source = "process (login " + s.LoginShell + " failed)"
+			envFinding = &finding.Finding{
+				Command: packages.Command, Check: CheckLoginEnv, Kind: finding.Issue, Severity: finding.Warning,
+				Subject: s.LoginShell,
+				Message: fmt.Sprintf("could not read the environment of a login %s (%v); checked against audit's own environment instead", s.LoginShell, err),
+				Hint:    "Run `audit environment -r` to see why the shell fails to start, or set packages.env: process.",
+			}
+		} else {
+			env, source = le, "login "+s.LoginShell
+		}
+	}
 	rep.Phase("collecting packages", len(s.Managers))
-	invs := packages.CollectAll(ctx, s.Env, s.Managers, func(inv packages.Inventory) { rep.Step(inv.Manager) })
+	invs := packages.CollectAll(ctx, env, s.Managers, func(inv packages.Inventory) { rep.Step(inv.Manager) })
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	rep.Phase("checking packages", 0)
-	state := &packages.State{Ctx: ctx, Env: s.Env, Inventories: invs, ScanDirs: s.ScanDirs}
+	state := &packages.State{Ctx: ctx, Env: env, Inventories: invs, ScanDirs: s.ScanDirs}
 	fs := packages.Analyze(state)
+	if envFinding != nil {
+		fs = append(fs, *envFinding)
+		finding.Sort(fs)
+	}
 	data, err := json.Marshal(packages.Data{Inventories: invs})
 	if err != nil {
 		return nil, err
 	}
-	return &Outcome{Findings: fs, Stats: packageStats(invs), Data: data}, nil
+	stats := append([]run.Stat{{Name: "environment", Value: source}}, packageStats(invs)...)
+	return &Outcome{Findings: fs, Stats: stats, Data: data}, nil
+}
+
+// loginEnv starts shell as a fresh login shell and returns env over the
+// variables it ends up with. A startup file that exits non-zero still counts
+// as long as the shell got far enough to report its environment.
+func loginEnv(ctx context.Context, env *exec.Env, c ShellCapturer, shell string) (*exec.Env, error) {
+	cp := c.Capture(ctx, shell, environment.ModeNoTTY)
+	switch {
+	case cp.TimedOut:
+		return nil, fmt.Errorf("it did not finish starting in time")
+	case cp.Err != "":
+		return nil, errors.New(cp.Err)
+	case len(cp.Env) == 0 || cp.Env["PATH"] == "":
+		return nil, fmt.Errorf("it exited with status %d before reporting its environment", cp.Code)
+	}
+	vars := maps.Clone(cp.Env)
+	delete(vars, "AUDIT_ENV_OUT")
+	return env.WithVars(vars), nil
 }
 
 func packageStats(invs []packages.Inventory) []run.Stat {
