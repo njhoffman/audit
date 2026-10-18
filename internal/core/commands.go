@@ -155,7 +155,12 @@ type PackagesScanner struct {
 	Refresh *RegistryRefresh
 	// Updates, when set, supplies the last update run for the report and
 	// failed update attempts for the outdated findings.
-	Updates           UpdateStore
+	Updates UpdateStore
+	// Runtimes, when set, supplies the runtime cache and remembers the node
+	// major of the pnpm globals; nil leaves runtime statuses out.
+	Runtimes RuntimeStore
+	// RuntimeRefresh, when set, looks the runtimes up before the checks run.
+	RuntimeRefresh    *RuntimeRefresh
 	UnmaintainedAfter time.Duration
 	// Now is the scan's clock; zero means time.Now.
 	Now time.Time
@@ -169,6 +174,32 @@ type PackagesScanner struct {
 type UpdateStore interface {
 	LastUpdate(ctx context.Context) (*packages.Update, error)
 	UpdateFailures(ctx context.Context) (map[string]packages.UpdateFailure, error)
+}
+
+// RuntimeStore holds the runtime cache and settings (implemented by
+// *store.Store).
+type RuntimeStore interface {
+	RuntimeMeta(ctx context.Context) (map[string]packages.RuntimeMeta, error)
+	SaveRuntimeMeta(ctx context.Context, ms []packages.RuntimeMeta) error
+	Setting(ctx context.Context, key string) (string, error)
+	SetSetting(ctx context.Context, key, value string) error
+}
+
+// NodeMajorSetting stores the node major the pnpm globals were last
+// installed under.
+const NodeMajorSetting = "packages.node_major"
+
+// RuntimeRefresh says which runtimes a scan looks up.
+type RuntimeRefresh struct {
+	// Names limits the lookup; empty means every runtime.
+	Names  []string
+	MaxAge time.Duration
+	Force  bool
+	// Looker answers the lookups; nil uses a registry.Client over the scan's
+	// environment.
+	Looker    registry.RuntimeLooker
+	UserAgent string
+	Timeout   time.Duration
 }
 
 // MetaStore holds cached registry data (implemented by *store.Store).
@@ -310,15 +341,26 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 			return nil, fmt.Errorf("load update failures: %w", err)
 		}
 	}
+	var runtimes []packages.RuntimeStatus
+	nodeMajor := ""
+	if s.Runtimes != nil {
+		var rerrs []string
+		var err error
+		if runtimes, nodeMajor, rerrs, err = s.runtimeStatuses(ctx, rep, env, invs, now); err != nil {
+			return nil, err
+		}
+		errs = append(errs, rerrs...)
+	}
 	rep.Phase("checking packages", 0)
 	state := &packages.State{Ctx: ctx, Env: env, Inventories: invs, ScanDirs: s.ScanDirs,
-		Meta: metas, UnmaintainedAfter: s.UnmaintainedAfter, Now: now, UpdateFailures: failures}
+		Meta: metas, UnmaintainedAfter: s.UnmaintainedAfter, Now: now, UpdateFailures: failures,
+		Runtimes: runtimes, NodeMajor: nodeMajor}
 	fs := packages.Analyze(state)
 	if envFinding != nil {
 		fs = append(fs, *envFinding)
 		finding.Sort(fs)
 	}
-	data, err := json.Marshal(packages.Data{Inventories: invs})
+	data, err := json.Marshal(packages.Data{Inventories: invs, Runtimes: runtimes, NodeMajor: nodeMajor})
 	if err != nil {
 		return nil, err
 	}
@@ -383,6 +425,55 @@ func (s *PackagesScanner) refresh(ctx context.Context, rep progress.Reporter, en
 		r.Updated(updated)
 	}
 	return st, errs, nil
+}
+
+// runtimeStatuses refreshes the runtime cache when asked, remembers the node
+// major the first time node is seen, and describes the runtimes.
+func (s *PackagesScanner) runtimeStatuses(ctx context.Context, rep progress.Reporter, env *exec.Env,
+	invs []packages.Inventory, now time.Time) ([]packages.RuntimeStatus, string, []string, error) {
+	metas, err := s.Runtimes.RuntimeMeta(ctx)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("load runtime cache: %w", err)
+	}
+	var errs []string
+	if r := s.RuntimeRefresh; r != nil {
+		names := r.Names
+		if len(names) == 0 {
+			names = packages.RuntimeNames
+		}
+		looker := r.Looker
+		if looker == nil {
+			looker = registry.NewClient(env, r.UserAgent, r.Timeout)
+		}
+		rep.Phase("checking runtime releases", len(names))
+		updated := registry.RefreshRuntimes(ctx, looker, names, metas, r.MaxAge, r.Force, now, rep.Step)
+		if err := ctx.Err(); err != nil {
+			return nil, "", nil, err
+		}
+		if err := s.Runtimes.SaveRuntimeMeta(ctx, updated); err != nil {
+			return nil, "", nil, fmt.Errorf("save runtime cache: %w", err)
+		}
+		for _, m := range updated {
+			metas[m.Name] = m
+			if m.Error != "" {
+				errs = append(errs, fmt.Sprintf("%s release lookup: %s", m.Name, m.Error))
+			}
+		}
+	}
+	nodeMajor, err := s.Runtimes.Setting(ctx, NodeMajorSetting)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	for _, inv := range invs {
+		if inv.Manager == "pnpm" && inv.Available && inv.Runtime != nil && inv.Runtime.Version != "" && nodeMajor == "" {
+			nodeMajor = packages.VersionLine(packages.RuntimeNode, inv.Runtime.Version)
+			if err := s.Runtimes.SetSetting(ctx, NodeMajorSetting, nodeMajor); err != nil {
+				return nil, "", nil, err
+			}
+		}
+	}
+	sts := packages.RuntimeStatuses(invs, packages.RuntimeContext{Env: env, Meta: metas, NodeMajor: nodeMajor})
+	return sts, nodeMajor, errs, nil
 }
 
 // registryAge reports how old the oldest cached registry answer is.

@@ -63,6 +63,8 @@ type PlanOptions struct {
 // Planned is one package of an update plan.
 type Planned struct {
 	Package
+	// Kind is KindPackage (""), KindRuntime or KindMigration.
+	Kind    string   `json:"kind,omitempty"`
 	Latest  string   `json:"latest,omitempty"`
 	Gap     Gap      `json:"gap,omitempty"`
 	Command []string `json:"command,omitempty"`
@@ -78,6 +80,9 @@ type Plan struct {
 	NotFromRegistry int `json:"not_from_registry"`
 	// Unmatched lists refs that name no installed package.
 	Unmatched []string `json:"unmatched,omitempty"`
+	// Rebuildable counts cargo and go binaries a migration rebuilds only
+	// with --rebuild.
+	Rebuildable int `json:"rebuildable,omitempty"`
 }
 
 // Runnable lists the items that will be updated.
@@ -206,6 +211,16 @@ type UpdateResult struct {
 	// Output is the tail of a failed command's output (stderr, or stdout
 	// when stderr is empty).
 	Output string `json:"output,omitempty"`
+	// Kind is KindPackage, KindRuntime or KindMigration.
+	Kind string `json:"kind,omitempty"`
+}
+
+// KindOrDefault is the result's kind, KindPackage when unset.
+func (r UpdateResult) KindOrDefault() string {
+	if r.Kind == "" {
+		return KindPackage
+	}
+	return r.Kind
 }
 
 // Key is the result's package key.
@@ -261,7 +276,7 @@ func RunUpdates(ctx context.Context, env *exec.Env, plan Plan, o RunOptions) []U
 	stop := ""
 	for _, it := range plan.Items {
 		r := UpdateResult{Manager: it.Manager, Name: it.Name, ID: it.ID(), From: it.Version, Latest: it.Latest,
-			Status: UpdateSkipped, Command: strings.Join(it.Command, " "), Reason: it.Skip}
+			Status: UpdateSkipped, Command: strings.Join(it.Command, " "), Reason: it.Skip, Kind: it.Kind}
 		if ctx.Err() != nil {
 			stop = "not run: interrupted"
 		}

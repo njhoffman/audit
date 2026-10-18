@@ -38,6 +38,7 @@ func input() Input {
 			{Name: "bad", Status: packages.UpdateFailed, Reason: "exit status 1", Output: "token=abc\nerror"},
 		}}},
 		Packages: []string{"annotated"},
+		Runtimes: []packages.RuntimeStatus{{Name: "python", Version: "3.14.8", Owner: "uv"}},
 	}
 }
 
@@ -73,8 +74,11 @@ func TestBuild(t *testing.T) {
 	if in.Runs["system"].Data == nil {
 		t.Error("Build must not modify its input")
 	}
-	if pf := files["packages.json"].(RunFile); pf.Packages == nil {
-		t.Error("packages.json carries the annotated inventory")
+	if pf := files["packages.json"].(RunFile); pf.Packages == nil || len(pf.Runtimes) != 1 {
+		t.Error("packages.json carries the annotated inventory and the runtimes")
+	}
+	if sf.Runtimes != nil {
+		t.Error("only packages.json has runtimes")
 	}
 	if _, ok := files["environment.json"]; ok {
 		t.Error("no file for a command that never ran")

@@ -21,6 +21,14 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **packages** **update** **-L** [**-j**]
 
+**audit** **packages** **runtimes** [**-F**] [**-j**]
+
+**audit** **packages** **runtimes** **update** [**-N**] [**-y**] [**-m**] [**-x**] [**-j**] [_runtime_...]
+
+**audit** **packages** **runtimes** **update** **-L** [**-j**]
+
+**audit** **packages** **runtimes** **migrate** [**-N**] [**-y**] [**-b**] [**-P**] [**-x**] [**-j**] [_runtime_...]
+
 **audit** **packages** **info** [**-j**] _package_
 
 **audit** **packages** **tag** [**-d**] [**-j**] [_package_ [_tag_...]]
@@ -52,6 +60,8 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
     The inventory (**\-\-list**) shows each package's latest release, how long ago it was published and its tags, read from the registry cache. The header says when the cache was last refreshed; a plain scan never contacts a registry. Cached data adds the checks **registry.outdated** (info, one task per manager), **registry.major_behind** (notice), **registry.deprecated**, **registry.yanked** and **registry.archived** (warnings), **registry.unmaintained** (a suggestion when the latest release is older than **packages.registry.unmaintained_after**) and **registry.error** (info, a failed lookup).
 
+    Runtime checks: **runtime.drift** reports packages installed against another version of their runtime (a notice for uv tools and pnpm globals, info for cargo and go binaries, which are self-contained) with the **runtimes migrate** command that moves them; **runtime.outdated** reports, from the runtime cache, a runtime behind the newest release of its line (a notice when uv, pnpm or rustup owns it, info for a system or manual install) or with a newer line available (info). pnpm records no node version per global, so audit remembers the node major the globals were installed under, starting with the major it first sees.
+
 **packages registry** [_package_...]
 :   Looks installed packages up on PyPI, npm, crates.io, the Go module proxy, rubygems.org and GitHub (through **gh**), caches the latest version, release date, description, repository, homepage, license, keywords and deprecation, archive and yank status, then rescans so findings and tasks reflect it. Entries younger than **packages.registry.max_age** are reused unless **-F** is given; named packages are always looked up. Descriptions are refreshed after **packages.registry.metadata_max_age** where that costs extra requests. Go modules matched by **GONOPROXY**/**GOPRIVATE**, or with **GOPROXY** set to **direct** or **off**, are not looked up. Requests to crates.io are spaced one second apart, as its crawler policy asks.
 
@@ -59,6 +69,15 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 :   Updates packages behind their latest release, one at a time, with each manager's own command: **uv tool upgrade**, **pnpm add -g** _name_**@latest**, **cargo install \-\-locked**, **go install** _package_**@latest** (each Go binary by its own package path), **gem update \-\-user-install** and **gh extension upgrade**. The inventory is scanned and the registry cache refreshed first, then the plan is printed and confirmed with **[y/N]**; without a terminal, **-y** is required. Without packages, every outdated package is planned except major releases (**-m** includes them), **packages.update.exclude** entries and packages installed from git or a path. Named packages are always listed, with the reason when one is skipped; a name that matches nothing is an error.
 
     Each update prints a status line under the progress bar. A command that exits 0 counts as updated only when a fresh inventory shows a new version; one that leaves the version unchanged, or removes the package, is a failure. Commands are stopped after **packages.update.timeout**. Failures are itemized with the command and the tail of its output, and saved with the update; the exit status is 1 when any failed. The inventory is rescanned afterwards so tasks follow, a failed attempt is noted on the package's **registry.outdated** item until its version changes, and the **packages** report shows the last update's counts. **-L** shows the last update again.
+
+**packages runtimes**
+:   Lists python, node, rust, go and ruby with the installed version, the owner (**uv**, **pnpm**, **rustup**, **system** or **manual**), the newest release of the installed line, the newest release overall (the newest LTS for node) and how many packages run on another version. uv-managed pythons and rustup toolchains are listed one per row. Releases come from **uv python list** (local), nodejs.org, go.dev and **rustup check**, cached for **packages.registry.max_age**; **-F** looks them up again. Ruby belongs to the system package manager and is not looked up. The packages scan is saved, so runtime tasks follow.
+
+**packages runtimes update** [_runtime_...]
+:   Updates runtimes with their owner's command: **uv python upgrade** _minor_ for each uv-managed python with a newer patch, **pnpm runtime set node** _version_ **-g**, and **rustup update** _toolchain_ for each rustup toolchain with a newer release (toolchains follow their channel and are not limited). By default python and node stay on their line; **-m** also installs the newest python minor (**uv python install**) and moves node to the newest LTS major. System and manual installs are listed when behind and skipped. Releases are looked up first, the plan is confirmed like **packages update**, and an update counts only when the runtime reports the new version afterwards. Installed packages keep the interpreter they were installed with; the command says when **runtimes migrate** has work to do. **-L** shows the last runtime update or migration.
+
+**packages runtimes migrate** [_runtime_...]
+:   Reinstalls packages that run on another version of their runtime: uv tools with **uv tool upgrade \-\-reinstall \-\-python** _minor_ (uv tools keep the exact interpreter they were installed with, so a new patch needs this too, and the tool is also upgraded within its constraints); every pnpm global after a node major change with **pnpm add -g \-\-force** _name_**@**_version_; user gems found only in another ruby's gem directory with **gem install \-\-user-install** _name_ **-v** _version_; and with **-b**, cargo crates and go binaries built by an older toolchain (**cargo install \-\-locked \-\-force**, **go install** _pkg_**@**_version_). **packages.update.exclude** entries and git or path installs are skipped. Results are checked against a fresh inventory. Afterwards audit lists stale runtime directories (**runtime.stale_dirs**), to be moved to the trash with **gio trash**, and uv-managed python patches that a newer patch replaced and no tool uses, to be removed with **uv python uninstall**; it asks before removing them, and with **-y** keeps them unless **-P** is given.
 
 **packages info** _package_
 :   Shows the cached details and tags of one package from the saved inventory, without scanning.
@@ -213,6 +232,26 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 **-j**, **\-\-json**
 :   Print the plan (with **-N**) or the update as JSON.
 
+# PACKAGES RUNTIMES OPTIONS
+
+**-F**, **\-\-force** (**runtimes**)
+:   Look the releases up again, ignoring the cache age.
+
+**-N**, **\-\-dry-run** / **-y**, **\-\-yes** / **-x**, **\-\-stop-on-error** / **-j**, **\-\-json**
+:   As for **packages update**.
+
+**-m**, **\-\-major** (**update**)
+:   Also install the newest python minor and move node to the newest LTS major.
+
+**-L**, **\-\-last** (**update**)
+:   Show the last runtime update or migration; update nothing.
+
+**-b**, **\-\-rebuild** (**migrate**)
+:   Also rebuild cargo and go binaries built by an older toolchain.
+
+**-P**, **\-\-prune** (**migrate**)
+:   With **-y**, also remove the stale runtime directories and replaced pythons.
+
 # PACKAGES TAG OPTIONS
 
 **-d**, **\-\-delete**
@@ -256,13 +295,13 @@ The export directory (**export.dir**, by default **~/.local/share/audit/export/*
 :   One row per scanning command under **commands**: **command**, **file** (its own export file, absent when it never ran), **freshness** (**fresh**, **stale**, **old** or **none**, graded at **generated_at**), **stale_after_seconds** and **old_after_seconds** to regrade it later, **last_run** (**id**, **scope**, **started_at**, **finished_at**, **findings** counted by severity, **ignored**, **errors**) and **open_tasks** by priority. Then **open_tasks** totals and **last_update** (**id**, **finished_at**, **updated**, **failed**, **skipped**) once a package update has run.
 
 _command_**.json**
-:   The command's latest full run under **run**, with its findings and errors but without the scanner's raw data, which can hold environment values. **packages.json** adds the annotated inventory as **packages**, as **audit packages \-\-json** prints it.
+:   The command's latest full run under **run**, with its findings and errors but without the scanner's raw data, which can hold environment values. **packages.json** adds the annotated inventory as **packages**, as **audit packages \-\-json** prints it, and the runtimes as **runtimes**, as **audit packages runtimes \-\-json** prints them.
 
 **tasks.json**
 :   Every task under **tasks**, closed ones included.
 
 **updates.json**
-:   The saved package updates under **updates**, newest first, each item with its command, status and reason but not the command's output.
+:   The saved package updates, runtime updates and migrations under **updates**, newest first, each item with its **kind** (**package**, **runtime** or **migration**), command, status and reason but not the command's output.
 
 # CONFIGURATION
 
@@ -374,7 +413,7 @@ Mark task 12 done with a note:
 :   Configuration, created with the defaults on first run.
 
 **~/.local/share/audit/audit.db**
-:   Runs, findings, tasks, the package registry cache and tags, saved package updates, and the AI response cache.
+:   Runs, findings, tasks, the package registry and runtime caches, tags, saved updates and migrations, and the AI response cache. A database from an older audit is upgraded in place; one from a newer audit is refused.
 
 **~/.local/share/audit/reports/**
 :   HTML reports and **index.html**.

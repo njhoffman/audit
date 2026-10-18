@@ -31,6 +31,9 @@ type Bases struct {
 	// GoProxy overrides GOPROXY when set.
 	GoProxy  string
 	Rubygems string
+	// Node and GoDL are the runtime release lists.
+	Node string
+	GoDL string
 }
 
 // DefaultBases are the public registries.
@@ -41,6 +44,8 @@ func DefaultBases() Bases {
 		CratesIndex: "https://index.crates.io",
 		CratesAPI:   "https://crates.io",
 		Rubygems:    "https://rubygems.org",
+		Node:        "https://nodejs.org/dist/index.json",
+		GoDL:        "https://go.dev/dl/?mode=json",
 	}
 }
 

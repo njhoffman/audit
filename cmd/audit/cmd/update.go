@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/njhoffman/audit/internal/core"
+	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
 )
@@ -59,7 +60,7 @@ tasks follow, and a failed attempt is noted on the package's outdated task.`,
 				if len(args) > 0 || f.dryRun || f.yes {
 					return errors.New("--last takes no packages, --dry-run or --yes")
 				}
-				return a.showLastUpdate(c.Context(), f.json)
+				return a.showLastUpdate(c.Context(), f.json, packages.KindPackage)
 			}
 			return a.update(c.Context(), parseRefs(args), f)
 		},
@@ -170,31 +171,7 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 func (a *app) runUpdates(ctx context.Context, s *core.PackagesScanner, plan packages.Plan, f updateFlags, show bool) *packages.Update {
 	u := &packages.Update{Host: a.engine.Host, StartedAt: timeNow()}
 	rep := a.progress(!f.json)
-	lines := a.errOut
-	if !show {
-		lines = io.Discard
-	}
-	rep.Phase("updating packages", len(plan.Runnable()))
-	u.Items = packages.RunUpdates(ctx, s.ScanEnv, plan, packages.RunOptions{
-		Timeout:     a.cfg.Packages.Update.Timeout,
-		StopOnError: f.stopOnError,
-		OnStart: func(it packages.Planned) {
-			progress.Status(rep, fmt.Sprintf("%s:%s %s -> %s", it.Manager, it.Name, it.Version, it.Latest))
-		},
-		OnDone: func(it packages.Planned, r packages.UpdateResult) {
-			rep.Step(it.Manager + ":" + it.Name)
-			status := "ok"
-			if r.Status == packages.UpdateFailed {
-				status = "FAILED"
-			}
-			line := fmt.Sprintf("%-6s  %s:%s %s -> %s  (%s)", status, it.Manager, it.Name, it.Version, it.Latest, r.Duration.Round(100*time.Millisecond))
-			if r.Status == packages.UpdateFailed {
-				line += "  " + r.Reason
-			}
-			progress.Println(rep, lines, line)
-		},
-	})
-	rep.Done()
+	u.Items = a.execPlan(ctx, s.ScanEnv, plan, "updating packages", f.stopOnError, !f.json, show)
 	if ctx.Err() == nil {
 		var touched []packages.Manager
 		for _, m := range s.Managers {
@@ -215,6 +192,37 @@ func (a *app) runUpdates(ctx context.Context, s *core.PackagesScanner, plan pack
 	}
 	u.FinishedAt = timeNow()
 	return u
+}
+
+// execPlan runs the plan's commands behind a progress bar with one status
+// line per item.
+func (a *app) execPlan(ctx context.Context, env *exec.Env, plan packages.Plan, phase string, stopOnError, bar, show bool) []packages.UpdateResult {
+	rep := a.progress(bar)
+	lines := a.errOut
+	if !show {
+		lines = io.Discard
+	}
+	rep.Phase(phase, len(plan.Runnable()))
+	defer rep.Done()
+	return packages.RunUpdates(ctx, env, plan, packages.RunOptions{
+		Timeout:     a.cfg.Packages.Update.Timeout,
+		StopOnError: stopOnError,
+		OnStart: func(it packages.Planned) {
+			progress.Status(rep, fmt.Sprintf("%s:%s %s -> %s", it.Manager, it.Name, it.Version, it.Latest))
+		},
+		OnDone: func(it packages.Planned, r packages.UpdateResult) {
+			rep.Step(it.Manager + ":" + it.Name)
+			status := "ok"
+			if r.Status == packages.UpdateFailed {
+				status = "FAILED"
+			}
+			line := fmt.Sprintf("%-6s  %s:%s %s -> %s  (%s)", status, it.Manager, it.Name, it.Version, it.Latest, r.Duration.Round(100*time.Millisecond))
+			if r.Status == packages.UpdateFailed {
+				line += "  " + r.Reason
+			}
+			progress.Println(rep, lines, line)
+		},
+	})
 }
 
 // confirm asks a yes/no question on the terminal; without one it refuses.
@@ -256,7 +264,11 @@ func (a *app) printPlan(plan packages.Plan, dryRun bool) {
 			}
 			rows[i] = []string{it.Manager + ":" + it.Name, it.Version, it.Latest, action}
 		}
-		p.Table([]string{"PACKAGE", "INSTALLED", "LATEST", head}, rows)
+		from, to := "INSTALLED", "LATEST"
+		if !slices.ContainsFunc(plan.Items, func(it packages.Planned) bool { return it.Kind != packages.KindMigration }) {
+			from, to = "RUNS ON", "MOVES TO"
+		}
+		p.Table([]string{"PACKAGE", from, to, head}, rows)
 	}
 	runnable := len(plan.Runnable())
 	msg := fmt.Sprintf("%d to update, %d skipped.", runnable, len(plan.Items)-runnable)
@@ -310,8 +322,8 @@ func (a *app) printUpdate(u *packages.Update, table bool) {
 }
 
 // showLastUpdate prints the newest saved update.
-func (a *app) showLastUpdate(ctx context.Context, asJSON bool) error {
-	u, err := a.store.LastUpdate(ctx)
+func (a *app) showLastUpdate(ctx context.Context, asJSON bool, kinds ...string) error {
+	u, err := a.store.LastUpdateOf(ctx, kinds...)
 	if err != nil {
 		return err
 	}
@@ -319,7 +331,7 @@ func (a *app) showLastUpdate(ctx context.Context, asJSON bool) error {
 		return a.writeJSON(u)
 	}
 	if u == nil {
-		sayln(a.out, "No update has been run; see `audit packages update --help`.")
+		sayln(a.out, "Nothing has been updated yet.")
 		return nil
 	}
 	a.printUpdate(u, true)

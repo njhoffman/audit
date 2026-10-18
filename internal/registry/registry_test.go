@@ -38,6 +38,8 @@ var routes = map[string]string{
 		"repository":"https://github.com/BurntSushi/ripgrep","keywords":["regex","grep"]},
 		"versions":[{"num":"14.1.1","created_at":"2024-09-08T22:24:21.000000+00:00","license":"Unlicense OR MIT"}]}`,
 	"/goproxy/github.com/!burnt!sushi/toml/@latest": `{"Version":"v1.5.0","Time":"2025-03-01T00:00:00Z","Origin":{"VCS":"git","URL":"https://github.com/BurntSushi/toml"}}`,
+	"/node/index.json": `[{"version":"v26.12.0","lts":false},{"version":"v24.22.0","lts":"Krypton"},{"version":"v24.21.0","lts":"Krypton"}]`,
+	"/go/dl":           `[{"version":"go1.27.2","stable":true},{"version":"go1.26.9","stable":true}]`,
 	"/gems/api/v1/gems/rake.json": `{"version":"13.3.0","version_created_at":"2025-05-01T00:00:00.000Z","info":"Make-like program",
 		"homepage_uri":"https://github.com/ruby/rake","source_code_uri":"","licenses":["MIT"]}`,
 }
@@ -75,7 +77,7 @@ func newClient(t *testing.T) (*Client, *exec.Fake, *atomic.Int32) {
 		"gh", "api", "repos/BurntSushi/toml")
 	c := NewClient(&exec.Env{Vars: map[string]string{}, Runner: fake}, "audit/test", 5*time.Second)
 	c.Base = Bases{PyPI: srv.URL, Npm: srv.URL + "/npm", CratesIndex: srv.URL + "/index", CratesAPI: srv.URL + "/crates",
-		GoProxy: srv.URL + "/goproxy", Rubygems: srv.URL + "/gems"}
+		GoProxy: srv.URL + "/goproxy", Rubygems: srv.URL + "/gems", Node: srv.URL + "/node/index.json", GoDL: srv.URL + "/go/dl"}
 	c.Intervals = nil
 	return c, fake, &hits
 }

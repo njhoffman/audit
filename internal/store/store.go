@@ -20,7 +20,8 @@ import (
 	"github.com/njhoffman/audit/internal/todo"
 )
 
-const schemaVersion = 1
+// schemaVersion 2 added update_items.kind.
+const schemaVersion = 2
 
 const schema = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -117,7 +118,13 @@ CREATE TABLE IF NOT EXISTS update_items (
 	duration_ms INTEGER NOT NULL DEFAULT 0,
 	reason TEXT NOT NULL DEFAULT '',
 	output TEXT NOT NULL DEFAULT '',
+	kind TEXT NOT NULL DEFAULT 'package',
 	PRIMARY KEY (update_id, seq)
+);
+CREATE TABLE IF NOT EXISTS runtime_meta (
+	name TEXT PRIMARY KEY,
+	data TEXT NOT NULL,
+	checked_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS llm_cache (
 	hash TEXT PRIMARY KEY,
@@ -167,10 +174,39 @@ func checkVersion(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+	if v == "1" {
+		if err := migrateV2(db); err != nil {
+			return fmt.Errorf("upgrade database schema to version 2: %w", err)
+		}
+		v = "2"
+	}
 	if v != fmt.Sprint(schemaVersion) {
 		return fmt.Errorf("database schema version %s is not supported (want %d)", v, schemaVersion)
 	}
 	return nil
+}
+
+// migrateV2 adds update_items.kind. A version 1 database whose update_items
+// table was created by this binary's schema already has the column.
+func migrateV2(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var n int
+	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('update_items') WHERE name='kind'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		if _, err := tx.Exec(`ALTER TABLE update_items ADD COLUMN kind TEXT NOT NULL DEFAULT 'package'`); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`UPDATE meta SET value='2' WHERE key='schema_version'`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Changes counts the rows this store has written since it was opened. The

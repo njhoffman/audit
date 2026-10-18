@@ -81,11 +81,13 @@ type UpdateSummary struct {
 }
 
 // RunFile is <command>.json: the latest full run with its findings, without
-// the scanner's raw payload, plus the annotated inventory for packages.
+// the scanner's raw payload, plus the annotated inventory and the runtimes
+// for packages.
 type RunFile struct {
 	Header
-	Run      *run.Run `json:"run"`
-	Packages any      `json:"packages,omitempty"`
+	Run      *run.Run                 `json:"run"`
+	Packages any                      `json:"packages,omitempty"`
+	Runtimes []packages.RuntimeStatus `json:"runtimes,omitempty"`
 }
 
 // Tasks is tasks.json: every task, closed ones included.
@@ -114,6 +116,8 @@ type Input struct {
 	Updates    []packages.Update
 	// Packages is the annotated inventory added to packages.json.
 	Packages any
+	// Runtimes are the runtime statuses added to packages.json.
+	Runtimes []packages.RuntimeStatus
 }
 
 // Build turns in into the export files, by file name.
@@ -136,7 +140,7 @@ func Build(in Input) map[string]any {
 				Findings: r.Counts(), Ignored: r.Ignored, Errors: len(r.Errors)}
 			rf := RunFile{Header: h, Run: withoutData(r)}
 			if c == packages.Command {
-				rf.Packages = in.Packages
+				rf.Packages, rf.Runtimes = in.Packages, in.Runtimes
 			}
 			files[row.File] = rf
 		}

@@ -43,4 +43,9 @@ type Inventory struct {
 // Data is what a packages run stores in run.Run.Data.
 type Data struct {
 	Inventories []Inventory `json:"inventories"`
+	// Runtimes describes the runtimes the managers install against.
+	Runtimes []RuntimeStatus `json:"runtimes,omitempty"`
+	// NodeMajor is the node major the pnpm globals were last installed
+	// under.
+	NodeMajor string `json:"node_major,omitempty"`
 }

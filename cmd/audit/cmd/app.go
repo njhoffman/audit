@@ -59,8 +59,9 @@ type app struct {
 	in io.Reader
 	// runner and looker replace the command runner and the registry client
 	// when set (tests).
-	runner exec.Runner
-	looker registry.Looker
+	runner   exec.Runner
+	looker   registry.Looker
+	rtLooker registry.RuntimeLooker
 	// changes is the store's write count after load; close exports when it
 	// moved.
 	changes int64
@@ -167,6 +168,10 @@ func (a *app) export(ctx context.Context, dir string) error {
 		if c == packages.Command {
 			if in.Packages, err = a.annotated(ctx, r, packages.Query{}); err != nil {
 				return err
+			}
+			var d packages.Data
+			if err := json.Unmarshal(r.Data, &d); err == nil {
+				in.Runtimes = d.Runtimes
 			}
 		}
 	}

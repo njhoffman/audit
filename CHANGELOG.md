@@ -32,10 +32,16 @@ The project is renamed from `sysaudit` to `audit` and restructured around saved,
 - `audit packages info <pkg>` and `audit packages tag [<pkg> [tag...]] [-d]`. Automatic tags (manager, runtime, `git`, `local`, `mine`) are derived; user and AI tags are stored.
 - Checks `registry.outdated` (one task per manager), `registry.major_behind`, `registry.deprecated`, `registry.yanked`, `registry.archived`, `registry.unmaintained` and `registry.error`.
 - Config keys `github_user`, `packages.registry.{max_age,metadata_max_age,concurrency,timeout,unmaintained_after}` and `packages.tags`.
+- `packages` phase 4: `audit packages runtimes` lists python, node, rust, go and ruby with their owner (uv, pnpm, rustup, system, manual), the newest release of the installed line and overall, and how many packages run on another version; releases come from `uv python list`, nodejs.org, go.dev and `rustup check`, cached in the store (`-F/--force` refreshes). `runtimes update [rt...]` runs `uv python upgrade MINOR`, `pnpm runtime set node VERSION -g` and `rustup update TOOLCHAIN`, within the installed line unless `-m/--major` (new python minor, newest node LTS); system-owned go and ruby are reported and skipped. `runtimes migrate [rt...]` reinstalls uv tools on the default python, pnpm globals after a node major change, and user gems from an old ruby ABI dir, plus with `-b/--rebuild` cargo and go binaries built by an older toolchain; afterwards it offers to trash stale runtime dirs (`gio trash`) and uninstall replaced python patches, kept under `-y` unless `-P/--prune`. Both confirm, verify against a fresh scan, save results (`-L/--last`) and share `-N`, `-y`, `-x`, `-j` with `packages update`.
+- Check `runtime.outdated` (from the runtime cache). `runtime.drift` now covers pnpm globals after a node major change (audit remembers the major they were installed under), is a notice for uv and pnpm, and hints at `audit packages runtimes migrate`.
+- `packages.json` in the export carries the runtimes; `updates.json` items carry `kind` (`package`, `runtime`, `migration`).
 - Export files for dashboards and scripts: `summary.json`, `<command>.json`, `tasks.json` and `updates.json` in `export.dir` (default `$XDG_DATA_HOME/audit/export`), versioned with `schema_version`, written atomically after every command that saves something (also when it then fails) and on demand with `audit export [-d DIR]`. Raw scanner data and update command output are not exported. Config `export.enabled` and `export.dir`.
 - A `justfile` with `build`, `run`, `install`, `test` (runner argument), `test-one`, `cover`, `lint`, `vet`, `fmt`, `fmt-check`, `check`, `manpage` and `clean`.
 
 ### Changed
+
+- The database schema is version 2 (`update_items.kind`); a version 1 database is upgraded in place on open.
+- `audit packages update -L` shows the last package update, not a runtime update or migration.
 
 - The "N task(s) updated" notice counts only tasks created, reopened, resolved or with new content; a rescan that only sees the same problems again is silent. Content changes now bump a task's `updated_at`.
 - Registry findings carry the release date (`released 2026-10-13`, `no release since ...`) instead of a relative age, so task titles do not change every day.

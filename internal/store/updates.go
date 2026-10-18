@@ -2,13 +2,16 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/njhoffman/audit/internal/packages"
 )
 
-const updateItemCols = `manager, id, name, from_version, to_version, latest, status, command, code, duration_ms, reason, output`
+const updateItemCols = `manager, id, name, from_version, to_version, latest, status, command, code, duration_ms, reason, output, kind`
 
 // SaveUpdate stores an update run with its results and sets u.ID.
 func (s *Store) SaveUpdate(ctx context.Context, u *packages.Update) error {
@@ -28,9 +31,9 @@ func (s *Store) SaveUpdate(ctx context.Context, u *packages.Update) error {
 	}
 	for i, it := range u.Items {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO update_items(update_id, seq, `+updateItemCols+`)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			id, i, it.Manager, it.ID, it.Name, it.From, it.To, it.Latest, it.Status, it.Command, it.Code,
-			it.Duration.Milliseconds(), it.Reason, it.Output); err != nil {
+			it.Duration.Milliseconds(), it.Reason, it.Output, it.KindOrDefault()); err != nil {
 			return fmt.Errorf("insert update item %s: %w", it.Key(), err)
 		}
 	}
@@ -48,6 +51,40 @@ func (s *Store) LastUpdate(ctx context.Context) (*packages.Update, error) {
 		return nil, err
 	}
 	return &us[0], nil
+}
+
+// LastUpdateOf returns the newest update run with an item of one of kinds,
+// or nil when there is none.
+func (s *Store) LastUpdateOf(ctx context.Context, kinds ...string) (*packages.Update, error) {
+	if len(kinds) == 0 {
+		return s.LastUpdate(ctx)
+	}
+	args := make([]any, len(kinds))
+	marks := make([]string, len(kinds))
+	for i, k := range kinds {
+		args[i], marks[i] = k, "?"
+	}
+	var id int64
+	err := s.db.QueryRowContext(ctx, `SELECT u.id FROM updates u WHERE EXISTS
+		(SELECT 1 FROM update_items i WHERE i.update_id = u.id AND i.kind IN (`+strings.Join(marks, ",")+`))
+		ORDER BY u.finished_at DESC, u.id DESC LIMIT 1`, args...).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	u := packages.Update{ID: id}
+	var started, finished string
+	if err := s.db.QueryRowContext(ctx, `SELECT host, started_at, finished_at FROM updates WHERE id=?`, id).
+		Scan(&u.Host, &started, &finished); err != nil {
+		return nil, err
+	}
+	u.StartedAt, u.FinishedAt = parseTS(started), parseTS(finished)
+	if u.Items, err = s.updateItems(ctx, id); err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 // Updates returns the newest limit update runs with their results, newest
@@ -91,7 +128,7 @@ func (s *Store) updateItems(ctx context.Context, id int64) ([]packages.UpdateRes
 		var it packages.UpdateResult
 		var ms int64
 		if err := rows.Scan(&it.Manager, &it.ID, &it.Name, &it.From, &it.To, &it.Latest, &it.Status, &it.Command,
-			&it.Code, &ms, &it.Reason, &it.Output); err != nil {
+			&it.Code, &ms, &it.Reason, &it.Output, &it.Kind); err != nil {
 			return nil, err
 		}
 		it.Duration = time.Duration(ms) * time.Millisecond
@@ -105,7 +142,7 @@ func (s *Store) updateItems(ctx context.Context, id int64) ([]packages.UpdateRes
 func (s *Store) UpdateFailures(ctx context.Context) (map[string]packages.UpdateFailure, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT i.manager, i.id, i.status, i.from_version, i.reason, u.finished_at
 		FROM update_items i JOIN updates u ON u.id = i.update_id
-		WHERE i.status != ? ORDER BY u.finished_at DESC, u.id DESC, i.seq`, packages.UpdateSkipped)
+		WHERE i.status != ? AND i.kind = ? ORDER BY u.finished_at DESC, u.id DESC, i.seq`, packages.UpdateSkipped, packages.KindPackage)
 	if err != nil {
 		return nil, err
 	}

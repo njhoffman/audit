@@ -42,6 +42,11 @@ type State struct {
 	// UpdateFailures holds each package's last update attempt, by Key, when
 	// it failed; the outdated findings mention it.
 	UpdateFailures map[string]UpdateFailure
+	// Runtimes are the runtime statuses built from the runtime cache.
+	Runtimes []RuntimeStatus
+	// NodeMajor is the node major the pnpm globals were last installed
+	// under; "" when unknown.
+	NodeMajor string
 }
 
 func (s *State) inv(manager string) *Inventory {
@@ -72,6 +77,7 @@ var Checks = []finding.Check[*State]{
 	{ID: "exe.broken", Fn: exeBroken},
 	{ID: "pnpm.legacy_shim", Fn: pnpmLegacyShim},
 	{ID: "runtime.drift", Fn: runtimeDrift},
+	{ID: "runtime.outdated", Fn: runtimeOutdated},
 	{ID: "runtime.stale_dirs", Fn: staleDirs},
 	{ID: "npm.stray_globals", Fn: npmStrayGlobals},
 }
@@ -411,32 +417,51 @@ func readHead(path string, n int) string {
 }
 
 var driftHints = map[string]string{
-	"uv": "Usually intended (pinned with --python). Otherwise `uv tool install " +
-		"--reinstall --python <ver> <name>`.",
-	"cargo": "Harmless unless a crate needs newer std; `cargo install --force <name>` rebuilds.",
-	"go":    "Harmless; `go install <path>@<version>` rebuilds with the current toolchain.",
+	"uv": "uv tools keep the exact interpreter they were installed with. `audit packages runtimes migrate python` " +
+		"reinstalls them on the default one; add a tool to packages.update.exclude to keep it pinned.",
+	"pnpm":  "Native addons are built for one node major. `audit packages runtimes migrate node` reinstalls the globals.",
+	"cargo": "Harmless unless a crate needs newer std; `audit packages runtimes migrate --rebuild rust` rebuilds them.",
+	"go":    "Harmless; `audit packages runtimes migrate --rebuild go` rebuilds them with the current toolchain.",
 }
 
 // runtimeDrift reports packages built or installed against a runtime other
-// than the current one.
+// than the current one. uv and pnpm drift is a notice, since the old
+// runtime can go away under them; cargo and go binaries are self-contained
+// and only informational.
 func runtimeDrift(s *State) []finding.Finding {
 	var out []finding.Finding
-	for _, manager := range []string{"uv", "cargo", "go"} {
+	for _, rt := range []string{RuntimePython, RuntimeNode, RuntimeRust, RuntimeGo} {
+		manager := runtimeManagers[rt]
 		inv := s.inv(manager)
 		if inv == nil || inv.Runtime == nil || inv.Runtime.Version == "" {
 			continue
 		}
-		current := inv.Runtime.Version
-		byVersion := map[string][]string{}
-		count := 0
-		for _, p := range inv.Packages {
-			if p.RuntimeVersion != "" && p.RuntimeVersion != current {
-				byVersion[p.RuntimeVersion] = append(byVersion[p.RuntimeVersion], p.Name)
-				count++
-			}
-		}
-		if count == 0 {
+		drifted := Drifted(*inv, rt, s.NodeMajor)
+		if len(drifted) == 0 {
 			continue
+		}
+		current := inv.Runtime.Version
+		sev := finding.Info
+		if rt == RuntimePython || rt == RuntimeNode {
+			sev = finding.Notice
+		}
+		if rt == RuntimeNode {
+			names := make([]string, len(drifted))
+			for i, p := range drifted {
+				names[i] = p.Name
+			}
+			sort.Strings(names)
+			out = append(out, finding.Finding{
+				Severity: sev, Subject: manager, Details: names,
+				Message: fmt.Sprintf("%d pnpm global(s) were installed under node %s; node is now %s",
+					len(drifted), s.NodeMajor, current),
+				Hint: driftHints[manager],
+			})
+			continue
+		}
+		byVersion := map[string][]string{}
+		for _, p := range drifted {
+			byVersion[p.RuntimeVersion] = append(byVersion[p.RuntimeVersion], p.Name)
 		}
 		versions := make([]string, 0, len(byVersion))
 		for v := range byVersion {
@@ -450,13 +475,66 @@ func runtimeDrift(s *State) []finding.Finding {
 			details = append(details, v+": "+strings.Join(names, ", "))
 		}
 		out = append(out, finding.Finding{
-			Severity: finding.Info, Subject: manager, Details: details,
+			Severity: sev, Subject: manager, Details: details,
 			Message: fmt.Sprintf("%d %s package(s) built with a %s other than %s",
-				count, manager, inv.Runtime.Name, current),
+				len(drifted), manager, inv.Runtime.Name, current),
 			Hint: driftHints[manager],
 		})
 	}
 	return out
+}
+
+// runtimeOutdated reports runtimes behind a release, from the runtime cache:
+// a newer release of the installed line is a notice when audit can update
+// it, a new line (python minor, node LTS major, go minor) is info.
+func runtimeOutdated(s *State) []finding.Finding {
+	var out []finding.Finding
+	for _, st := range s.Runtimes {
+		if st.Error != "" || st.CheckedAt.IsZero() {
+			continue
+		}
+		managed := st.Owner != OwnerSystem && st.Owner != OwnerManual
+		var details []string
+		for _, l := range st.Lines {
+			if l.Behind() {
+				details = append(details, fmt.Sprintf("%s: %s -> %s", l.Name, l.Version, l.Latest))
+			}
+		}
+		behind, newLine := st.Behind(), st.NewerLine()
+		if !behind && !newLine {
+			continue
+		}
+		f := finding.Finding{Severity: finding.Info, Subject: st.Name, Details: details}
+		switch {
+		case behind && len(st.Lines) > 0:
+			f.Message = fmt.Sprintf("%s: %d install(s) have a newer release", st.Name, len(details))
+		case behind:
+			f.Message = fmt.Sprintf("%s %s -> %s is available", st.Name, st.Version, st.Latest)
+		default:
+			f.Message = fmt.Sprintf("%s %s is available (%s installed)", st.Name, st.Newest, st.Version)
+		}
+		if behind && newLine {
+			f.Message += fmt.Sprintf("; %s %s is the newest", st.Name, st.Newest)
+		}
+		switch {
+		case !managed:
+			f.Hint = fmt.Sprintf("%s comes from %s (%s); update it there.", st.Name, ownerLabel(st.Owner), st.Path)
+		case behind:
+			f.Severity = finding.Notice
+			f.Hint = "`audit packages runtimes update " + st.Name + "`."
+		default:
+			f.Hint = "`audit packages runtimes update --major " + st.Name + "`, then `audit packages runtimes migrate " + st.Name + "`."
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+func ownerLabel(owner string) string {
+	if owner == OwnerSystem {
+		return "the system package manager"
+	}
+	return "a manual install"
 }
 
 func staleDirs(s *State) []finding.Finding {

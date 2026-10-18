@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -219,5 +220,56 @@ func TestChanges(t *testing.T) {
 	}
 	if n, _ := s.Changes(ctx); n <= before {
 		t.Errorf("a write did not change the count: %d -> %d", before, n)
+	}
+}
+
+// TestMigrateV1 opens a version 1 database whose update_items has no kind
+// column and checks it is upgraded in place, keeping its rows.
+func TestMigrateV1(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+		`INSERT INTO meta VALUES ('schema_version', '1')`,
+		`CREATE TABLE updates (id INTEGER PRIMARY KEY AUTOINCREMENT, host TEXT NOT NULL DEFAULT '',
+			started_at TEXT NOT NULL, finished_at TEXT NOT NULL)`,
+		`CREATE TABLE update_items (update_id INTEGER NOT NULL REFERENCES updates(id) ON DELETE CASCADE,
+			seq INTEGER NOT NULL, manager TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
+			from_version TEXT NOT NULL DEFAULT '', to_version TEXT NOT NULL DEFAULT '', latest TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL, command TEXT NOT NULL DEFAULT '', code INTEGER NOT NULL DEFAULT 0,
+			duration_ms INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '', output TEXT NOT NULL DEFAULT '',
+			PRIMARY KEY (update_id, seq))`,
+		`INSERT INTO updates(host, started_at, finished_at) VALUES ('h', '2026-10-01T12:00:00Z', '2026-10-01T12:00:00Z')`,
+		`INSERT INTO update_items(update_id, seq, manager, id, name, status) VALUES (1, 0, 'uv', 'ruff', 'ruff', 'updated')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	_ = db.Close()
+
+	for range 2 {
+		s, err := Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v, _ := s.Setting(ctx, "schema_version"); v != "2" {
+			t.Errorf("schema_version = %q", v)
+		}
+		u, err := s.LastUpdate(ctx)
+		if err != nil || u == nil || u.Items[0].Kind != "package" {
+			t.Errorf("old rows read as packages: %+v %v", u, err)
+		}
+		_ = s.Close()
+	}
+
+	db, _ = sql.Open("sqlite", "file:"+path)
+	_, _ = db.Exec(`UPDATE meta SET value='3' WHERE key='schema_version'`)
+	_ = db.Close()
+	if _, err := Open(path); err == nil || err.Error() != "database schema version 3 is not supported (want 2)" {
+		t.Errorf("a newer database is refused: %v", err)
 	}
 }
