@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The project is renamed from `sysaudit` to `audit` and restructured around saved, task-tracked scans.
+
+### Added
+
+- Subcommands `system`, `environment`, `packages`, `todo`, `history` and `config`. Bare `audit` opens a Bubble Tea dashboard in a terminal and prints the summary otherwise; `-s/--summary`, `-H/--html` and `-o/--open` work on the root.
+- `environment`: captures each login shell with and without a tty, traces sourced startup files, times start-up, and checks PATH, environment variables and startup scripts (syntax, shellcheck).
+- `packages`: inventory and checks for uv, pnpm, cargo, go, gem and gh (ported from the Python `pkgm` prototype, phase 1).
+- SQLite store (`$XDG_DATA_HOME/audit/audit.db`) for runs, findings, tasks and the AI cache; `history` setting prunes old runs.
+- Freshness: a bare scan command reuses saved results younger than `stale.warn` and rescans otherwise; `-R/--report`, `-l/--list`, `-s/--summary`, `-j/--json` never scan unless `-r/--rescan` is given. Saved results carry an age banner, yellow when stale and red when old.
+- Tasks: findings become tasks by severity (high, medium, low, suggestion); info findings share one task per check. Rescans add and resolve tasks; user statuses (in progress, done, won't do) persist. Narrowed scans only resolve tasks of the parts they scanned. `audit todo` lists, filters, shows, sets, notes, adds and removes tasks; `-i` opens the task editor.
+- `ignore` config rules (`command:check:subject`, `command:check`, `check`), re-applied when saved runs are shown.
+- Self-contained HTML reports per command plus an index page, with severity and text filters and light/dark themes.
+- `-a/--ai`, `-A/--ai-refresh`, `-L/--level`: opt-in review through the `claude` CLI (`claude -p`, tools disabled, no session persistence), cached by prompt hash.
+- `-m/--min-severity` and `-k/--check` filters; `-W/--width`, `-n/--no-color`, `-c/--config` global flags.
+- `audit config` prints the effective configuration; `--init` writes a commented starter file.
+- The first run creates `~/.config/audit.yaml` with every default written out and commented. A file passed with `-c` is never created; a missing one is an error.
+- Config keys `display.details`, `ai.max_details`, `system.log_max_lines`, `system.log_patterns`, `system.programs`, `system.procs.*`, `system.services.*` and `environment.shellcheck.{severity,exclude}`, replacing values that were hard-coded.
+- A `justfile` with `build`, `run`, `install`, `test` (runner argument), `test-one`, `cover`, `lint`, `vet`, `fmt`, `fmt-check`, `check`, `manpage` and `clean`.
+
+### Changed
+
+- Config moves to `~/.config/audit.yaml`; environment overrides use the `AUDIT_` prefix.
+- Shell start-up time excludes background jobs a startup file leaves running; the time is stamped by the shell itself.
+- Task titles no longer repeat the subject when the finding message already starts with it.
+- The `--procs`/`--services`/`--users`/`--logs`/`--programs`/`--all` switches are replaced by `audit system -O procs,services,users,logs,programs`.
+
+### Removed
+
+- The Anthropic SDK client and API-key configuration (`--tokens`, `--model`, `--claude-verbosity`, `--no-claude`); AI review now goes through the `claude` CLI and is off by default.
+- Markdown file output (`--output`); use `--json` or the HTML report.
+- The Makefile; use `just`.
+
+### Previously unreleased
+
 ### Added
 
 - End-to-end integration tests for `runRoot` covering `--version`, `--help` (asserts every flag is documented), `--procs --no-claude` smoke (stdout shape), `--procs --no-claude --output FILE` (markdown file shape), `--logs=invalid_source` (validation error), `--programs=typo` (validation error), `--users --no-claude`, `--all --no-claude`, and YAML config loading from `XDG_CONFIG_HOME`.

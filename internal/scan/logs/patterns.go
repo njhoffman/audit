@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // Normalization regexes collapse high-cardinality tokens (numbers, addrs,
@@ -188,8 +188,9 @@ func ApplyRules(src Source, entries []Entry) []scan.Finding {
 		h := hits[name]
 		out = append(out, scan.Finding{
 			Severity: h.rule.Severity,
-			Subject:  fmt.Sprintf("[%s] %s (%d hit(s))", src, h.rule.Subject, h.count),
-			Detail:   fmt.Sprintf("rule=%s sample=%q", h.rule.Name, truncate(h.sample.Message, 240)),
+			Check:    h.rule.Name,
+			Subject:  string(src),
+			Detail:   fmt.Sprintf("%s (%d hit(s)); sample: %q", h.rule.Subject, h.count, truncate(h.sample.Message, 240)),
 		})
 	}
 	return out

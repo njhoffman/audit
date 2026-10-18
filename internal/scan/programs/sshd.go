@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 const (
@@ -56,7 +56,7 @@ func analyzeSSHD(ctx context.Context) ProgramResult {
 			} else {
 				out.Findings = append(out.Findings, scan.Finding{
 					Severity: scan.SeverityError,
-					Subject:  "sshd config failed syntax check (sshd -t)",
+					Subject:  "sshd: config failed syntax check (sshd -t)",
 					Detail:   msg,
 				})
 			}

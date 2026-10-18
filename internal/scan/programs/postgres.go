@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 const postgresGlob = "/etc/postgresql/*/main/postgresql.conf"

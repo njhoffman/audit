@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 const dockerDaemonJSON = "/etc/docker/daemon.json"

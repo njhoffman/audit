@@ -10,7 +10,7 @@ import (
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/process"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // Process is a flattened, marshalable view of a single process.
@@ -152,31 +152,35 @@ func deriveFindings(all, zombies []Process, opts Options) []scan.Finding {
 			names = append(names, fmt.Sprintf("%s(%d)", z.Name, z.PID))
 		}
 		out = append(out, scan.Finding{
+			Check:    "zombies",
 			Severity: scan.SeverityWarning,
-			Subject:  fmt.Sprintf("%d zombie process(es)", len(zombies)),
-			Detail:   fmt.Sprintf("Zombies indicate a parent that is not reaping children. Offenders: %s", joinShort(names, 10)),
+			Subject:  "zombie processes",
+			Detail:   fmt.Sprintf("%d zombie process(es); a parent is not reaping its children. Offenders: %s", len(zombies), joinShort(names, 10)),
 		})
 	}
 	for _, p := range all {
 		if p.CPUPct >= opts.HighCPUPct {
 			out = append(out, scan.Finding{
 				Severity: scan.SeverityNotice,
-				Subject:  fmt.Sprintf("high CPU: %s(%d) %.1f%%", p.Name, p.PID, p.CPUPct),
-				Detail:   fmt.Sprintf("user=%s cmd=%s", p.User, truncate(p.Cmd, 200)),
+				Check:    "high_cpu",
+				Subject:  p.Name,
+				Detail:   fmt.Sprintf("%.1f%% CPU (pid %d, user %s): %s", p.CPUPct, p.PID, p.User, truncate(p.Cmd, 200)),
 			})
 		}
 		if p.MemPct >= opts.HighMemPct {
 			out = append(out, scan.Finding{
 				Severity: scan.SeverityNotice,
-				Subject:  fmt.Sprintf("high memory: %s(%d) %.1f%% (%d MiB)", p.Name, p.PID, p.MemPct, p.RSSMB),
-				Detail:   fmt.Sprintf("user=%s cmd=%s", p.User, truncate(p.Cmd, 200)),
+				Check:    "high_memory",
+				Subject:  p.Name,
+				Detail:   fmt.Sprintf("%.1f%% memory, %d MiB RSS (pid %d, user %s): %s", p.MemPct, p.RSSMB, p.PID, p.User, truncate(p.Cmd, 200)),
 			})
 		}
 		if opts.HighThreadCount > 0 && p.NumThreads >= opts.HighThreadCount {
 			out = append(out, scan.Finding{
 				Severity: scan.SeverityNotice,
-				Subject:  fmt.Sprintf("high thread count: %s(%d) %d threads", p.Name, p.PID, p.NumThreads),
-				Detail:   fmt.Sprintf("user=%s cmd=%s", p.User, truncate(p.Cmd, 200)),
+				Check:    "high_threads",
+				Subject:  p.Name,
+				Detail:   fmt.Sprintf("%d threads (pid %d, user %s): %s", p.NumThreads, p.PID, p.User, truncate(p.Cmd, 200)),
 			})
 		}
 	}

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 type fakeStat struct {

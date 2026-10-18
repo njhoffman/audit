@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // fakeStat is a minimal os.FileInfo for permission-mode tests.
@@ -126,9 +126,9 @@ func TestFindPrivilegedGroupMembership_ExplicitAndPrimary(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("got %d findings: %+v", len(out), out)
 	}
-	subj := out[0].Subject
-	if !strings.Contains(subj, "sudo") || !strings.Contains(subj, "alice") || !strings.Contains(subj, "bob") {
-		t.Errorf("subject should include both alice and bob in sudo: %q", subj)
+	f := out[0]
+	if f.Subject != "sudo" || !strings.Contains(f.Detail, "alice") || !strings.Contains(f.Detail, "bob") {
+		t.Errorf("want subject sudo with alice and bob in detail: %+v", f)
 	}
 }
 
@@ -145,7 +145,7 @@ func TestFindShadowAnomalies_LockedWithLoginShell(t *testing.T) {
 	pwd := []PasswdEntry{{Name: "alice", Shell: "/bin/bash"}}
 	shd := []ShadowEntry{{Name: "alice", HashField: "!"}}
 	out := findShadowAnomalies(pwd, shd)
-	if len(out) != 1 || !strings.Contains(out[0].Subject, "locked password but login shell") {
+	if len(out) != 1 || out[0].Check != "locked_with_shell" || out[0].Subject != "alice" {
 		t.Errorf("got %+v", out)
 	}
 }

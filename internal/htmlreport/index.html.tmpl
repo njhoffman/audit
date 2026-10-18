@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>audit overview</title>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<main>
+<h1>audit overview</h1>
+<div class="meta">Generated {{stamp .Generated}}</div>
+<h2>Commands</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Last run</th><th>Age</th><th>Findings</th><th>Open tasks</th></tr></thead>
+<tbody>
+{{range .Rows}}<tr>
+<td>{{if .Link}}<a href="{{.Link}}">{{.Command}}</a>{{else}}{{.Command}}{{end}}</td>
+{{if .Latest}}<td>{{stamp .Latest.FinishedAt}}</td><td class="age-{{.Freshness}}">{{.Age}}</td>{{else}}<td class="empty">never</td><td>-</td>{{end}}
+<td>{{.Findings}}</td>
+<td>{{.Tasks}}</td>
+</tr>
+{{end}}
+</tbody>
+</table></div>
+<footer>audit {{.Version}}</footer>
+</main>
+</body>
+</html>

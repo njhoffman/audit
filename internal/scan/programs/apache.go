@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // apacheConfigCandidates lists the conventional layouts for Debian/Ubuntu

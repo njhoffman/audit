@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 const (
@@ -85,16 +85,16 @@ func cronFilePermFindings(path string, fi fs.FileInfo) []scan.Finding {
 	if mode&0o002 != 0 {
 		out = append(out, scan.Finding{
 			Severity: scan.SeverityCritical,
-			Subject:  fmt.Sprintf("cron: world-writable %s (%#o)", path, mode),
-			Detail:   "Anyone on the system can append commands run as root.",
+			Subject:  "cron: world-writable " + path,
+			Detail:   fmt.Sprintf("mode %#o. Anyone", mode) + " on the system can append commands run as root.",
 		})
 	}
 	// Group-writable when not owned by root group is suspicious.
 	if mode&0o020 != 0 {
 		out = append(out, scan.Finding{
 			Severity: scan.SeverityWarning,
-			Subject:  fmt.Sprintf("cron: group-writable %s (%#o)", path, mode),
-			Detail:   "Group write on a cron file can allow privilege escalation through group-membership exploits.",
+			Subject:  "cron: group-writable " + path,
+			Detail:   fmt.Sprintf("mode %#o. Group write", mode) + " on a cron file can allow privilege escalation through group-membership exploits.",
 		})
 	}
 	return out

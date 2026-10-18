@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // Options reserved for future tuning; scan currently has no knobs.

@@ -16,6 +16,11 @@ const (
 
 // Finding is a single derived anomaly produced by a scanner.
 type Finding struct {
+	// Check names the rule that produced the finding, relative to the
+	// scanner (e.g. "high_cpu" in procs). Subject identifies what it is
+	// about and stays stable between scans; counts, PIDs and other volatile
+	// values belong in Detail.
+	Check    string   `json:"check,omitempty"`
 	Severity Severity `json:"severity"`
 	Subject  string   `json:"subject"`
 	Detail   string   `json:"detail"`

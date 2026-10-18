@@ -1,0 +1,292 @@
+package render
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/njhoffman/audit/internal/config"
+	"github.com/njhoffman/audit/internal/environment"
+	"github.com/njhoffman/audit/internal/finding"
+	"github.com/njhoffman/audit/internal/packages"
+	"github.com/njhoffman/audit/internal/run"
+	"github.com/njhoffman/audit/internal/store"
+	"github.com/njhoffman/audit/internal/todo"
+)
+
+var now = time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+
+var th = config.Thresholds{Warn: 24 * time.Hour, Old: 168 * time.Hour}
+
+func printer(width int) (*Printer, *bytes.Buffer) {
+	var b bytes.Buffer
+	p := New(&b, true, width)
+	p.Now = func() time.Time { return now }
+	return p, &b
+}
+
+func sampleRun(age time.Duration) *run.Run {
+	fin := now.Add(-age)
+	return &run.Run{
+		Command: "system", Host: "box", StartedAt: fin.Add(-2 * time.Second), FinishedAt: fin, Ignored: 2,
+		Stats:  []run.Stat{{Group: "procs", Name: "total", Value: "412"}, {Name: "plain", Value: "x"}},
+		Errors: []string{"logs dmesg: permission denied"},
+		Findings: []finding.Finding{
+			{Command: "system", Check: "logs.oom_kill", Severity: finding.Error, Kind: finding.Issue,
+				Subject: "journal", Message: "OOM killer activated (3 hit(s))", Hint: "add swap",
+				Details: []string{"a", "b", "c", "d", "e", "f", "g"}},
+			{Command: "system", Check: "procs.high_cpu", Severity: finding.Notice, Kind: finding.Issue,
+				Subject: "firefox", Message: "93% CPU"},
+			{Command: "system", Check: "users.tidy", Severity: finding.Info, Kind: finding.Suggestion,
+				Subject: "accounts", Message: "remove unused accounts"},
+		},
+	}
+}
+
+func TestBanner(t *testing.T) {
+	p, _ := printer(80)
+	if b := p.Banner(sampleRun(time.Hour), th, false, ""); b != "" {
+		t.Errorf("fresh scan should have no banner: %q", b)
+	}
+	cases := []struct {
+		age  time.Duration
+		want []string
+	}{
+		{time.Hour, []string{"Saved results from 1h ago"}},
+		{3 * 24 * time.Hour, []string{"! Saved results are 3d old", "Run `audit system -r` to rescan."}},
+		{30 * 24 * time.Hour, []string{"OUTDATED", "4w old", "to rescan", "┏"}},
+	}
+	for _, c := range cases {
+		b := ansi.Strip(p.Banner(sampleRun(c.age), th, true, "audit system -r"))
+		for _, w := range c.want {
+			if !strings.Contains(strings.Join(strings.Fields(b), " "), w) {
+				t.Errorf("age %s: banner %q missing %q", c.age, b, w)
+			}
+		}
+	}
+}
+
+func TestReport(t *testing.T) {
+	p, b := printer(100)
+	p.Report(sampleRun(3*24*time.Hour), ReportOptions{Thresholds: th, Saved: true})
+	out := b.String()
+	for _, w := range []string{
+		"audit system", "box", "took 2s", "1 error  1 notice  1 info  (2 ignored)",
+		"Summary", "procs", "total  412", "Scan errors", "permission denied",
+		"Issues", "ERROR    logs.oom_kill  journal", "OOM killer activated", "hint: add swap",
+		"- e", "(+2 more, -v shows all)", "key system:logs.oom_kill:journal",
+		"Suggestions", "users.tidy", "! Saved results",
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("report missing %q:\n%s", w, out)
+		}
+	}
+	if strings.Contains(out, "- f") {
+		t.Errorf("details beyond %d should be hidden", defaultDetails)
+	}
+	if strings.Index(out, "Issues") > strings.Index(out, "Suggestions") {
+		t.Error("issues should come before suggestions")
+	}
+	if strings.Contains(out, "\x1b[") {
+		t.Error("no-color output contains escape codes")
+	}
+}
+
+func TestReportVerboseAndFilter(t *testing.T) {
+	p, b := printer(100)
+	p.Verbose = true
+	p.Report(sampleRun(0), ReportOptions{Filter: finding.Filter{MinSeverity: finding.Warning}})
+	out := b.String()
+	if !strings.Contains(out, "- g") {
+		t.Error("verbose should show every detail")
+	}
+	if strings.Contains(out, "procs.high_cpu") || !strings.Contains(out, "2 finding(s) hidden by filters") {
+		t.Errorf("filter not applied:\n%s", out)
+	}
+	if strings.Contains(out, "Saved results") {
+		t.Error("unsaved run should have no banner")
+	}
+}
+
+func TestReportAnalysis(t *testing.T) {
+	p, b := printer(80)
+	r := sampleRun(0)
+	r.Analysis = &run.Analysis{Text: "## Top issues\n\n- swap is off", Model: "m1", Level: "brief",
+		Cached: true, CreatedAt: now.Add(-2 * time.Hour), CostUSD: 0.01}
+	p.Report(r, ReportOptions{})
+	out := b.String()
+	for _, w := range []string{"AI review", "m1  brief  cached 2h ago  $0.0100", "Top issues", "swap is off"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing %q:\n%s", w, out)
+		}
+	}
+}
+
+func TestListTruncatesToWidth(t *testing.T) {
+	p, b := printer(60)
+	r := sampleRun(0)
+	r.Findings[1].Message = strings.Repeat("long message ", 20)
+	p.List(r, ReportOptions{})
+	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
+	var table []string
+	for i, l := range lines {
+		if strings.HasPrefix(l, "SEVERITY") {
+			table = lines[i:]
+		}
+	}
+	if len(table) != 4 {
+		t.Fatalf("want header + 3 rows, got:\n%s", b.String())
+	}
+	for _, l := range table {
+		if w := ansi.StringWidth(l); w > 60 {
+			t.Errorf("line wider than 60 (%d): %q", w, l)
+		}
+	}
+	if !strings.Contains(table[2], "…") || !strings.Contains(table[3], "(suggestion) accounts") {
+		t.Errorf("rows:\n%s", strings.Join(table, "\n"))
+	}
+}
+
+func TestListUnlimitedWidth(t *testing.T) {
+	p, b := printer(0)
+	r := sampleRun(0)
+	r.Findings[1].Message = strings.Repeat("x", 300)
+	p.List(r, ReportOptions{})
+	if !strings.Contains(b.String(), strings.Repeat("x", 300)) {
+		t.Error("width 0 should not truncate")
+	}
+}
+
+func TestSummary(t *testing.T) {
+	p, b := printer(120)
+	p.Summary([]CommandStatus{
+		{Command: "system", Thresholds: th, Latest: &store.RunInfo{FinishedAt: now.Add(-2 * time.Hour),
+			Counts: finding.Counts{finding.Error: 2, finding.Info: 1}},
+			Open: map[todo.Priority]int{todo.High: 2, todo.Low: 1}},
+		{Command: "packages", Thresholds: th, Latest: &store.RunInfo{FinishedAt: now.Add(-10 * 24 * time.Hour)}},
+		{Command: "repos", Thresholds: th},
+	})
+	out := b.String()
+	for _, w := range []string{"COMMAND", "system", "2h", "2 err 1 info", "2 high 1 low",
+		"packages", "10d", "none", "repos", "never"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("summary missing %q:\n%s", w, out)
+		}
+	}
+}
+
+func TestOpenCounts(t *testing.T) {
+	got := OpenCounts([]todo.Todo{
+		{Priority: todo.High, Status: todo.Open}, {Priority: todo.High, Status: todo.InProgress},
+		{Priority: todo.Low, Status: todo.Done}, {Priority: todo.Low, Status: todo.WontDo},
+	})
+	if got[todo.High] != 2 || got[todo.Low] != 0 {
+		t.Errorf("%v", got)
+	}
+}
+
+func TestTodos(t *testing.T) {
+	p, b := printer(80)
+	p.Todos(nil)
+	if !strings.Contains(b.String(), "No tasks match.") {
+		t.Error("empty message")
+	}
+	b.Reset()
+	ts := []todo.Todo{
+		{ID: 3, Priority: todo.High, Status: todo.InProgress, Command: "system", Title: "Fix OOM"},
+		{ID: 7, Priority: todo.Suggestion, Status: todo.WontDo, Command: "environment", Title: "Tidy PATH"},
+	}
+	p.Todos(ts)
+	out := b.String()
+	for _, w := range []string{"ID", "PRIORITY", "3   high", "in progress", "won't do", "Tidy PATH"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("todos missing %q:\n%s", w, out)
+		}
+	}
+	b.Reset()
+	p.Todo(todo.Todo{ID: 3, Title: "Fix OOM", Priority: todo.High, Status: todo.Open, Key: "system:x:y",
+		Note: "after reboot", Details: []string{"one"}, CreatedAt: now})
+	out = b.String()
+	for _, w := range []string{"#3 Fix OOM", "priority  high", "key       system:x:y", "note      after reboot",
+		"- one", "created   2026-10-17"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("todo missing %q:\n%s", w, out)
+		}
+	}
+	if strings.Contains(out, "resolved") {
+		t.Error("zero times should be omitted")
+	}
+}
+
+func TestPackages(t *testing.T) {
+	p, b := printer(100)
+	p.Verbose = true
+	p.Packages(packages.Data{Inventories: []packages.Inventory{
+		{Manager: "cargo", Available: true, ManagerVersion: "1.90", Runtime: &packages.Runtime{Name: "rust", Version: "1.90"},
+			Packages: []packages.Package{{Name: "ripgrep", Version: "14.1.0", RuntimeVersion: "1.88",
+				Source: "crates.io", Executables: []string{"rg"}}}},
+		{Manager: "gh"},
+		{Manager: "uv", Available: true, Error: "boom"},
+	}})
+	out := b.String()
+	for _, w := range []string{"cargo  1.90  rust 1.90  1 package(s)", "ripgrep", "14.1.0", "crates.io", "rg",
+		"EXECUTABLES", "gh  not installed", "uv  error: boom"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("packages missing %q:\n%s", w, out)
+		}
+	}
+}
+
+func TestEnvironment(t *testing.T) {
+	p, b := printer(100)
+	p.Environment(environment.Data{
+		EnvSource: "zsh tty",
+		Captures: []environment.Capture{
+			{Shell: "zsh", Mode: "tty", Duration: 450 * time.Millisecond, Output: []string{"oops"}},
+			{Shell: "bash", Mode: "notty", TimedOut: true},
+		},
+		Scripts: []environment.Script{
+			{Path: "/h/.zshrc", Dialect: "zsh", Startup: true, LoadedBy: []string{"zsh"}},
+			{Path: "/h/notes.sh", Dialect: "sh"},
+			{Path: "/h/bin/tool", Dialect: "bash", Executable: true},
+		},
+		Syntax: []environment.SyntaxResult{{Path: "/h/notes.sh"}},
+		Traced: []string{"/h/.zshrc"},
+	})
+	out := b.String()
+	for _, w := range []string{"zsh    tty    450ms", "timed out", "analyzed env: zsh tty", "startup",
+		"not loaded  syntax error  /h/notes.sh", "executable"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("environment missing %q:\n%s", w, out)
+		}
+	}
+}
+
+func TestWrappedHintHasNoTrailingPadding(t *testing.T) {
+	var buf bytes.Buffer
+	p := New(&buf, true, 40)
+	p.findings([]finding.Finding{{Command: "c", Check: "k", Severity: finding.Error, Subject: "s", Message: "m",
+		Hint: "Add /a/very/long/path/that/cannot/be/broken/at/spaces/anywhere to PATH"}})
+	for _, l := range strings.Split(buf.String(), "\n") {
+		if strings.HasSuffix(l, " ") {
+			t.Errorf("trailing space in %q", l)
+		}
+	}
+}
+
+func TestTrimPadding(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"plain   \nnext", "plain\nnext"},
+		{"\x1b[1mbold\x1b[0m \x1b[0m  ", "\x1b[1mbold\x1b[0m"},
+		{"  indented", "  indented"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := trimPadding(c.in); got != c.want {
+			t.Errorf("trimPadding(%q) = %q want %q", c.in, got, c.want)
+		}
+	}
+}

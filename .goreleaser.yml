@@ -1,18 +1,18 @@
 version: 2
 
-project_name: sysaudit
+project_name: audit
 
 before:
   hooks:
     - go mod tidy
     # Render the manpage so it can be packaged into the archive. Uses the
-    # same go-md2man path as `make manpage`.
-    - go run github.com/cpuguy83/go-md2man/v2@v2.0.4 -in man/sysaudit.1.md -out man/sysaudit.1
+    # same go-md2man path as `just manpage`.
+    - go run github.com/cpuguy83/go-md2man/v2@v2.0.4 -in man/audit.1.md -out man/audit.1
 
 builds:
-  - id: sysaudit
-    main: ./cmd/sysaudit
-    binary: sysaudit
+  - id: audit
+    main: ./cmd/audit
+    binary: audit
     env:
       - CGO_ENABLED=0
     goos:
@@ -24,12 +24,12 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/njhoffman/sysaudit/internal/version.Version={{ .Version }}
-      - -X github.com/njhoffman/sysaudit/internal/version.Commit={{ .Commit }}
-      - -X github.com/njhoffman/sysaudit/internal/version.Date={{ .Date }}
+      - -X github.com/njhoffman/audit/internal/version.Version={{ .Version }}
+      - -X github.com/njhoffman/audit/internal/version.Commit={{ .Commit }}
+      - -X github.com/njhoffman/audit/internal/version.Date={{ .Date }}
 
 archives:
-  - id: sysaudit
+  - id: audit
     formats:
       - tar.gz
     name_template: >-
@@ -42,8 +42,8 @@ archives:
       - README.md
       - CHANGELOG.md
       - LICENSE*
-      - man/sysaudit.1
-      - man/sysaudit.1.md
+      - man/audit.1
+      - man/audit.1.md
 
 checksum:
   name_template: "checksums.txt"
@@ -65,8 +65,8 @@ release:
   prerelease: auto
   mode: replace
   header: |
-    ## sysaudit {{ .Tag }}
+    ## audit {{ .Tag }}
 
     Linux audit tool that scans processes, services, users/groups, logs, and per-program configuration; runs the digest through Claude for analysis; and writes a colorful or Markdown report.
 
-    See [CHANGELOG.md](https://github.com/njhoffman/sysaudit/blob/{{ .Tag }}/CHANGELOG.md) for full notes.
+    See [CHANGELOG.md](https://github.com/njhoffman/audit/blob/{{ .Tag }}/CHANGELOG.md) for full notes.

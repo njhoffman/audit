@@ -3,122 +3,171 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
+	"time"
 )
 
-func TestLoad_NoFile(t *testing.T) {
-	// Point XDG at a directory we know is empty so config.yaml is absent.
+func isolate(t *testing.T) string {
+	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(dir, "data"))
+	return dir
+}
 
-	v := New()
-	cfg, err := Load(v)
-	if err != nil {
-		t.Fatalf("Load with no file should not error, got: %v", err)
+func write(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if cfg.Journal != DefaultJournalFlags {
-		t.Errorf("default journal flags not applied: got %q want %q", cfg.Journal, DefaultJournalFlags)
-	}
-	if got, want := cfg.Claude.Model, DefaultModel; got != want {
-		t.Errorf("default model: got %q want %q", got, want)
-	}
-	if cfg.Claude.MaxTokens != DefaultMaxTokens {
-		t.Errorf("default max_tokens: got %d want %d", cfg.Claude.MaxTokens, DefaultMaxTokens)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestLoad_FromYAML(t *testing.T) {
-	dir := t.TempDir()
-	cfgDir := filepath.Join(dir, "sysaudit")
-	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+func TestLoadDefaults(t *testing.T) {
+	dir := isolate(t)
+	cfg, used, err := Load("")
+	if err != nil {
 		t.Fatal(err)
 	}
-	yaml := []byte(`
-journal: "-p 3 --no-pager"
-logs:
-  - auth
-  - kern
-claude:
-  model: claude-sonnet-4-6
-  max_tokens: 2048
-  analysis_level: deep
+	if used != "" {
+		t.Errorf("no file should be reported, got %q", used)
+	}
+	if cfg.System.Journal != DefaultJournalFlags || cfg.AI.Model != DefaultModel || cfg.History != DefaultHistory {
+		t.Errorf("defaults not applied: %+v", cfg)
+	}
+	if cfg.DataDir != filepath.Join(dir, "data", "audit") || !strings.HasSuffix(cfg.DBPath(), "audit/audit.db") {
+		t.Errorf("data dir: %q", cfg.DataDir)
+	}
+	if got := cfg.Stale.For("packages"); got.Warn != 24*time.Hour || got.Old != 168*time.Hour {
+		t.Errorf("default thresholds: %+v", got)
+	}
+	if got := cfg.Stale.For("files"); got.Warn != 168*time.Hour || got.Old != 720*time.Hour {
+		t.Errorf("files thresholds: %+v", got)
+	}
+	if len(cfg.Packages.Managers) != 6 || cfg.Environment.StartupTimeout != 15*time.Second {
+		t.Errorf("command defaults: %+v %+v", cfg.Packages, cfg.Environment)
+	}
+}
+
+func TestLoadFile(t *testing.T) {
+	dir := isolate(t)
+	path := filepath.Join(dir, "config", "audit.yaml")
+	write(t, path, `
+history: 5
+stale:
+  warn: 2h
+  old: 10h
+  commands:
+    repos: {old: 48h}
+ignore: [path.missing]
+ai: {model: claude-haiku-5-5}
+packages: {managers: [cargo]}
 `)
-	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), yaml, 0o644); err != nil {
+	cfg, used, err := Load("")
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("ANTHROPIC_API_KEY", "")
-
-	v := New()
-	cfg, err := Load(v)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
+	if used != path || cfg.History != 5 || cfg.AI.Model != "claude-haiku-5-5" || cfg.Ignore[0] != "path.missing" {
+		t.Errorf("file not applied: %+v", cfg)
 	}
-	if cfg.Journal != "-p 3 --no-pager" {
-		t.Errorf("journal not loaded from YAML: %q", cfg.Journal)
+	if got := cfg.Stale.For("repos"); got.Warn != 2*time.Hour || got.Old != 48*time.Hour {
+		t.Errorf("partial override: %+v", got)
 	}
-	if got := cfg.Logs; len(got) != 2 || got[0] != "auth" || got[1] != "kern" {
-		t.Errorf("logs not loaded from YAML: %v", got)
-	}
-	if cfg.Claude.Model != "claude-sonnet-4-6" {
-		t.Errorf("claude.model: got %q", cfg.Claude.Model)
-	}
-	if cfg.Claude.MaxTokens != 2048 {
-		t.Errorf("claude.max_tokens: got %d", cfg.Claude.MaxTokens)
-	}
-	if cfg.Claude.AnalysisLevel != "deep" {
-		t.Errorf("claude.analysis_level: got %q", cfg.Claude.AnalysisLevel)
+	if len(cfg.Packages.Managers) != 1 || cfg.System.Journal != DefaultJournalFlags {
+		t.Errorf("merge with defaults: %+v", cfg)
 	}
 }
 
-func TestLoad_EnvAPIKeyFallback(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("ANTHROPIC_API_KEY", "sk-test-123")
-
-	v := New()
-	cfg, err := Load(v)
+func TestLoadEnvOverride(t *testing.T) {
+	isolate(t)
+	t.Setenv("AUDIT_AI_MODEL", "from-env")
+	cfg, _, err := Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Claude.APIKey != "sk-test-123" {
-		t.Errorf("expected APIKey from env, got %q", cfg.Claude.APIKey)
+	if cfg.AI.Model != "from-env" {
+		t.Errorf("env override: %q", cfg.AI.Model)
 	}
 }
 
-func TestLoad_YAMLAPIKeyOverridesEnv(t *testing.T) {
-	dir := t.TempDir()
-	cfgDir := filepath.Join(dir, "sysaudit")
-	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
-		t.Fatal(err)
+func TestLoadErrors(t *testing.T) {
+	dir := isolate(t)
+	if _, _, err := Load(filepath.Join(dir, "missing.yaml")); err == nil {
+		t.Error("explicit missing file must error")
 	}
-	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"),
-		[]byte("claude:\n  api_key: from-yaml\n"), 0o644); err != nil {
-		t.Fatal(err)
+	bad := filepath.Join(dir, "bad.yaml")
+	write(t, bad, "history: [")
+	if _, _, err := Load(bad); err == nil {
+		t.Error("invalid YAML must error")
 	}
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("ANTHROPIC_API_KEY", "from-env")
-
-	v := New()
-	cfg, err := Load(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Claude.APIKey != "from-yaml" {
-		t.Errorf("expected YAML to win over env, got %q", cfg.Claude.APIKey)
+	for _, body := range []string{
+		"history: 0", "stale: {warn: 5h, old: 1h}", "environment: {shells: [fish]}",
+		"display: {details: 0}", "ai: {max_details: -1}", "system: {log_max_lines: 0}",
+		"system: {procs: {high_cpu: 0}}", "system: {services: {high_restarts: -1}}",
+		"environment: {shellcheck: {severity: loud}}",
+	} {
+		write(t, bad, body)
+		if _, _, err := Load(bad); err == nil {
+			t.Errorf("invalid config %q must error", body)
+		}
 	}
 }
 
-func TestPath(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	p, err := Path()
+// The template documents every default, so loading it must give exactly the
+// config that no file gives.
+func TestTemplateMatchesDefaults(t *testing.T) {
+	dir := isolate(t)
+	want, _, err := Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(dir, "sysaudit", "config.yaml")
-	if p != want {
-		t.Errorf("Path(): got %q want %q", p, want)
+	path := filepath.Join(dir, "t.yaml")
+	write(t, path, Template)
+	got, _, err := Load(path)
+	if err != nil {
+		t.Fatalf("template does not load: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("template disagrees with defaults:\n got %+v\nwant %+v", got, want)
+	}
+	if got.System.Procs.HighCPU != 80 || got.Environment.Shellcheck.Exclude[0] != "SC2034" || got.Display.Details != 5 {
+		t.Errorf("new keys: %+v %+v", got.System.Procs, got.Environment.Shellcheck)
+	}
+}
+
+func TestEnsureDefault(t *testing.T) {
+	dir := isolate(t)
+	want := filepath.Join(dir, "config", "audit.yaml")
+	path, created, err := EnsureDefault()
+	if err != nil || path != want || !created {
+		t.Fatalf("first call: %q %v %v", path, created, err)
+	}
+	if b, err := os.ReadFile(path); err != nil || string(b) != Template {
+		t.Fatalf("written file is not the template: %v", err)
+	}
+	write(t, path, "history: 3\n")
+	if _, created, err := EnsureDefault(); err != nil || created {
+		t.Fatalf("existing file must be left alone: %v %v", created, err)
+	}
+	if cfg, used, err := Load(""); err != nil || used != want || cfg.History != 3 {
+		t.Errorf("load after ensure: %q %v", used, err)
+	}
+}
+
+func TestEnsureDefaultUnwritable(t *testing.T) {
+	dir := isolate(t)
+	ro := filepath.Join(dir, "config")
+	if err := os.MkdirAll(ro, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	if _, _, err := EnsureDefault(); err == nil {
+		t.Error("unwritable config dir must error")
 	}
 }

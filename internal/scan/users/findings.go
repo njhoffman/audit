@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // expectedFileMode lists the conventional secure mode and owner/group
@@ -41,9 +41,10 @@ func DeriveFindings(pwd []PasswdEntry, grp []GroupEntry, shd []ShadowEntry, file
 		out = append(out, findShadowAnomalies(pwd, shd)...)
 	} else {
 		out = append(out, scan.Finding{
+			Check:    "shadow_unreadable",
 			Severity: scan.SeverityInfo,
-			Subject:  "shadow not readable; password-hash checks were skipped",
-			Detail:   "Run as root or as a member of group `shadow` to enable empty-hash and locked-but-shell checks.",
+			Subject:  PathShadow,
+			Detail:   "Not readable, so password-hash checks were skipped. Run as root or as a member of group `shadow` to enable empty-hash and locked-but-shell checks.",
 		})
 	}
 
@@ -59,8 +60,9 @@ func findUID0Extras(pwd []PasswdEntry) []scan.Finding {
 		if e.UID == 0 && e.Name != "root" {
 			out = append(out, scan.Finding{
 				Severity: scan.SeverityCritical,
-				Subject:  fmt.Sprintf("UID 0 user is not root: %s", e.Name),
-				Detail:   fmt.Sprintf("home=%s shell=%s — additional UID-0 accounts are equivalent to root and a common backdoor pattern.", e.Home, e.Shell),
+				Check:    "uid0_extra",
+				Subject:  e.Name,
+				Detail:   fmt.Sprintf("UID 0 account other than root (home=%s shell=%s); additional UID-0 accounts are equivalent to root and a common backdoor pattern.", e.Home, e.Shell),
 			})
 		}
 	}
@@ -87,8 +89,9 @@ func findUIDCollisions(pwd []PasswdEntry) []scan.Finding {
 			}
 			out = append(out, scan.Finding{
 				Severity: sev,
-				Subject:  fmt.Sprintf("UID %d shared by %d users", uid, len(names)),
-				Detail:   fmt.Sprintf("users: %s — UID collisions break audit attribution and can hide a backdoor.", strings.Join(names, ", ")),
+				Check:    "uid_shared",
+				Subject:  fmt.Sprintf("UID %d", uid),
+				Detail:   fmt.Sprintf("shared by %d users: %s; UID collisions break audit attribution and can hide a backdoor.", len(names), strings.Join(names, ", ")),
 			})
 		}
 	}
@@ -111,8 +114,9 @@ func findGIDCollisions(grp []GroupEntry) []scan.Finding {
 		if len(names) > 1 {
 			out = append(out, scan.Finding{
 				Severity: scan.SeverityNotice,
-				Subject:  fmt.Sprintf("GID %d shared by %d groups", gid, len(names)),
-				Detail:   fmt.Sprintf("groups: %s", strings.Join(names, ", ")),
+				Check:    "gid_shared",
+				Subject:  fmt.Sprintf("GID %d", gid),
+				Detail:   fmt.Sprintf("shared by %d groups: %s", len(names), strings.Join(names, ", ")),
 			})
 		}
 	}
@@ -128,8 +132,9 @@ func findSystemAccountsWithLoginShell(pwd []PasswdEntry) []scan.Finding {
 		if LoginShells[e.Shell] {
 			out = append(out, scan.Finding{
 				Severity: scan.SeverityWarning,
-				Subject:  fmt.Sprintf("system account has login shell: %s (UID %d)", e.Name, e.UID),
-				Detail:   fmt.Sprintf("shell=%s home=%s — service accounts should use /usr/sbin/nologin.", e.Shell, e.Home),
+				Check:    "system_login_shell",
+				Subject:  e.Name,
+				Detail:   fmt.Sprintf("system account (UID %d) has login shell %s (home=%s); service accounts should use /usr/sbin/nologin.", e.UID, e.Shell, e.Home),
 			})
 		}
 	}
@@ -199,8 +204,9 @@ func findPrivilegedGroupMembership(pwd []PasswdEntry, grp []GroupEntry) []scan.F
 		sort.Strings(names)
 		out = append(out, scan.Finding{
 			Severity: scan.SeverityNotice,
-			Subject:  fmt.Sprintf("members of privileged group %s: %s", g, strings.Join(names, ", ")),
-			Detail:   fmt.Sprintf("Membership in %s confers privileges: review whether each account still needs it.", g),
+			Check:    "privileged_group",
+			Subject:  g,
+			Detail:   fmt.Sprintf("members: %s; membership in %s confers privileges, review whether each account still needs it.", strings.Join(names, ", "), g),
 		})
 	}
 	return out
@@ -217,8 +223,9 @@ func findShadowAnomalies(pwd []PasswdEntry, shd []ShadowEntry) []scan.Finding {
 		if s.HashField == "" {
 			out = append(out, scan.Finding{
 				Severity: scan.SeverityCritical,
-				Subject:  fmt.Sprintf("user has empty password hash: %s", s.Name),
-				Detail:   "An empty hash field allows login with no password. Lock the account or set a password.",
+				Check:    "empty_password",
+				Subject:  s.Name,
+				Detail:   "Empty password hash. An empty hash field allows login with no password. Lock the account or set a password.",
 			})
 			continue
 		}
@@ -230,8 +237,9 @@ func findShadowAnomalies(pwd []PasswdEntry, shd []ShadowEntry) []scan.Finding {
 			if p, ok := pwdByName[s.Name]; ok && LoginShells[p.Shell] {
 				out = append(out, scan.Finding{
 					Severity: scan.SeverityNotice,
-					Subject:  fmt.Sprintf("locked password but login shell: %s", s.Name),
-					Detail:   fmt.Sprintf("hash=%q shell=%s — verify that any SSH keys or sudoers entries for this user are intentional.", s.HashField, p.Shell),
+					Check:    "locked_with_shell",
+					Subject:  s.Name,
+					Detail:   fmt.Sprintf("locked password but login shell (hash=%q shell=%s); verify that any SSH keys or sudoers entries for this user are intentional.", s.HashField, p.Shell),
 				})
 			}
 		}
@@ -266,8 +274,9 @@ func findFilePermAnomalies(stats map[string]os.FileInfo) []scan.Finding {
 			}
 			out = append(out, scan.Finding{
 				Severity: sev,
-				Subject:  fmt.Sprintf("%s has loose permissions: %#o", p, mode),
-				Detail:   fmt.Sprintf("expected at most %#o; extra bits: %#o", want.maxMode, extra),
+				Check:    "file_permissions",
+				Subject:  p,
+				Detail:   fmt.Sprintf("loose permissions %#o; expected at most %#o, extra bits %#o", mode, want.maxMode, extra),
 			})
 		}
 	}

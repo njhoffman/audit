@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 func enriched(scope Scope, name, load, active string, props Properties) EnrichedUnit {
@@ -87,7 +87,7 @@ func TestDeriveFindings_LoadNotFound_OnlyWhenEnabledOrActive(t *testing.T) {
 			out := DeriveFindings(units, FindingOptions{})
 			fired := false
 			for _, f := range out {
-				if strings.Contains(f.Subject, "load=not-found") {
+				if f.Check == "load_error" && strings.Contains(f.Detail, "load=not-found") {
 					fired = true
 					break
 				}
@@ -106,7 +106,7 @@ func TestDeriveFindings_MissingFragment(t *testing.T) {
 		}),
 	}
 	out := DeriveFindings(units, FindingOptions{})
-	if len(out) != 1 || !strings.Contains(out[0].Subject, "FragmentPath") {
+	if len(out) != 1 || out[0].Check != "missing_fragment" || out[0].Subject != "system/ghost.service" {
 		t.Errorf("missing fragment: %+v", out)
 	}
 }
@@ -118,7 +118,7 @@ func TestDeriveFindings_HighRestart(t *testing.T) {
 		}),
 	}
 	out := DeriveFindings(units, FindingOptions{HighRestartCount: 5})
-	if len(out) != 1 || !strings.Contains(out[0].Subject, "restarted 7") {
+	if len(out) != 1 || out[0].Check != "restarts" || !strings.Contains(out[0].Detail, "restarted 7") {
 		t.Errorf("high restart: %+v", out)
 	}
 }
@@ -131,7 +131,7 @@ func TestDeriveFindings_HighRestartDisabledAtZero(t *testing.T) {
 	}
 	out := DeriveFindings(units, FindingOptions{HighRestartCount: 0})
 	for _, f := range out {
-		if strings.Contains(f.Subject, "restarted") {
+		if f.Check == "restarts" {
 			t.Errorf("expected no high-restart finding, got %+v", f)
 		}
 	}

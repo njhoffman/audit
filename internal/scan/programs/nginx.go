@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 const nginxConfigPath = "/etc/nginx/nginx.conf"
@@ -40,7 +40,7 @@ func analyzeNginx(ctx context.Context) ProgramResult {
 	if err := cmd.Run(); err != nil {
 		out.Findings = append(out.Findings, scan.Finding{
 			Severity: scan.SeverityError,
-			Subject:  "nginx config failed syntax check (nginx -t)",
+			Subject:  "nginx: config failed syntax check (nginx -t)",
 			Detail:   strings.TrimSpace(stderr.String()),
 		})
 		// Continue on; the dump may still parse.

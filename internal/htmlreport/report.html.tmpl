@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>audit {{.Run.Command}}</title>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<main>
+<h1>audit {{.Run.Command}}</h1>
+<div class="meta">{{.Run.Host}} · scanned {{stamp .Run.FinishedAt}} · took {{.Run.Duration.Round 100000000}}{{if .Run.Scope}} · scope {{.Run.Scope}}{{end}}{{if .Run.Ignored}} · {{.Run.Ignored}} ignored{{end}}</div>
+
+{{if eq .Freshness "old"}}<div class="banner old">OUTDATED: these results are {{.Age}} old. Run <code>{{.Rescan}}</code> to refresh.</div>
+{{else if eq .Freshness "stale"}}<div class="banner stale">These results are {{.Age}} old. Run <code>{{.Rescan}}</code> to refresh.</div>
+{{else}}<div class="banner fresh">Results from {{.Ago}}.</div>{{end}}
+
+<div class="chips">
+{{range .Counts}}<span class="chip sev-{{.Severity}}">{{.N}} {{.Severity}}</span>{{else}}<span class="chip sev-info">no findings</span>{{end}}
+</div>
+
+{{if .Groups}}
+<h2>Summary</h2>
+<div class="stats">
+{{range .Groups}}<div class="panel">{{if .Name}}<h3>{{.Name}}</h3>{{end}}<dl>{{range .Stats}}<dt>{{.Name}}</dt><dd>{{.Value}}</dd>{{end}}</dl></div>
+{{end}}
+</div>
+{{end}}
+
+{{if .Run.Errors}}
+<h2>Scan errors</h2>
+<div class="panel"><ul>{{range .Run.Errors}}<li class="sev-error">{{.}}</li>{{end}}</ul></div>
+{{end}}
+
+{{if .Total}}
+<h2>Findings</h2>
+<div class="controls">
+<input type="search" id="q" placeholder="Filter findings" aria-label="Filter findings">
+{{range .Counts}}<label class="sev-{{.Severity}}"><input type="checkbox" class="sev" value="{{.Severity}}" checked> {{.Severity}}</label>{{end}}
+</div>
+{{if .Issues}}<h3>Issues</h3>{{range .Issues}}{{template "finding" .}}{{end}}{{end}}
+{{if .Suggestion}}<h3>Suggestions</h3>{{range .Suggestion}}{{template "finding" .}}{{end}}{{end}}
+<p class="empty" id="none" hidden>No findings match the filter.</p>
+{{end}}
+
+{{range .Tables}}
+<h2>{{.Title}}</h2>
+{{if .Note}}<p class="meta">{{.Note}}</p>{{end}}
+{{if .Rows}}<div class="table-wrap"><table>
+<thead><tr>{{range .Columns}}<th>{{.}}</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr>{{range .}}<td class="pre">{{.}}</td>{{end}}</tr>{{end}}</tbody>
+</table></div>{{end}}
+{{end}}
+
+<h2>Tasks</h2>
+{{if .Todos}}<div class="table-wrap"><table>
+<thead><tr><th>ID</th><th>Priority</th><th>Status</th><th>Title</th><th>Note</th></tr></thead>
+<tbody>{{range .Todos}}<tr{{if .Status.Closed}} class="closed"{{end}}><td>{{.ID}}</td><td class="prio-{{.Priority}}">{{.Priority}}</td><td>{{.Status.Label}}</td><td>{{.Title}}</td><td>{{.Note}}</td></tr>{{end}}</tbody>
+</table></div>
+<p class="meta">Change a status with <code>audit todo &lt;id&gt; --status done</code> or in the dashboard (<code>audit</code>).</p>
+{{else}}<p class="empty">No tasks for this command.</p>{{end}}
+
+{{if .Analysis}}
+<h2>AI review</h2>
+<p class="meta">{{.Run.Analysis.Model}} · {{.Run.Analysis.Level}} · {{stamp .Run.Analysis.CreatedAt}}</p>
+<div class="review">{{.Analysis}}</div>
+{{end}}
+
+<footer>Generated {{stamp .Generated}} by audit {{.Version}}.</footer>
+</main>
+<script>
+(function () {
+  var q = document.getElementById('q');
+  if (!q) return;
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('input.sev'));
+  var items = Array.prototype.slice.call(document.querySelectorAll('.finding'));
+  var none = document.getElementById('none');
+  function apply() {
+    var on = {}, text = q.value.toLowerCase(), shown = 0;
+    boxes.forEach(function (b) { on[b.value] = b.checked; });
+    items.forEach(function (el) {
+      var ok = on[el.dataset.sev] && (!text || el.textContent.toLowerCase().indexOf(text) >= 0);
+      el.hidden = !ok;
+      if (ok) shown++;
+    });
+    none.hidden = shown > 0;
+  }
+  q.addEventListener('input', apply);
+  boxes.forEach(function (b) { b.addEventListener('change', apply); });
+})();
+</script>
+</body>
+</html>
+{{define "finding"}}<div class="finding sev-{{.Severity}}" data-sev="{{.Severity}}">
+<div class="head"><span class="badge">{{.Severity}}</span><span class="check mono">{{.Check}}</span>{{if .Subject}}<span class="subject">{{.Subject}}</span>{{end}}</div>
+{{if .Message}}<div class="body">{{.Message}}</div>{{end}}
+{{if .Hint}}<div class="hint">hint: {{.Hint}}</div>{{end}}
+{{if .Details}}<details{{if le (len .Details) 5}} open{{end}}><summary>{{len .Details}} detail(s)</summary><ul>{{range .Details}}<li class="mono">{{.}}</li>{{end}}</ul></details>{{end}}
+<div class="key mono">{{.Key}}</div>
+</div>{{end}}

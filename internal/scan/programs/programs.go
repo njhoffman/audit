@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // Program identifies one analyzed program.

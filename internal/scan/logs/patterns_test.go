@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 func TestNormalize(t *testing.T) {
@@ -77,8 +77,8 @@ func TestApplyRules_OOM(t *testing.T) {
 	if len(out) != 1 || out[0].Severity != scan.SeverityCritical {
 		t.Errorf("OOM finding: %+v", out)
 	}
-	if !strings.Contains(out[0].Subject, "OOM killer") {
-		t.Errorf("subject: %q", out[0].Subject)
+	if out[0].Check != "oom-kill" || out[0].Subject != "journal" || !strings.Contains(out[0].Detail, "OOM killer") {
+		t.Errorf("OOM finding: %+v", out[0])
 	}
 }
 
@@ -92,8 +92,8 @@ func TestApplyRules_AggregatesMultipleHits(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("expected 1 finding (auth-failure), got %d", len(out))
 	}
-	if !strings.Contains(out[0].Subject, "(3 hit(s))") {
-		t.Errorf("expected hit count in subject: %q", out[0].Subject)
+	if out[0].Subject != "auth" || !strings.Contains(out[0].Detail, "(3 hit(s))") {
+		t.Errorf("expected stable subject and hit count in detail: %+v", out[0])
 	}
 }
 

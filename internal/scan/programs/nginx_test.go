@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 func TestNginxRules_ServerTokensOn(t *testing.T) {

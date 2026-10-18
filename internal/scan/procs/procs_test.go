@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 func TestDeriveFindings_Zombies(t *testing.T) {
@@ -20,8 +20,8 @@ func TestDeriveFindings_Zombies(t *testing.T) {
 	if out[0].Severity != scan.SeverityWarning {
 		t.Errorf("zombie severity: got %q", out[0].Severity)
 	}
-	if !strings.Contains(out[0].Subject, "2 zombie") {
-		t.Errorf("zombie subject missing count: %q", out[0].Subject)
+	if out[0].Check != "zombies" || out[0].Subject != "zombie processes" || !strings.Contains(out[0].Detail, "2 zombie") {
+		t.Errorf("zombie finding: %+v", out[0])
 	}
 }
 
@@ -34,8 +34,8 @@ func TestDeriveFindings_HighCPU(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("want 1 finding, got %d", len(out))
 	}
-	if !strings.Contains(out[0].Subject, "high CPU") {
-		t.Errorf("subject: %q", out[0].Subject)
+	if out[0].Check != "high_cpu" || out[0].Subject != "hot" || !strings.Contains(out[0].Detail, "pid 2") {
+		t.Errorf("high cpu: %+v", out[0])
 	}
 }
 
@@ -44,7 +44,7 @@ func TestDeriveFindings_HighMem(t *testing.T) {
 		{PID: 1, Name: "fat", MemPct: 30.0, RSSMB: 1024, User: "u", Cmd: "x"},
 	}
 	out := deriveFindings(all, nil, DefaultOptions())
-	if len(out) != 1 || !strings.Contains(out[0].Subject, "high memory") {
+	if len(out) != 1 || out[0].Check != "high_memory" || out[0].Subject != "fat" || !strings.Contains(out[0].Detail, "1024 MiB") {
 		t.Fatalf("expected one high memory finding, got %v", out)
 	}
 }
@@ -54,7 +54,7 @@ func TestDeriveFindings_HighThreads(t *testing.T) {
 		{PID: 1, Name: "thready", NumThreads: 2000, User: "u", Cmd: "x"},
 	}
 	out := deriveFindings(all, nil, DefaultOptions())
-	if len(out) != 1 || !strings.Contains(out[0].Subject, "high thread count") {
+	if len(out) != 1 || out[0].Check != "high_threads" || !strings.Contains(out[0].Detail, "2000 threads") {
 		t.Fatalf("expected one high thread finding, got %v", out)
 	}
 }

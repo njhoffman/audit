@@ -40,7 +40,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/njhoffman/sysaudit
+        - github.com/njhoffman/audit
 
 issues:
   max-issues-per-linter: 0

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // Options configures a services scan.

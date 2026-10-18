@@ -5,7 +5,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/njhoffman/sysaudit/internal/scan"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 // EnrichedUnit pairs a list-units row with its detailed properties.
@@ -76,37 +76,42 @@ func DeriveFindings(units []EnrichedUnit, opts FindingOptions) []scan.Finding {
 		}
 		out = append(out, scan.Finding{
 			Severity: sev,
-			Subject:  fmt.Sprintf("%s service failed: %s", u.Scope, u.Name),
-			Detail: fmt.Sprintf("ActiveState=%s SubState=%s Result=%s Description=%q",
+			Check:    "failed",
+			Subject:  unitSubject(u),
+			Detail: fmt.Sprintf("failed: ActiveState=%s SubState=%s Result=%s Description=%q",
 				u.Props.ActiveState, u.Props.SubState, u.Props.Result, u.Description),
 		})
 	}
 	for _, u := range masked {
 		out = append(out, scan.Finding{
 			Severity: scan.SeverityWarning,
-			Subject:  fmt.Sprintf("%s service masked: %s", u.Scope, u.Name),
+			Check:    "masked",
+			Subject:  unitSubject(u),
 			Detail:   "Masked units cannot be started even if other units depend on them.",
 		})
 	}
 	for _, u := range loadErr {
 		out = append(out, scan.Finding{
 			Severity: scan.SeverityError,
-			Subject:  fmt.Sprintf("%s service load=%s: %s", u.Scope, u.Load, u.Name),
-			Detail:   fmt.Sprintf("Active=%s Sub=%s Description=%q", u.Active, u.Sub, u.Description),
+			Check:    "load_error",
+			Subject:  unitSubject(u),
+			Detail:   fmt.Sprintf("load=%s Active=%s Sub=%s Description=%q", u.Load, u.Active, u.Sub, u.Description),
 		})
 	}
 	for _, u := range missingFrag {
 		out = append(out, scan.Finding{
 			Severity: scan.SeverityWarning,
-			Subject:  fmt.Sprintf("%s service has no FragmentPath: %s", u.Scope, u.Name),
-			Detail:   "Loaded unit with no on-disk fragment — likely the unit file was deleted while the unit remained loaded.",
+			Check:    "missing_fragment",
+			Subject:  unitSubject(u),
+			Detail:   "No FragmentPath. Loaded unit with no on-disk fragment — likely the unit file was deleted while the unit remained loaded.",
 		})
 	}
 	for _, u := range highRestart {
 		out = append(out, scan.Finding{
 			Severity: scan.SeverityNotice,
-			Subject:  fmt.Sprintf("%s service has restarted %d time(s): %s", u.Scope, u.Props.NRestarts, u.Name),
-			Detail:   fmt.Sprintf("Restart=%s Result=%s — investigate flapping.", u.Props.Restart, u.Props.Result),
+			Check:    "restarts",
+			Subject:  unitSubject(u),
+			Detail:   fmt.Sprintf("restarted %d time(s) (Restart=%s Result=%s); investigate flapping.", u.Props.NRestarts, u.Props.Restart, u.Props.Result),
 		})
 	}
 
@@ -118,6 +123,11 @@ func DeriveFindings(units []EnrichedUnit, opts FindingOptions) []scan.Finding {
 		return severityRank(out[i].Severity) > severityRank(out[j].Severity)
 	})
 	return out
+}
+
+// unitSubject names a unit with its bus scope, e.g. "user/foo.service".
+func unitSubject(u EnrichedUnit) string {
+	return fmt.Sprintf("%s/%s", u.Scope, u.Name)
 }
 
 func severityRank(s scan.Severity) int {
@@ -156,7 +166,8 @@ func unitFilePermFindings(units []EnrichedUnit) []scan.Finding {
 		if mode&0o002 != 0 {
 			out = append(out, scan.Finding{
 				Severity: scan.SeverityCritical,
-				Subject:  fmt.Sprintf("world-writable unit file: %s", path),
+				Check:    "unit_file_writable",
+				Subject:  path,
 				Detail: fmt.Sprintf("mode=%o unit=%s — anyone on the system can rewrite ExecStart and gain privileges.",
 					mode, u.Name),
 			})

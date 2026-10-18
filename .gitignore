@@ -6,6 +6,6 @@ coverage.html
 *.out
 .env
 .envrc
-/sysaudit
-# Build artifact: the rendered manpage. Source of truth is man/sysaudit.1.md.
-man/sysaudit.1
+/audit
+# Build artifact: the rendered manpage. Source of truth is man/audit.1.md.
+man/audit.1

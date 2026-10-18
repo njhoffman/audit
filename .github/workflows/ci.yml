@@ -27,6 +27,9 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      - name: Set up just
+        uses: extractions/setup-just@v2
+
       # gofmt -l prints filenames of files that would change. Empty output
       # means everything is already formatted.
       - name: Verify gofmt
@@ -49,12 +52,12 @@ jobs:
           version: v2.11.4
 
       - name: Test (race, single run)
-        run: make test
+        run: just test
 
       - name: Build
-        run: make build
+        run: just build
 
-      # Catches Markdown source regressions in man/sysaudit.1.md by
+      # Catches Markdown source regressions in man/audit.1.md by
       # rendering the .1 file. Doesn't publish the artifact.
       - name: Render manpage
-        run: make manpage
+        run: just manpage
