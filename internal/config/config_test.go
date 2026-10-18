@@ -36,7 +36,7 @@ func TestLoadDefaults(t *testing.T) {
 	if used != "" {
 		t.Errorf("no file should be reported, got %q", used)
 	}
-	if cfg.System.Journal != DefaultJournalFlags || cfg.AI.Model != DefaultModel || cfg.History != DefaultHistory {
+	if cfg.System.Journal != DefaultJournalFlags || cfg.AI.Claude.Model != DefaultModel || cfg.AI.Provider != ProviderClaude || cfg.History != DefaultHistory {
 		t.Errorf("defaults not applied: %+v", cfg)
 	}
 	if cfg.DataDir != filepath.Join(dir, "data", "audit") || !strings.HasSuffix(cfg.DBPath(), "audit/audit.db") {
@@ -72,15 +72,21 @@ stale:
   commands:
     repos: {old: 48h}
 ignore: [path.missing]
-ai: {model: claude-haiku-5-5}
+ai: {provider: codex, codex: {model: gpt-test}, claude: {model: claude-haiku-5-5}}
 packages: {managers: [cargo]}
 `)
 	cfg, used, err := Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if used != path || cfg.History != 5 || cfg.AI.Model != "claude-haiku-5-5" || cfg.Ignore[0] != "path.missing" {
+	if used != path || cfg.History != 5 || cfg.AI.Claude.Model != "claude-haiku-5-5" || cfg.Ignore[0] != "path.missing" {
 		t.Errorf("file not applied: %+v", cfg)
+	}
+	if name, pc := cfg.AI.For(""); name != ProviderCodex || pc.Model != "gpt-test" || pc.Command != "codex" {
+		t.Errorf("ai.provider codex: %s %+v", name, pc)
+	}
+	if name, pc := cfg.AI.For(ProviderClaude); name != ProviderClaude || pc.Model != "claude-haiku-5-5" {
+		t.Errorf("explicit provider: %s %+v", name, pc)
 	}
 	if got := cfg.Stale.For("repos"); got.Warn != 2*time.Hour || got.Old != 48*time.Hour {
 		t.Errorf("partial override: %+v", got)
@@ -92,13 +98,13 @@ packages: {managers: [cargo]}
 
 func TestLoadEnvOverride(t *testing.T) {
 	isolate(t)
-	t.Setenv("AUDIT_AI_MODEL", "from-env")
+	t.Setenv("AUDIT_AI_CLAUDE_MODEL", "from-env")
 	cfg, _, err := Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.AI.Model != "from-env" {
-		t.Errorf("env override: %q", cfg.AI.Model)
+	if cfg.AI.Claude.Model != "from-env" {
+		t.Errorf("env override: %q", cfg.AI.Claude.Model)
 	}
 }
 
@@ -113,7 +119,7 @@ func TestLoadErrors(t *testing.T) {
 		t.Error("invalid YAML must error")
 	}
 	for _, body := range []string{
-		"history: 0", "stale: {warn: 5h, old: 1h}", "environment: {shells: [fish]}",
+		"history: 0", "stale: {warn: 5h, old: 1h}", "environment: {shells: [fish]}", "ai: {provider: gemini}",
 		"display: {details: 0}", "ai: {max_details: -1}", "system: {log_max_lines: 0}",
 		"system: {procs: {high_cpu: 0}}", "system: {services: {high_restarts: -1}}",
 		"environment: {shellcheck: {severity: loud}}", "packages: {env: shell}",

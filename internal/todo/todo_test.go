@@ -280,3 +280,60 @@ func equal(a, b []int64) bool {
 	}
 	return true
 }
+
+func TestReconcileAI(t *testing.T) {
+	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+	earlier := now.Add(-time.Hour)
+	ai := func(id int64, title string, st Status) Todo {
+		return Todo{ID: id, Key: AIKey(title), Command: "system", Title: title, Status: st, Source: FromAI, Priority: Low,
+			CreatedAt: earlier, UpdatedAt: earlier}
+	}
+	existing := []Todo{
+		ai(1, "keep me", Open),
+		ai(2, "drop me", Open),
+		ai(3, "working on it", InProgress),
+		{ID: 4, Key: "system:svc.failed:nginx", Command: "system", Status: Open, Source: FromFinding},
+		{ID: 5, Key: "manual:1", Command: "manual", Status: Open, Source: Manual},
+	}
+	suggested := []Todo{
+		{Key: AIKey("Keep  ME"), Command: "system", Title: "Keep ME", Status: Open, Source: FromAI, Priority: High},
+		{Key: AIKey("brand new"), Command: "packages", Title: "brand new", Status: Open, Source: FromAI, Priority: Low},
+	}
+	writes, changes := ReconcileAI(existing, suggested, now)
+	byID := map[int64]Todo{}
+	var added []Todo
+	for _, w := range writes {
+		if w.ID == 0 {
+			added = append(added, w)
+		}
+		byID[w.ID] = w
+	}
+	if changes != 3 || len(added) != 1 || added[0].Title != "brand new" {
+		t.Errorf("changes %d, added %+v", changes, added)
+	}
+	if k := byID[1]; k.Priority != High || k.Title != "Keep ME" || k.Status != Open {
+		t.Errorf("kept suggestion updates in place: %+v", k)
+	}
+	if d := byID[2]; d.Status != Resolved {
+		t.Errorf("no longer suggested: %+v", d)
+	}
+	if w, ok := byID[3]; ok {
+		t.Errorf("a task in progress is left alone: %+v", w)
+	}
+	done := ai(6, "done already", Done)
+	writes, _ = ReconcileAI([]Todo{done}, []Todo{{Key: done.Key, Title: done.Title, Status: Open, Source: FromAI}}, now)
+	if len(writes) != 1 || writes[0].Status != Done {
+		t.Errorf("a repeated suggestion does not reopen a done task: %+v", writes)
+	}
+	if _, ok := byID[4]; ok {
+		t.Error("scan tasks are not touched")
+	}
+
+	// A scan of system leaves AI tasks under system alone.
+	writes, _ = Reconcile("system", existing, nil, now)
+	for _, w := range writes {
+		if w.Source == FromAI {
+			t.Errorf("a scan resolved an AI task: %+v", w)
+		}
+	}
+}

@@ -594,7 +594,7 @@ func TestPackagesAITag(t *testing.T) {
 	if err := os.WriteFile(script, []byte("#!/bin/sh\ncat >/dev/null\nprintf '%s' '"+answer+"'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	a.cfg.AI.Command = script
+	a.cfg.AI.Claude.Command = script
 	r, err := a.store.LatestRun(ctx, packages.Command, "")
 	if err != nil {
 		t.Fatal(err)
@@ -636,7 +636,7 @@ func TestPackagesAITag(t *testing.T) {
 	}
 
 	// A failing command is reported, not fatal to the other batches.
-	a.cfg.AI.Command = filepath.Join(dir, "missing")
+	a.cfg.AI.Claude.Command = filepath.Join(dir, "missing")
 	if err := a.aiTag(ctx, r, nil, true, false); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("missing command: %v", err)
 	}

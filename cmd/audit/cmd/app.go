@@ -18,7 +18,6 @@ import (
 	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/export"
 	"github.com/njhoffman/audit/internal/htmlreport"
-	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/log"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
@@ -37,6 +36,8 @@ type globalFlags struct {
 	verbose bool
 	debug   bool
 	quiet   bool
+	// aiProvider overrides ai.provider.
+	aiProvider string
 }
 
 // app is the state every subcommand shares. It is built lazily so that
@@ -92,6 +93,9 @@ func (a *app) load() error {
 		return err
 	}
 	a.cfg, a.cfgPath = cfg, path
+	if err := checkProvider(a.flags.aiProvider); err != nil {
+		return err
+	}
 	if path != "" {
 		a.log.Debug("config", "path", path)
 	}
@@ -214,16 +218,6 @@ func (a *app) printer() *render.Printer {
 
 func (a *app) progress(enabled bool) progress.Reporter {
 	return progress.New(enabled && !a.flags.quiet)
-}
-
-// aiClient builds the claude CLI client; level overrides the configured
-// analysis level when set.
-func (a *app) aiClient(level string) *llm.Client {
-	if level != "" {
-		a.cfg.AI.AnalysisLevel = level
-	}
-	return &llm.Client{Runner: exec.NewOSRunner(a.env), Command: a.cfg.AI.Command, Model: a.cfg.AI.Model,
-		Timeout: a.cfg.AI.Timeout, Cache: a.store}
 }
 
 func (a *app) writeJSON(v any) error {

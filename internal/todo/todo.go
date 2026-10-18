@@ -3,6 +3,8 @@
 package todo
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"sort"
@@ -108,7 +110,23 @@ const (
 	FromFinding   Source = "finding"
 	FromAggregate Source = "aggregate"
 	Manual        Source = "manual"
+	// FromAI marks tasks suggested by audit analyze --tasks.
+	FromAI Source = "ai"
 )
+
+// Scanned reports whether a scan owns tasks of this source.
+func (s Source) Scanned() bool { return s == FromFinding || s == FromAggregate }
+
+// AICommand files AI tasks that concern no single scanning command.
+const AICommand = "ai"
+
+// AIKey is the key of an AI task: its title, case and spacing aside, so the
+// same suggestion keeps its task across analyses.
+func AIKey(title string) string {
+	norm := strings.Join(strings.Fields(strings.ToLower(title)), " ")
+	sum := sha256.Sum256([]byte(norm))
+	return "ai:" + hex.EncodeToString(sum[:8])
+}
 
 // Todo is one task.
 type Todo struct {
@@ -254,9 +272,24 @@ func titleFor(f finding.Finding) string {
 //
 // Manual tasks and tasks of other commands are never touched.
 func Reconcile(command string, existing, derived []Todo, now time.Time) (writes []Todo, changes int) {
+	return reconcile(func(t Todo) bool { return t.Command == command && t.Source.Scanned() }, false, existing, derived, now)
+}
+
+// ReconcileAI applies a new set of AI suggestions the way Reconcile applies
+// a scan: suggestions seen before keep their task and status, new ones are
+// added, and open AI tasks no longer suggested are resolved. Tasks the user
+// moved to in progress, done or won't do keep that status: a suggestion is
+// not evidence the way a finding is, so it neither reopens nor resolves them.
+func ReconcileAI(existing, suggested []Todo, now time.Time) (writes []Todo, changes int) {
+	return reconcile(func(t Todo) bool { return t.Source == FromAI }, true, existing, suggested, now)
+}
+
+// reconcile merges derived into the existing tasks owns selects. keepUser
+// leaves tasks the user moved out of open (or resolved) in their status.
+func reconcile(owns func(Todo) bool, keepUser bool, existing, derived []Todo, now time.Time) (writes []Todo, changes int) {
 	byKey := map[string]Todo{}
 	for _, t := range existing {
-		if t.Command == command && t.Source != Manual {
+		if owns(t) {
 			byKey[t.Key] = t
 		}
 	}
@@ -275,7 +308,7 @@ func Reconcile(command string, existing, derived []Todo, now time.Time) (writes 
 		t.LastSeenAt = now
 		changed := t.Title != old.Title || t.Hint != old.Hint || !slices.Equal(t.Details, old.Details) ||
 			t.Priority != old.Priority || t.Check != old.Check || t.Source != old.Source
-		if t.Status == Resolved || t.Status == Done {
+		if t.Status == Resolved || t.Status == Done && !keepUser {
 			t.Status = Open
 			t.ResolvedAt = time.Time{}
 			changed = true
@@ -287,10 +320,10 @@ func Reconcile(command string, existing, derived []Todo, now time.Time) (writes 
 		writes = append(writes, t)
 	}
 	for _, old := range existing {
-		if old.Command != command || old.Source == Manual || present[old.Key] {
+		if !owns(old) || present[old.Key] {
 			continue
 		}
-		if old.Status == WontDo || old.Status == Resolved {
+		if old.Status == WontDo || old.Status == Resolved || keepUser && old.Status != Open {
 			continue
 		}
 		old.Status = Resolved

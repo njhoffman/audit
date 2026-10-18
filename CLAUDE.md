@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by the `claude` CLI, and optionally written as an HTML report. Bare `audit` is a Bubble Tea dashboard.
+`audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Bare `audit` is a Bubble Tea dashboard.
 
 Planned commands not yet built: `repos`, `files`, `configs`, `scripts`, `ai`, and the system-package phase (apt, snap, flatpak) of `packages`.
 
@@ -31,7 +31,7 @@ internal/finding/     Finding, Severity, filters, ignore rules
 internal/todo/        Priority, Status, Derive and Reconcile
 internal/run/         Run, Stat, freshness
 internal/store/       SQLite (modernc): runs, findings, tasks, LLM cache
-internal/llm/         claude -p client with prompt-hash cache
+internal/llm/         claude -p / codex exec client with prompt-hash cache; prompts for reviews, suggestions, explanations
 internal/render/      terminal output (lipgloss, glamour)
 internal/htmlreport/  self-contained HTML reports and index
 internal/tui/         Bubble Tea dashboard, report viewer, task editor (Backend interface)

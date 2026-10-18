@@ -75,6 +75,22 @@ func (b tuiBackend) SetNote(ctx context.Context, id int64, note string) (todo.To
 	return b.a.store.SetTodoNote(ctx, id, note, timeNow())
 }
 
+func (b tuiBackend) Explain(ctx context.Context, id int64, width int, refresh bool) (string, error) {
+	t, resp, err := b.a.explainTask(ctx, id, refresh, "", false)
+	if err != nil {
+		return "", err
+	}
+	profile := lipgloss.ColorProfile()
+	if b.a.noColorTUI() {
+		profile = termenv.Ascii
+	}
+	var buf bytes.Buffer
+	p := render.NewProfile(&buf, profile, width)
+	p.Now = timeNow
+	p.AI(fmt.Sprintf("#%d %s", t.ID, t.Title), resp.Model, resp.Cached, resp.CreatedAt, resp.CostUSD, resp.Text)
+	return buf.String(), nil
+}
+
 // defaultScanner builds command's scanner with its configured scope.
 func (a *app) defaultScanner(command string) (core.Scanner, error) {
 	switch command {

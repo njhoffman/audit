@@ -50,7 +50,7 @@ func (f *scanFlags) register(c *cobra.Command) {
 	fl.BoolVarP(&f.json, "json", "j", false, "print the run as JSON (no scan)")
 	fl.BoolVarP(&f.html, "html", "H", false, "write the HTML report and print its path")
 	fl.BoolVarP(&f.open, "open", "o", false, "write the HTML report and open it")
-	fl.BoolVarP(&f.ai, "ai", "a", false, "add an AI review through the claude CLI (cached per result set)")
+	fl.BoolVarP(&f.ai, "ai", "a", false, "add an AI review through the AI CLI (ai.provider; cached per result set)")
 	fl.BoolVarP(&f.aiRefresh, "ai-refresh", "A", false, "like --ai, but ask again instead of using the cache")
 	fl.StringVarP(&f.level, "level", "L", "", "AI analysis level: brief, standard or deep (default from config)")
 	fl.StringVarP(&f.minSeverity, "min-severity", "m", "", "hide findings below this severity (critical, error, warning, notice, info)")
@@ -130,7 +130,7 @@ func (a *app) runScan(ctx context.Context, s core.Scanner, f *scanFlags, view vi
 	if f.ai || f.aiRefresh {
 		a.engine.AI = a.aiClient(f.level)
 		rep := a.progress(!f.json)
-		rep.Phase("asking claude for a review", 0)
+		rep.Phase("asking the AI for a review", 0)
 		err := a.engine.Analyze(ctx, r, f.aiRefresh)
 		rep.Done()
 		if err != nil {

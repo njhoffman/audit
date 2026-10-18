@@ -128,8 +128,20 @@ func (p *Printer) Report(r *run.Run, o ReportOptions) {
 	}
 }
 
+// AI prints an AI answer under a heading with its model, cache age and cost.
+func (p *Printer) AI(title, model string, cached bool, at time.Time, cost float64, md string) {
+	meta := analysisMeta(&run.Analysis{Model: model, Cached: cached, CreatedAt: at, CostUSD: cost}, p.Now())
+	p.printf("%s  %s\n", p.heading(title), p.faint().Render(meta))
+	p.println(p.markdown(md))
+}
+
 func analysisMeta(a *run.Analysis, now time.Time) string {
-	parts := []string{a.Model, a.Level}
+	var parts []string
+	for _, s := range []string{a.Model, a.Level} {
+		if s != "" {
+			parts = append(parts, s)
+		}
+	}
 	if a.Cached {
 		parts = append(parts, "cached "+run.Ago(now.Sub(a.CreatedAt)))
 	}

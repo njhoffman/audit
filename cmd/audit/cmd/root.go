@@ -96,6 +96,7 @@ Run without a command in a terminal for the interactive dashboard, or with
 	pf.BoolVarP(&a.flags.verbose, "verbose", "v", false, "show more detail and info logs")
 	pf.BoolVarP(&a.flags.debug, "debug", "D", false, "show debug logs")
 	pf.BoolVarP(&a.flags.quiet, "quiet", "q", false, "only errors; no progress bars or notices")
+	pf.StringVarP(&a.flags.aiProvider, "ai-provider", "I", "", "AI CLI for this run: claude or codex (default ai.provider)")
 	root.MarkFlagsMutuallyExclusive("verbose", "quiet")
 	root.MarkFlagsMutuallyExclusive("debug", "quiet")
 	root.Flags().BoolP("version", "V", false, "print the version")
@@ -106,7 +107,7 @@ Run without a command in a terminal for the interactive dashboard, or with
 	fl.BoolVarP(&open, "open", "o", false, "like --html, then open the index")
 
 	root.AddCommand(newSystemCmd(a), newEnvironmentCmd(a), newPackagesCmd(a),
-		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a), newExportCmd(a))
+		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a))
 	return root
 }
 

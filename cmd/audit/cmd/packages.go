@@ -189,7 +189,7 @@ Entries younger than packages.registry.max_age are reused unless --force is
 given; named packages are always looked up. A package may be named as
 manager:name when the name is ambiguous.
 
---ai-tags asks claude to tag packages that have not been tagged yet, from
+--ai-tags asks the AI CLI (ai.provider) to tag packages that have not been tagged yet, from
 the packages.tags vocabulary; --ai-retag tags them all again. Tags you
 removed with audit packages tag -d are not put back without --ai-retag.`,
 		RunE: func(c *cobra.Command, args []string) error {
@@ -240,7 +240,7 @@ removed with audit packages tag -d are not put back without --ai-retag.`,
 	fl := c.Flags()
 	fl.StringSliceVarP(&managers, "manager", "M", nil, "look up only these managers: "+strings.Join(packages.Names(), ", "))
 	fl.BoolVarP(&force, "force", "F", false, "look everything up, ignoring the age of cached entries")
-	fl.BoolVarP(&aiTags, "ai-tags", "a", false, "tag untagged packages through the claude CLI")
+	fl.BoolVarP(&aiTags, "ai-tags", "a", false, "tag untagged packages through the AI CLI (ai.provider)")
 	fl.BoolVarP(&aiRetag, "ai-retag", "A", false, "like --ai-tags, but tag every package again")
 	fl.BoolVarP(&asJSON, "json", "j", false, "print the run and the annotated inventory as JSON")
 	fl.BoolVarP(&list, "list", "l", false, "print findings one per line plus the inventory")
@@ -290,7 +290,7 @@ func (a *app) aiTag(ctx context.Context, r *run.Run, refs []packages.Ref, retag,
 	client := a.aiClient("")
 	rep := a.progress(showProgress)
 	defer rep.Done()
-	rep.Phase("asking claude for tags", (len(todo)+aiTagBatch-1)/aiTagBatch)
+	rep.Phase("asking the AI for tags", (len(todo)+aiTagBatch-1)/aiTagBatch)
 	tagged := 0
 	var updated []packages.Meta
 	var errs []error

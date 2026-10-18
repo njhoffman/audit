@@ -27,6 +27,16 @@ type fake struct {
 	setCalls []todo.Status
 	notes    []string
 	failSet  bool
+	explains []string
+	failAI   bool
+}
+
+func (f *fake) Explain(_ context.Context, id int64, _ int, refresh bool) (string, error) {
+	f.explains = append(f.explains, fmt.Sprintf("%d:%v", id, refresh))
+	if f.failAI {
+		return "", errors.New("claude not found")
+	}
+	return fmt.Sprintf("why #%d happens", id), nil
 }
 
 func (f *fake) Statuses(context.Context) ([]render.CommandStatus, error) { return f.rows, nil }
@@ -303,5 +313,30 @@ func TestEmptyTodos(t *testing.T) {
 	key(t, m, "n")
 	if m.input != inputNone || !strings.Contains(m.View(), "No tasks match") {
 		t.Errorf("empty list should ignore edits:\n%s", m.View())
+	}
+}
+
+func TestTodosExplain(t *testing.T) {
+	f := newFake()
+	m := start(t, f, StartInTodos(todo.Filter{}))
+	key(t, m, "e")
+	if m.screen != screenExplain || !strings.Contains(m.View(), "why #1 happens") ||
+		!strings.Contains(m.View(), "audit todo explain 1") || !strings.Contains(m.View(), "r ask again") {
+		t.Fatalf("explain screen:\n%s", m.View())
+	}
+	key(t, m, "r")
+	if strings.Join(f.explains, ",") != "1:false,1:true" {
+		t.Errorf("r asks again without the cache: %v", f.explains)
+	}
+	key(t, m, "esc")
+	if m.screen != screenTodos {
+		t.Errorf("esc goes back to the tasks, not out: %v", m.screen)
+	}
+
+	f.failAI = true
+	key(t, m, "down")
+	key(t, m, "e")
+	if !strings.Contains(m.View(), "claude not found") || !strings.Contains(m.View(), "could not answer") {
+		t.Errorf("an AI failure shows:\n%s", m.View())
 	}
 }

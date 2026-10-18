@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -68,11 +69,40 @@ func (s StaleConfig) For(command string) Thresholds {
 
 // AIConfig configures the opt-in LLM review (the claude CLI in print mode).
 type AIConfig struct {
-	Command       string        `mapstructure:"command" yaml:"command"`
-	Model         string        `mapstructure:"model" yaml:"model"`
-	AnalysisLevel string        `mapstructure:"analysis_level" yaml:"analysis_level"`
-	Timeout       time.Duration `mapstructure:"timeout" yaml:"timeout"`
-	MaxDetails    int           `mapstructure:"max_details" yaml:"max_details"`
+	// Provider picks the CLI that answers: claude or codex.
+	Provider      string         `mapstructure:"provider" yaml:"provider"`
+	Claude        ProviderConfig `mapstructure:"claude" yaml:"claude"`
+	Codex         ProviderConfig `mapstructure:"codex" yaml:"codex"`
+	AnalysisLevel string         `mapstructure:"analysis_level" yaml:"analysis_level"`
+	Timeout       time.Duration  `mapstructure:"timeout" yaml:"timeout"`
+	MaxDetails    int            `mapstructure:"max_details" yaml:"max_details"`
+}
+
+// ProviderConfig is one AI CLI.
+type ProviderConfig struct {
+	Command string `mapstructure:"command" yaml:"command"`
+	// Model is passed with --model; empty uses the CLI's own default.
+	Model string `mapstructure:"model" yaml:"model"`
+}
+
+// AI providers.
+const (
+	ProviderClaude = "claude"
+	ProviderCodex  = "codex"
+)
+
+// Providers lists the accepted ai.provider values.
+var Providers = []string{ProviderClaude, ProviderCodex}
+
+// For returns the settings of provider ("" means ai.provider).
+func (c AIConfig) For(provider string) (string, ProviderConfig) {
+	if provider == "" {
+		provider = c.Provider
+	}
+	if provider == ProviderCodex {
+		return provider, c.Codex
+	}
+	return ProviderClaude, c.Claude
 }
 
 // DisplayConfig configures terminal output.
@@ -208,8 +238,11 @@ func defaults(v *viper.Viper) {
 	})
 	v.SetDefault("ignore", []string{})
 	v.SetDefault("display.details", 5)
-	v.SetDefault("ai.command", "claude")
-	v.SetDefault("ai.model", DefaultModel)
+	v.SetDefault("ai.provider", ProviderClaude)
+	v.SetDefault("ai.claude.command", "claude")
+	v.SetDefault("ai.claude.model", DefaultModel)
+	v.SetDefault("ai.codex.command", "codex")
+	v.SetDefault("ai.codex.model", "")
 	v.SetDefault("ai.analysis_level", DefaultAnalysisLevel)
 	v.SetDefault("ai.timeout", 5*time.Minute)
 	v.SetDefault("ai.max_details", 10)
@@ -294,6 +327,9 @@ func Load(explicit string) (*Config, string, error) {
 func (c *Config) validate() error {
 	if c.History < 1 {
 		return fmt.Errorf("history must be at least 1, got %d", c.History)
+	}
+	if !slices.Contains(Providers, c.AI.Provider) {
+		return fmt.Errorf("ai.provider must be one of %s, got %q", strings.Join(Providers, ", "), c.AI.Provider)
 	}
 	if c.Stale.Warn <= 0 || c.Stale.Old < c.Stale.Warn {
 		return fmt.Errorf("stale thresholds must satisfy 0 < warn <= old (got warn=%s old=%s)", c.Stale.Warn, c.Stale.Old)
@@ -464,8 +500,16 @@ display:
 
 # Opt-in review of findings with --ai, through the claude CLI in print mode.
 ai:
-  command: claude
-  model: claude-sonnet-5-5
+  # Which CLI answers: claude (claude -p, tools off) or codex (codex exec in
+  # its read-only sandbox, from an empty directory). -I/--ai-provider
+  # overrides it per run.
+  provider: claude
+  claude:
+    command: claude
+    model: claude-sonnet-5-5
+  codex:
+    command: codex
+    model: ""                # empty: codex's configured default
   analysis_level: standard   # brief | standard | deep
   timeout: 5m
   # Detail lines per finding sent in the prompt.

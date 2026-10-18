@@ -88,7 +88,7 @@ Without a subcommand, open and in-progress tasks are listed.`,
 	fl.BoolVarP(&asJSON, "json", "j", false, "print tasks as JSON")
 	fl.BoolVarP(&interactive, "interactive", "i", false, "browse and change tasks in a terminal UI")
 
-	c.AddCommand(newTodoShowCmd(a), newTodoSetCmd(a), newTodoNoteCmd(a), newTodoAddCmd(a), newTodoRmCmd(a))
+	c.AddCommand(newTodoShowCmd(a), newTodoSetCmd(a), newTodoNoteCmd(a), newTodoAddCmd(a), newTodoRmCmd(a), newTodoExplainCmd(a))
 	return c
 }
 

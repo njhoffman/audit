@@ -19,7 +19,7 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **packages** **update** [**-M** _managers_] [**-N**] [**-y**] [**-m**] [**-x**] [**-j**] [_package_...]
 
-**audit** **packages** **update** **-L** [**-j**]
+**audit** **packages** **update** **-L** [**-j**|**-e**]
 
 **audit** **packages** **runtimes** [**-F**] [**-j**]
 
@@ -33,7 +33,9 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **packages** **tag** [**-d**] [**-j**] [_package_ [_tag_...]]
 
-**audit** **todo** [**show**|**set**|**note**|**add**|**rm**] ...
+**audit** **todo** [**show**|**set**|**note**|**add**|**rm**|**explain**] ...
+
+**audit** **analyze** [**-t**] [**-A**] [**-L** _level_] [**-j**]
 
 **audit** **history** [_command_] [**-l** _n_] [**-j**]
 
@@ -88,7 +90,10 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
     A _package_ is a name or Go module path, or _manager_**:**_name_ when the name is ambiguous.
 
 **todo**
-:   Lists open and in-progress tasks. Subcommands: **show** _ID_, **set** _ID_ _STATUS_ [**-N** _note_], **note** _ID_ _TEXT_, **add** _TITLE_ [**-p** _priority_] [**-C** _command_] [**-H** _hint_] [**-N** _note_], **rm** _ID_ (manual tasks only).
+:   Lists open and in-progress tasks. Subcommands: **show** _ID_, **set** _ID_ _STATUS_ [**-N** _note_], **note** _ID_ _TEXT_, **add** _TITLE_ [**-p** _priority_] [**-C** _command_] [**-H** _hint_] [**-N** _note_], **rm** _ID_ (manual tasks only), and **explain** _ID_ [**-A**] [**-L** _level_] [**-j**], which sends the task with every detail of the saved findings behind it to the AI CLI and prints the likely cause, whether it matters, the fix and how to confirm it. **e** in the task editor does the same for the selected task.
+
+**analyze**
+:   Sends the latest saved results of every command, the open tasks and the last update's failures to the AI CLI and prints one review: problems that share a root cause across commands, the errors that matter and an order to fix them in. Nothing is scanned. With **-t**, asks instead for at most ten structured suggestions that no open task covers, and files them as tasks with source **ai** under the command they concern (or **ai**). A later **-t** run keeps the suggestions it repeats, adds new ones and resolves open AI tasks it no longer suggests; AI tasks you moved to in progress, done or won't do keep their status, and scans never resolve them. **-A** asks again instead of using the cache, **-L** sets the level, **-j** prints JSON.
 
 **history** [_command_]
 :   Lists saved runs, newest first.
@@ -118,6 +123,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **-q**, **\-\-quiet**
 :   Errors only: no progress bars or notices.
+
+**-I**, **\-\-ai-provider** _name_
+:   The AI CLI for this run, **claude** or **codex**, instead of **ai.provider**.
 
 **-V**, **\-\-version**
 :   Print the version.
@@ -162,7 +170,7 @@ These apply to **system**, **environment** and **packages**. Without an output o
 :   Write the HTML report and open it.
 
 **-a**, **\-\-ai**
-:   Add an AI review through the **claude** CLI. Cached per result set.
+:   Add an AI review through the AI CLI (**ai.provider**). Cached per result set.
 
 **-A**, **\-\-ai-refresh**
 :   Like **\-\-ai**, but ask again instead of using the cache.
@@ -201,7 +209,7 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 :   Look everything up, ignoring the age of cached entries.
 
 **-a**, **\-\-ai-tags**
-:   After the lookup, ask the **claude** CLI to tag packages that have registry data and no AI tags yet, choosing up to four tags each from **packages.tags**.
+:   After the lookup, ask the AI CLI to tag packages that have registry data and no AI tags yet, choosing up to four tags each from **packages.tags**.
 
 **-A**, **\-\-ai-retag**
 :   Like **-a**, but tag every package again and bypass the AI cache. Tags removed with **packages tag -d** are only put back by this option.
@@ -231,6 +239,9 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 
 **-j**, **\-\-json**
 :   Print the plan (with **-N**) or the update as JSON.
+
+**-e**, **\-\-explain**
+:   After an update with failures, or with **-L** for the last update, send the failed items (command, reason and the tail of their output) to the AI CLI and print why they failed and what to do. Command output can hold whatever the package manager printed; it only leaves the machine with this option. Not with **-j**. **runtimes update** and **runtimes migrate** take it too.
 
 # PACKAGES RUNTIMES OPTIONS
 
@@ -285,7 +296,11 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 
 # TASKS
 
-Errors and criticals become **high** tasks, warnings **medium**, notices **low**, and suggestions **suggestion**. Info findings of one check share a single **low** task. A rescan adds tasks for new findings and marks tasks **resolved** when their finding is gone; **won't do** tasks stay closed. A scan narrowed with **\-\-only** or **\-\-manager** only resolves tasks of the parts it scanned.
+Errors and criticals become **high** tasks, warnings **medium**, notices **low**, and suggestions **suggestion**. Info findings of one check share a single **low** task. A rescan adds tasks for new findings and marks tasks **resolved** when their finding is gone; **won't do** tasks stay closed. A scan narrowed with **\-\-only** or **\-\-manager** only resolves tasks of the parts it scanned. Tasks from **analyze -t** (source **ai**) and manual tasks are never resolved by a scan.
+
+# AI
+
+AI features run a local CLI: **claude -p** with tools disabled and no session persistence, or **codex exec** in its read-only sandbox, ephemeral, from an empty temporary directory and told to answer from the prompt only (codex is an agent with a shell; the sandbox keeps it from writing, not from reading). Prompts carry findings, statistics, task titles and, with **-e**, failed command output; never raw logs, shell traces, timestamps or the export files. Answers are cached in the database by a hash of the provider, model and prompt, so asking again about unchanged results is free. Claude reports a cost per answer; codex does not. The features: **-a** on scans (one review per run), **packages registry -a** (tags), **analyze** (cross-command review or suggested tasks), **todo explain** and the task editor's **e** key, and **-e** on updates and migrations.
 
 # EXPORT FILES
 
@@ -320,8 +335,9 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     display:
       details: 5               # detail lines per finding; -v shows all
     ai:
-      command: claude
-      model: claude-sonnet-5-5
+      provider: claude         # claude or codex; -I overrides it per run
+      claude: {command: claude, model: claude-sonnet-5-5}
+      codex: {command: codex, model: ""}   # empty model: codex's default
       analysis_level: standard
       timeout: 5m
       max_details: 10          # detail lines per finding in the prompt
@@ -434,4 +450,4 @@ Mark task 12 done with a note:
 
 # SEE ALSO
 
-**claude**(1), **journalctl**(1), **shellcheck**(1)
+**claude**(1), **codex**(1), **journalctl**(1), **shellcheck**(1)

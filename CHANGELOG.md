@@ -32,6 +32,10 @@ The project is renamed from `sysaudit` to `audit` and restructured around saved,
 - `audit packages info <pkg>` and `audit packages tag [<pkg> [tag...]] [-d]`. Automatic tags (manager, runtime, `git`, `local`, `mine`) are derived; user and AI tags are stored.
 - Checks `registry.outdated` (one task per manager), `registry.major_behind`, `registry.deprecated`, `registry.yanked`, `registry.archived`, `registry.unmaintained` and `registry.error`.
 - Config keys `github_user`, `packages.registry.{max_age,metadata_max_age,concurrency,timeout,unmaintained_after}` and `packages.tags`.
+- AI providers: `ai.provider` picks `claude` (as before) or `codex` (`codex exec --sandbox read-only --ephemeral` from an empty temp dir, prompt on stdin, told not to run commands); per-provider `ai.claude.{command,model}` and `ai.codex.{command,model}`; `-I/--ai-provider` overrides it for one run. Cache entries are keyed by provider too; existing claude entries stay valid.
+- `audit analyze`: one AI review across every command's saved results, the open tasks and the last update's failures. `-t/--tasks` asks for structured suggestions (JSON schema) and files them as tasks with source `ai`, reconciled across runs without overriding statuses you set; scans never resolve them.
+- `audit todo explain ID` and the task editor's `e` key: an AI explanation of one task with every detail of the findings behind it.
+- `-e/--explain` on `packages update` and `packages runtimes update|migrate`, after a run with failures or with `-L`: an AI explanation of the failed items from their command output.
 - `packages` phase 4: `audit packages runtimes` lists python, node, rust, go and ruby with their owner (uv, pnpm, rustup, system, manual), the newest release of the installed line and overall, and how many packages run on another version; releases come from `uv python list`, nodejs.org, go.dev and `rustup check`, cached in the store (`-F/--force` refreshes). `runtimes update [rt...]` runs `uv python upgrade MINOR`, `pnpm runtime set node VERSION -g` and `rustup update TOOLCHAIN`, within the installed line unless `-m/--major` (new python minor, newest node LTS); system-owned go and ruby are reported and skipped. `runtimes migrate [rt...]` reinstalls uv tools on the default python, pnpm globals after a node major change, and user gems from an old ruby ABI dir, plus with `-b/--rebuild` cargo and go binaries built by an older toolchain; afterwards it offers to trash stale runtime dirs (`gio trash`) and uninstall replaced python patches, kept under `-y` unless `-P/--prune`. Both confirm, verify against a fresh scan, save results (`-L/--last`) and share `-N`, `-y`, `-x`, `-j` with `packages update`.
 - Check `runtime.outdated` (from the runtime cache). `runtime.drift` now covers pnpm globals after a node major change (audit remembers the major they were installed under), is a notice for uv and pnpm, and hints at `audit packages runtimes migrate`.
 - `packages.json` in the export carries the runtimes; `updates.json` items carry `kind` (`package`, `runtime`, `migration`).
@@ -39,6 +43,8 @@ The project is renamed from `sysaudit` to `audit` and restructured around saved,
 - A `justfile` with `build`, `run`, `install`, `test` (runner argument), `test-one`, `cover`, `lint`, `vet`, `fmt`, `fmt-check`, `check`, `manpage` and `clean`.
 
 ### Changed
+
+- `ai.command` and `ai.model` move to `ai.claude.command` and `ai.claude.model`; the old keys are ignored, so `audit config --init --force` (or editing the file) carries a custom value over.
 
 - The database schema is version 2 (`update_items.kind`); a version 1 database is upgraded in place on open.
 - `audit packages update -L` shows the last package update, not a runtime update or migration.

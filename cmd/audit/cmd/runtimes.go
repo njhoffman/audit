@@ -26,6 +26,7 @@ type runtimeFlags struct {
 	last        bool
 	force       bool
 	json        bool
+	explain     bool
 }
 
 func newRuntimesCmd(a *app) *cobra.Command {
@@ -92,7 +93,7 @@ moves them. --last shows the last runtime update or migration.`,
 				if len(args) > 0 || f.dryRun || f.yes {
 					return errors.New("--last takes no runtimes, --dry-run or --yes")
 				}
-				return a.showLastUpdate(c.Context(), f.json, packages.KindRuntime, packages.KindMigration)
+				return a.lastUpdate(c.Context(), f.json, f.explain, packages.KindRuntime, packages.KindMigration)
 			}
 			return a.runtimesUpdate(c.Context(), args, f)
 		},
@@ -104,6 +105,8 @@ moves them. --last shows the last runtime update or migration.`,
 	fl.BoolVarP(&f.stopOnError, "stop-on-error", "x", false, "skip the remaining updates after the first failure")
 	fl.BoolVarP(&f.last, "last", "L", false, "show the last runtime update or migration; update nothing")
 	fl.BoolVarP(&f.json, "json", "j", false, "print the plan (with --dry-run) or the update as JSON")
+	fl.BoolVarP(&f.explain, "explain", "e", false, "ask the AI why the failed updates failed (with --last, the last one's)")
+	c.MarkFlagsMutuallyExclusive("explain", "json")
 	return c
 }
 
@@ -147,6 +150,8 @@ given.`,
 	fl.BoolVarP(&f.prune, "prune", "P", false, "with --yes, also remove stale runtime directories and replaced pythons")
 	fl.BoolVarP(&f.stopOnError, "stop-on-error", "x", false, "skip the remaining migrations after the first failure")
 	fl.BoolVarP(&f.json, "json", "j", false, "print the plan (with --dry-run) or the migration as JSON")
+	fl.BoolVarP(&f.explain, "explain", "e", false, "ask the AI why the failed migrations failed")
+	c.MarkFlagsMutuallyExclusive("explain", "json")
 	return c
 }
 
@@ -247,7 +252,7 @@ func (a *app) runtimesUpdate(ctx context.Context, names []string, f runtimeFlags
 			}
 		}
 	}
-	return failedErr(u, "runtime update")
+	return a.failedErr(ctx, u, "runtime update", f.explain)
 }
 
 func (a *app) runtimesMigrate(ctx context.Context, names []string, f runtimeFlags) error {
@@ -289,7 +294,7 @@ func (a *app) runtimesMigrate(ctx context.Context, names []string, f runtimeFlag
 	if err := a.finishUpdate(ctx, u, f.json); err != nil {
 		return err
 	}
-	return failedErr(u, "migration")
+	return a.failedErr(ctx, u, "migration", f.explain)
 }
 
 // planGate prints the plan and asks to run it. ok is false when there is
@@ -463,9 +468,17 @@ func (a *app) finishUpdate(ctx context.Context, u *packages.Update, asJSON bool)
 	return ctx.Err()
 }
 
-func failedErr(u *packages.Update, what string) error {
-	if _, failed, _ := u.Counts(); failed > 0 {
-		return fmt.Errorf("%d %s(s) failed", failed, what)
+// failedErr is the error for an update with failures, explained first when
+// asked.
+func (a *app) failedErr(ctx context.Context, u *packages.Update, what string, explain bool) error {
+	_, failed, _ := u.Counts()
+	if failed == 0 {
+		return nil
 	}
-	return nil
+	if explain {
+		if err := a.explainUpdate(ctx, u, aiFlags{}); err != nil {
+			a.log.Warn("explain the failures", "err", err)
+		}
+	}
+	return fmt.Errorf("%d %s(s) failed", failed, what)
 }

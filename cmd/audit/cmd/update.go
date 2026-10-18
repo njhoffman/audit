@@ -27,6 +27,7 @@ type updateFlags struct {
 	stopOnError bool
 	last        bool
 	json        bool
+	explain     bool
 }
 
 func newPackagesUpdateCmd(a *app) *cobra.Command {
@@ -60,7 +61,7 @@ tasks follow, and a failed attempt is noted on the package's outdated task.`,
 				if len(args) > 0 || f.dryRun || f.yes {
 					return errors.New("--last takes no packages, --dry-run or --yes")
 				}
-				return a.showLastUpdate(c.Context(), f.json, packages.KindPackage)
+				return a.lastUpdate(c.Context(), f.json, f.explain, packages.KindPackage)
 			}
 			return a.update(c.Context(), parseRefs(args), f)
 		},
@@ -73,6 +74,8 @@ tasks follow, and a failed attempt is noted on the package's outdated task.`,
 	fl.BoolVarP(&f.stopOnError, "stop-on-error", "x", false, "skip the remaining updates after the first failure")
 	fl.BoolVarP(&f.last, "last", "L", false, "show the last update and its errors; update nothing")
 	fl.BoolVarP(&f.json, "json", "j", false, "print the plan (with --dry-run) or the update as JSON")
+	fl.BoolVarP(&f.explain, "explain", "e", false, "ask the AI why the failed updates failed (with --last, the last update's)")
+	c.MarkFlagsMutuallyExclusive("explain", "json")
 	return c
 }
 
@@ -160,6 +163,11 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 		a.printUpdate(u, false)
 	}
 	if _, failed, _ := u.Counts(); failed > 0 {
+		if f.explain {
+			if err := a.explainUpdate(ctx, u, aiFlags{}); err != nil {
+				a.log.Warn("explain the failures", "err", err)
+			}
+		}
 		return fmt.Errorf("%d package update(s) failed", failed)
 	}
 	return nil
@@ -322,7 +330,7 @@ func (a *app) printUpdate(u *packages.Update, table bool) {
 }
 
 // showLastUpdate prints the newest saved update.
-func (a *app) showLastUpdate(ctx context.Context, asJSON bool, kinds ...string) error {
+func (a *app) lastUpdate(ctx context.Context, asJSON, explain bool, kinds ...string) error {
 	u, err := a.store.LastUpdateOf(ctx, kinds...)
 	if err != nil {
 		return err
@@ -335,5 +343,8 @@ func (a *app) showLastUpdate(ctx context.Context, asJSON bool, kinds ...string) 
 		return nil
 	}
 	a.printUpdate(u, true)
+	if explain {
+		return a.explainUpdate(ctx, u, aiFlags{})
+	}
 	return nil
 }

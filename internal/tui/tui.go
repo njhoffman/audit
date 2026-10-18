@@ -33,6 +33,9 @@ type Backend interface {
 	Todos(ctx context.Context) ([]todo.Todo, error)
 	SetStatus(ctx context.Context, id int64, s todo.Status) (todo.Todo, error)
 	SetNote(ctx context.Context, id int64, note string) (todo.Todo, error)
+	// Explain asks the AI about task id and renders the answer at width;
+	// refresh skips the cache.
+	Explain(ctx context.Context, id int64, width int, refresh bool) (string, error)
 }
 
 type screen int
@@ -41,6 +44,9 @@ const (
 	screenDashboard screen = iota
 	screenReport
 	screenTodos
+	// screenExplain shows an AI explanation of a task; esc returns to the
+	// task list.
+	screenExplain
 )
 
 // input is what the text field at the bottom of the task list is editing.
@@ -73,6 +79,8 @@ type Model struct {
 
 	busy    string // command being rescanned, "" when idle
 	spinner spinner.Model
+
+	explainID int64 // task shown on screenExplain
 
 	tasks   []todo.Todo // after filtering
 	all     []todo.Todo
@@ -138,6 +146,12 @@ type rescanMsg struct {
 	err     error
 }
 
+type explainMsg struct {
+	id   int64
+	text string
+	err  error
+}
+
 type todosMsg struct {
 	tasks []todo.Todo
 	err   error
@@ -168,6 +182,20 @@ func (m *Model) loadTodos() tea.Cmd {
 		ts, err := m.b.Todos(m.ctx)
 		return todosMsg{ts, err}
 	}
+}
+
+func (m *Model) explain(id int64, refresh bool) tea.Cmd {
+	m.screen, m.explainID, m.busy = screenExplain, id, "explain"
+	m.reportLoaded = false
+	m.report.SetContent("")
+	m.report.GotoTop()
+	m.layout()
+	m.setStatus(fmt.Sprintf("asking the AI about #%d...", id), false)
+	width := m.width
+	return tea.Batch(m.spinner.Tick, func() tea.Msg {
+		text, err := m.b.Explain(m.ctx, id, width, refresh)
+		return explainMsg{id, text, err}
+	})
 }
 
 func (m *Model) rescan(command string) tea.Cmd {
@@ -242,6 +270,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.loadReport(msg.command))
 		}
 		return m, tea.Batch(cmds...)
+	case explainMsg:
+		m.busy = ""
+		if msg.id != m.explainID {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.setStatus(msg.err.Error(), true)
+			m.report.SetContent("\n  The AI could not answer. Press r to try again, esc to go back.")
+		} else {
+			m.setStatus("", false)
+			m.report.SetContent(msg.text)
+		}
+		m.reportLoaded = true
+		return m, nil
 	case todosMsg:
 		if msg.err != nil {
 			m.setStatus(msg.err.Error(), true)
@@ -289,6 +331,11 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.screen == screenTodos && m.standalone {
 			return m, tea.Quit
 		}
+		if m.screen == screenExplain {
+			m.screen = screenTodos
+			m.layout()
+			return m, nil
+		}
 		if m.screen != screenDashboard {
 			m.screen = screenDashboard
 			return m, m.loadStatuses()
@@ -299,6 +346,16 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.dashboardKey(k)
 	case screenReport:
 		return m.reportKey(k)
+	case screenExplain:
+		if k.String() == "r" {
+			if m.busy == "" {
+				return m, m.explain(m.explainID, true)
+			}
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.report, cmd = m.report.Update(k)
+		return m, cmd
 	default:
 		return m.todosKey(k)
 	}
@@ -368,6 +425,11 @@ func (m *Model) todosKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.field.SetValue(sel.Note)
 			m.field.CursorEnd()
 			return m, m.field.Focus()
+		}
+		return m, nil
+	case "e":
+		if sel != nil && m.busy == "" {
+			return m, m.explain(sel.ID, false)
 		}
 		return m, nil
 	case "/":
@@ -505,11 +567,18 @@ func (m *Model) View() string {
 	case screenDashboard:
 		b.WriteString(titleStyle.Render("audit") + faintStyle.Render("  dashboard") + "\n\n")
 		b.WriteString(m.dashboardView())
-	case screenReport:
-		b.WriteString(titleStyle.Render("audit "+m.reportCmd) + faintStyle.Render(fmt.Sprintf("  %3.f%%", m.report.ScrollPercent()*100)) + "\n")
-		if m.reportLoaded {
+	case screenReport, screenExplain:
+		title := "audit " + m.reportCmd
+		if m.screen == screenExplain {
+			title = fmt.Sprintf("audit todo explain %d", m.explainID)
+		}
+		b.WriteString(titleStyle.Render(title) + faintStyle.Render(fmt.Sprintf("  %3.f%%", m.report.ScrollPercent()*100)) + "\n")
+		switch {
+		case m.reportLoaded:
 			b.WriteString(m.report.View())
-		} else {
+		case m.screen == screenExplain:
+			b.WriteString("\n  " + m.spinner.View() + " asking the AI...")
+		default:
 			b.WriteString("\n  loading...")
 		}
 	default:
@@ -625,6 +694,8 @@ func (m *Model) help() string {
 		return "j/k move  enter report  r rescan  t tasks  q quit"
 	case m.screen == screenReport:
 		return "j/k scroll  pgup/pgdn page  r rescan  esc back  t tasks  q quit"
+	case m.screen == screenExplain:
+		return "j/k scroll  pgup/pgdn page  r ask again  esc back to tasks  q quit"
 	}
-	return "j/k move  o open  i in progress  d done  w won't do  n note  / find  c command  a closed  esc back  q quit"
+	return "j/k move  o open  i in progress  d done  w won't do  n note  e explain  / find  c command  a closed  esc back  q quit"
 }

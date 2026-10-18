@@ -212,3 +212,85 @@ func TestAnalysisRequest(t *testing.T) {
 		t.Error("input details mutated")
 	}
 }
+
+func TestAskCodex(t *testing.T) {
+	f := &exec.Fake{}
+	f.AddOutput("## Fine\n", "codex", "exec")
+	c := &Client{Runner: f, Provider: Codex, Model: "gpt-x", Timeout: time.Minute, Now: func() time.Time { return now }}
+	resp, err := c.Ask(context.Background(), Request{System: "sys", Prompt: "payload", Schema: `{"type":"object"}`}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Text != "## Fine" || resp.Model != "codex gpt-x" {
+		t.Errorf("stdout is the answer when no file was written: %+v", resp)
+	}
+	args := strings.Join(f.Calls[0], " ")
+	for _, want := range []string{"codex exec --sandbox read-only --skip-git-repo-check --ephemeral --color never --cd ",
+		"--output-last-message ", "--output-schema ", "--model gpt-x -"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args missing %q: %s", want, args)
+		}
+	}
+	opts := f.CallOpts[0]
+	if !strings.HasPrefix(opts.Stdin, codexPreamble+"\n\nsys\n\npayload") || opts.Dir == "" || !strings.Contains(args, "--cd "+opts.Dir) {
+		t.Errorf("prompt and work dir: %+v", opts)
+	}
+
+	f2 := &exec.Fake{}
+	f2.Add([]string{"codex"}, exec.Result{Code: exec.ExitNotFound})
+	c.Runner = f2
+	if _, err := c.Ask(context.Background(), Request{Prompt: "p"}, false); err == nil ||
+		err.Error() != "codex not found; install Codex or set ai.codex.command" {
+		t.Errorf("missing codex: %v", err)
+	}
+}
+
+func TestHashByProvider(t *testing.T) {
+	req := Request{System: "s", Prompt: "p"}
+	claude := &Client{Model: "m"}
+	codex := &Client{Model: "m", Provider: Codex}
+	if claude.Hash(req) == codex.Hash(req) {
+		t.Error("providers must not share cache entries")
+	}
+	if claude.Hash(req) != (&Client{Model: "m", Provider: Claude}).Hash(req) {
+		t.Error("an unset provider is claude")
+	}
+	withSchema := req
+	withSchema.Schema = "{}"
+	if claude.Hash(req) == claude.Hash(withSchema) {
+		t.Error("the schema is part of the request")
+	}
+}
+
+func TestAskJSON(t *testing.T) {
+	f := &exec.Fake{}
+	f.AddOutput(`{"type":"result","subtype":"success","result":"ignored","structured_output":{"suggestions":[{"title":"Fix it","priority":"high","command":"system","details":["d"],"fix":"run x","related":["#3"]}]}}`,
+		"claude", "-p")
+	c := client(f, nil)
+	var s Suggestions
+	if _, err := c.AskJSON(context.Background(), Request{Prompt: "p", Schema: suggestionSchema}, false, &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Suggestions) != 1 || s.Suggestions[0].Fix != "run x" {
+		t.Errorf("structured_output wins over result: %+v", s)
+	}
+	if !strings.Contains(strings.Join(f.Calls[0], " "), "--json-schema "+suggestionSchema) {
+		t.Errorf("schema passed: %v", f.Calls[0])
+	}
+
+	f = &exec.Fake{}
+	f.AddOutput("```json\n{\"suggestions\":[]}\n```", "codex")
+	c = &Client{Runner: f, Provider: Codex}
+	if _, err := c.AskJSON(context.Background(), Request{Prompt: "p", Schema: "{}"}, false, &s); err != nil || len(s.Suggestions) != 0 {
+		t.Errorf("a fenced answer is unwrapped: %v %+v", err, s)
+	}
+	f = &exec.Fake{}
+	f.AddOutput("no json here", "codex")
+	c.Runner = f
+	if _, err := c.AskJSON(context.Background(), Request{Prompt: "p", Schema: "{}"}, false, &s); err == nil {
+		t.Error("prose instead of JSON must fail")
+	}
+	if _, err := c.AskJSON(context.Background(), Request{Prompt: "p"}, false, &s); err == nil {
+		t.Error("AskJSON without a schema must fail")
+	}
+}

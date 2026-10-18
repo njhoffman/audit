@@ -18,7 +18,8 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit packages runtimes` | python, node, rust, go and ruby: installed version, owner (uv, pnpm, rustup, system), newest release of the line and overall, packages on another version |
 | `audit packages runtimes update` / `migrate` | update uv pythons, pnpm's node and rustup toolchains (same line by default, `-m` for a new python minor or node LTS); reinstall packages onto the current runtime, then offer to trash stale runtime dirs |
 | `audit packages info` / `tag` | one package's cached details; list, add or remove tags |
-| `audit todo` | the tasks scans create, plus tasks added by hand |
+| `audit todo` | the tasks scans create, plus tasks added by hand; `todo explain ID` asks the AI about one |
+| `audit analyze` | AI review across every command's saved results, open tasks and failed updates; `-t` files AI suggestions as tasks |
 | `audit history` | saved runs |
 | `audit config` | the effective configuration; `--init` rewrites the default file |
 | `audit export` | write the JSON snapshots other programs read (they are also rewritten after every command that saves) |
@@ -69,7 +70,12 @@ Errors and criticals become high-priority tasks, warnings medium, notices low, a
 
 ### AI review
 
-`--ai` sends the findings (not raw logs, hostnames or timestamps) to the `claude` CLI in print mode with tools disabled and no session persistence. Responses are cached by a hash of the prompt, so asking again about an unchanged result set is free; `--ai-refresh` asks again. `--level` picks brief, standard or deep.
+AI features go through a local CLI picked by `ai.provider` (or `-I/--ai-provider` per run): `claude` in print mode with tools disabled and no session persistence, or `codex exec` in its read-only sandbox, ephemeral, from an empty temp directory. Prompts carry findings, stats and task titles, not raw logs, hostnames or timestamps. Responses are cached by a hash of the provider, model and prompt, so asking again about an unchanged result set is free; `--ai-refresh` asks again. `--level` picks brief, standard or deep.
+
+- `--ai` on any scan: a review of that run.
+- `audit analyze`: one review across all commands (shared root causes, the errors that matter, a fix order). `-t` asks for structured suggestions instead and files them as tasks with source `ai`; later runs keep repeated suggestions, add new ones and resolve dropped ones, but never override a status you set, and scans leave them alone.
+- `audit todo explain ID`, or `e` in the task editor: cause, impact, fix and how to confirm it for one task, with the full findings behind it.
+- `-e/--explain` on `packages update` and `packages runtimes update|migrate` (also with `-L`): why the failed items failed. This sends the tail of their command output.
 
 ### Dashboard keys
 
@@ -77,7 +83,8 @@ Errors and criticals become high-priority tasks, warnings medium, notices low, a
 |---|---|
 | dashboard | `j`/`k` move, `enter` report, `r` rescan, `t` tasks, `q` quit |
 | report | `j`/`k`/`pgup`/`pgdn` scroll, `r` rescan, `esc` back |
-| tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `/` find, `c` cycle command, `a` show closed, `esc` back |
+| tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `e` explain with AI, `/` find, `c` cycle command, `a` show closed, `esc` back |
+| explanation | `j`/`k`/`pgup`/`pgdn` scroll, `r` ask again, `esc` back to tasks |
 
 ## Configuration
 
