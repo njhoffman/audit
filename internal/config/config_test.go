@@ -48,6 +48,14 @@ func TestLoadDefaults(t *testing.T) {
 	if got := cfg.Stale.For("files"); got.Warn != 168*time.Hour || got.Old != 720*time.Hour {
 		t.Errorf("files thresholds: %+v", got)
 	}
+	if !cfg.Export.Enabled || cfg.ExportDir() != filepath.Join(dir, "data", "audit", "export") {
+		t.Errorf("export: %+v %q", cfg.Export, cfg.ExportDir())
+	}
+	home, _ := os.UserHomeDir()
+	cfg.Export.Dir = "~/dash/audit"
+	if got := cfg.ExportDir(); got != filepath.Join(home, "dash", "audit") {
+		t.Errorf("export dir with ~: %q", got)
+	}
 	if len(cfg.Packages.Managers) != 6 || cfg.Environment.StartupTimeout != 15*time.Second {
 		t.Errorf("command defaults: %+v %+v", cfg.Packages, cfg.Environment)
 	}

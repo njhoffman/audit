@@ -201,3 +201,23 @@ func TestReopenKeepsData(t *testing.T) {
 		t.Error("run lost after reopen")
 	}
 }
+
+func TestChanges(t *testing.T) {
+	s := open(t)
+	before, err := s.Changes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Todos(ctx, ""); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.Changes(ctx); n != before {
+		t.Errorf("a read changed the count: %d -> %d", before, n)
+	}
+	if err := s.SetSetting(ctx, "k", "v"); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.Changes(ctx); n <= before {
+		t.Errorf("a write did not change the count: %d -> %d", before, n)
+	}
+}

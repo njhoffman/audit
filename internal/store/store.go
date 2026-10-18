@@ -173,6 +173,15 @@ func checkVersion(db *sql.DB) error {
 	return nil
 }
 
+// Changes counts the rows this store has written since it was opened. The
+// pool holds a single connection, so SQLite's per-connection total covers
+// every write.
+func (s *Store) Changes(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&n)
+	return n, err
+}
+
 // Close releases the database.
 func (s *Store) Close() error { return s.db.Close() }
 

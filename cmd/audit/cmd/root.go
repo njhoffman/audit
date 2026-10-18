@@ -21,8 +21,11 @@ var timeNow = time.Now
 func Execute() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	root := newRootCmd(newApp(os.Stdout, os.Stderr))
-	if err := root.ExecuteContext(ctx); err != nil {
+	a := newApp(os.Stdout, os.Stderr)
+	root := newRootCmd(a)
+	err := root.ExecuteContext(ctx)
+	a.close()
+	if err != nil {
 		sayln(os.Stderr, "audit: "+err.Error())
 		return 1
 	}
@@ -103,7 +106,7 @@ Run without a command in a terminal for the interactive dashboard, or with
 	fl.BoolVarP(&open, "open", "o", false, "like --html, then open the index")
 
 	root.AddCommand(newSystemCmd(a), newEnvironmentCmd(a), newPackagesCmd(a),
-		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a))
+		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a), newExportCmd(a))
 	return root
 }
 

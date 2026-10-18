@@ -82,6 +82,7 @@ func runUpdate(t *testing.T, gh *fakeGh, interactive bool, stdin string, args ..
 	root := newRootCmd(a)
 	root.SetArgs(args)
 	e := root.ExecuteContext(context.Background())
+	a.close()
 	return result{out.String(), errOut.String(), e, a}
 }
 
@@ -145,6 +146,15 @@ func TestPackagesUpdateRun(t *testing.T) {
 		if !strings.Contains(r.out, want) {
 			t.Errorf("summary missing %q:\n%s", want, r.out)
 		}
+	}
+	// A command that fails after saving still refreshes the export.
+	var exported struct {
+		Updates []packages.Update `json:"updates"`
+	}
+	b, err := os.ReadFile(filepath.Join(os.Getenv("XDG_DATA_HOME"), "audit", "export", "updates.json")) // #nosec G304 -- test file
+	if err != nil || json.Unmarshal(b, &exported) != nil || len(exported.Updates) != 1 ||
+		exported.Updates[0].Items[0].Output != "" {
+		t.Errorf("updates.json after a failed update: %v %s", err, b)
 	}
 	for _, want := range []string{"ok      gh:ok v1.0.0 -> v1.1.0", "FAILED  gh:bad v1.0.0 -> v1.1.0"} {
 		if !strings.Contains(r.err, want) {

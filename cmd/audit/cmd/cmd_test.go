@@ -52,6 +52,7 @@ func runArgs(t *testing.T, args ...string) result {
 	root := newRootCmd(a)
 	root.SetArgs(args)
 	e := root.ExecuteContext(context.Background())
+	a.close()
 	return result{out.String(), errOut.String(), e, a}
 }
 

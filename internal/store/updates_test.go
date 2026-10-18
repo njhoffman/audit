@@ -40,6 +40,10 @@ func TestUpdatesRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(last, second) {
 		t.Errorf("last:\n got %+v\nwant %+v", last, second)
 	}
+	all, err := s.Updates(ctx, 5)
+	if err != nil || len(all) != 2 || all[0].ID != second.ID || len(all[1].Items) != 3 || all[1].Items[0].Output != "error" {
+		t.Errorf("updates: %v %+v", err, all)
+	}
 	fails, err := s.UpdateFailures(ctx)
 	if err != nil {
 		t.Fatal(err)

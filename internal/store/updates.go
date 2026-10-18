@@ -2,8 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -45,22 +43,50 @@ func (s *Store) SaveUpdate(ctx context.Context, u *packages.Update) error {
 
 // LastUpdate returns the newest update run, or nil when there is none.
 func (s *Store) LastUpdate(ctx context.Context) (*packages.Update, error) {
-	var u packages.Update
-	var started, finished string
-	err := s.db.QueryRowContext(ctx, `SELECT id, host, started_at, finished_at FROM updates
-		ORDER BY finished_at DESC, id DESC LIMIT 1`).Scan(&u.ID, &u.Host, &started, &finished)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+	us, err := s.Updates(ctx, 1)
+	if err != nil || len(us) == 0 {
+		return nil, err
 	}
+	return &us[0], nil
+}
+
+// Updates returns the newest limit update runs with their results, newest
+// first.
+func (s *Store) Updates(ctx context.Context, limit int) ([]packages.Update, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, host, started_at, finished_at FROM updates
+		ORDER BY finished_at DESC, id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
-	u.StartedAt, u.FinishedAt = parseTS(started), parseTS(finished)
-	rows, err := s.db.QueryContext(ctx, `SELECT `+updateItemCols+` FROM update_items WHERE update_id=? ORDER BY seq`, u.ID)
+	var us []packages.Update
+	for rows.Next() {
+		var u packages.Update
+		var started, finished string
+		if err := rows.Scan(&u.ID, &u.Host, &started, &finished); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		u.StartedAt, u.FinishedAt = parseTS(started), parseTS(finished)
+		us = append(us, u)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for i := range us {
+		if us[i].Items, err = s.updateItems(ctx, us[i].ID); err != nil {
+			return nil, err
+		}
+	}
+	return us, nil
+}
+
+func (s *Store) updateItems(ctx context.Context, id int64) ([]packages.UpdateResult, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+updateItemCols+` FROM update_items WHERE update_id=? ORDER BY seq`, id)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
+	var out []packages.UpdateResult
 	for rows.Next() {
 		var it packages.UpdateResult
 		var ms int64
@@ -69,9 +95,9 @@ func (s *Store) LastUpdate(ctx context.Context) (*packages.Update, error) {
 			return nil, err
 		}
 		it.Duration = time.Duration(ms) * time.Millisecond
-		u.Items = append(u.Items, it)
+		out = append(out, it)
 	}
-	return &u, rows.Err()
+	return out, rows.Err()
 }
 
 // UpdateFailures returns, by package key, the last update attempt of each

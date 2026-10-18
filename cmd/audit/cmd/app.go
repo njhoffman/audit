@@ -8,6 +8,7 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"time"
 
 	clog "github.com/charmbracelet/log"
 	"golang.org/x/term"
@@ -15,6 +16,7 @@ import (
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/exec"
+	"github.com/njhoffman/audit/internal/export"
 	"github.com/njhoffman/audit/internal/htmlreport"
 	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/log"
@@ -59,6 +61,9 @@ type app struct {
 	// when set (tests).
 	runner exec.Runner
 	looker registry.Looker
+	// changes is the store's write count after load; close exports when it
+	// moved.
+	changes int64
 }
 
 func newApp(out, errOut io.Writer) *app {
@@ -97,6 +102,9 @@ func (a *app) load() error {
 		return err
 	}
 	a.store = st
+	if a.changes, err = st.Changes(context.Background()); err != nil {
+		a.log.Warn("read the database change count", "err", err)
+	}
 	host, _ := os.Hostname()
 	a.env = exec.FromOS()
 	if a.runner != nil {
@@ -122,10 +130,54 @@ func (a *app) ensureConfig() error {
 	return nil
 }
 
+// close rewrites the export snapshots when this invocation saved anything,
+// then releases the store. It runs after errors too, and a second call does
+// nothing.
 func (a *app) close() {
-	if a.store != nil {
-		_ = a.store.Close()
+	if a.store == nil {
+		return
 	}
+	if a.cfg.Export.Enabled {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if n, err := a.store.Changes(ctx); err == nil && n != a.changes {
+			if err := a.export(ctx, a.cfg.ExportDir()); err != nil {
+				a.log.Warn("export snapshots", "dir", a.cfg.ExportDir(), "err", err)
+			}
+		}
+		cancel()
+	}
+	_ = a.store.Close()
+	a.store, a.engine = nil, nil
+}
+
+// export writes the JSON snapshots of the saved results into dir.
+func (a *app) export(ctx context.Context, dir string) error {
+	in := export.Input{Host: a.engine.Host, Now: timeNow(), Commands: core.Commands,
+		Runs: map[string]*run.Run{}, Thresholds: map[string]config.Thresholds{}}
+	for _, c := range core.Commands {
+		in.Thresholds[c] = a.cfg.Stale.For(c)
+		r, err := a.engine.Saved(ctx, c, "")
+		if err != nil {
+			return err
+		}
+		if r == nil {
+			continue
+		}
+		in.Runs[c] = r
+		if c == packages.Command {
+			if in.Packages, err = a.annotated(ctx, r, packages.Query{}); err != nil {
+				return err
+			}
+		}
+	}
+	var err error
+	if in.Todos, err = a.store.Todos(ctx, ""); err != nil {
+		return err
+	}
+	if in.Updates, err = a.store.Updates(ctx, a.cfg.History); err != nil {
+		return err
+	}
+	return export.Write(dir, export.Build(in))
 }
 
 func (a *app) noColor() bool {

@@ -31,6 +31,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **config** [**-i** [**-f**]] [**-p**]
 
+**audit** **export** [**-d** _dir_]
+
 # DESCRIPTION
 
 **audit** scans a Linux workstation and saves the results in a database. Each issue and suggestion a scan finds becomes a task with a priority and a status. Saved results are shown again on later runs with their age; results older than the stale thresholds are highlighted.
@@ -74,6 +76,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **config**
 :   Prints the effective configuration and the file it came from. **-i** writes the default file (**-f** overwrites), **-p** prints the path.
+
+**export**
+:   Writes the export files (see **EXPORT FILES**) into **export.dir**, or into _dir_ with **-d**, and prints the directory. Nothing is scanned. With **export.enabled**, the default, the files are already rewritten after every command that saves something, including one that then fails; this writes them on demand.
 
 # GLOBAL OPTIONS
 
@@ -243,6 +248,22 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 
 Errors and criticals become **high** tasks, warnings **medium**, notices **low**, and suggestions **suggestion**. Info findings of one check share a single **low** task. A rescan adds tasks for new findings and marks tasks **resolved** when their finding is gone; **won't do** tasks stay closed. A scan narrowed with **\-\-only** or **\-\-manager** only resolves tasks of the parts it scanned.
 
+# EXPORT FILES
+
+The export directory (**export.dir**, by default **~/.local/share/audit/export/**) holds JSON snapshots for other programs, such as a desktop dashboard, to read without opening the database. Each file is written to a temporary file and renamed into place, so a reader never sees a partial file. Every file starts with **schema_version** (currently 1), **generated_at** (UTC) and **host**. Within one schema version fields are only added; a renamed or removed field bumps it.
+
+**summary.json**
+:   One row per scanning command under **commands**: **command**, **file** (its own export file, absent when it never ran), **freshness** (**fresh**, **stale**, **old** or **none**, graded at **generated_at**), **stale_after_seconds** and **old_after_seconds** to regrade it later, **last_run** (**id**, **scope**, **started_at**, **finished_at**, **findings** counted by severity, **ignored**, **errors**) and **open_tasks** by priority. Then **open_tasks** totals and **last_update** (**id**, **finished_at**, **updated**, **failed**, **skipped**) once a package update has run.
+
+_command_**.json**
+:   The command's latest full run under **run**, with its findings and errors but without the scanner's raw data, which can hold environment values. **packages.json** adds the annotated inventory as **packages**, as **audit packages \-\-json** prints it.
+
+**tasks.json**
+:   Every task under **tasks**, closed ones included.
+
+**updates.json**
+:   The saved package updates under **updates**, newest first, each item with its command, status and reason but not the command's output.
+
 # CONFIGURATION
 
 The first run creates **~/.config/audit.yaml** with every key set to its default and commented; edit or delete any key. **audit config \-\-init \-\-force** restores it. The defaults:
@@ -295,6 +316,9 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       startup_timeout: 15s
       slow_startup: 500ms
       shellcheck: {severity: warning, exclude: [SC2034]}
+    export:
+      enabled: true            # rewrite the export files after commands that save
+      dir: ""                  # empty: <data_dir>/export; ~ is expanded
 
 Keys can also be set as **AUDIT_**_KEY_ environment variables, with dots as underscores (**AUDIT_STALE_WARN=12h**).
 
@@ -354,6 +378,9 @@ Mark task 12 done with a note:
 
 **~/.local/share/audit/reports/**
 :   HTML reports and **index.html**.
+
+**~/.local/share/audit/export/**
+:   JSON snapshots for other programs; see **EXPORT FILES**.
 
 # ENVIRONMENT
 

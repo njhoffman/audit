@@ -29,6 +29,15 @@ type Config struct {
 	System      SystemConfig      `mapstructure:"system" yaml:"system"`
 	Packages    PackagesConfig    `mapstructure:"packages" yaml:"packages"`
 	Environment EnvironmentConfig `mapstructure:"environment" yaml:"environment"`
+	Export      ExportConfig      `mapstructure:"export" yaml:"export"`
+}
+
+// ExportConfig configures the JSON snapshots written for other programs.
+type ExportConfig struct {
+	// Enabled rewrites the snapshots whenever a command saves something.
+	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
+	// Dir is where they go; empty means <data_dir>/export.
+	Dir string `mapstructure:"dir" yaml:"dir"`
 }
 
 // Thresholds says when saved results count as stale (Warn) and old (Old).
@@ -235,6 +244,8 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("environment.slow_startup", 500*time.Millisecond)
 	v.SetDefault("environment.shellcheck.severity", "warning")
 	v.SetDefault("environment.shellcheck.exclude", []string{"SC2034"})
+	v.SetDefault("export.enabled", true)
+	v.SetDefault("export.dir", "")
 }
 
 // Load reads the config. explicit, when non-empty, must exist; otherwise the
@@ -394,6 +405,25 @@ func (c *Config) DBPath() string { return filepath.Join(c.DataDir, "audit.db") }
 // ReportDir is where HTML reports are written.
 func (c *Config) ReportDir() string { return filepath.Join(c.DataDir, "reports") }
 
+// ExportDir is where the JSON snapshots are written.
+func (c *Config) ExportDir() string {
+	if c.Export.Dir != "" {
+		return expandHome(c.Export.Dir)
+	}
+	return filepath.Join(c.DataDir, "export")
+}
+
+func expandHome(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, strings.TrimPrefix(p, "~"))
+}
+
 // Template is the commented file written on first run and by
 // `audit config --init`. TestTemplateMatchesDefaults keeps it in step with
 // defaults().
@@ -502,4 +532,11 @@ environment:
   shellcheck:
     severity: warning    # error | warning | info | style
     exclude: [SC2034]
+
+# JSON snapshots of the saved results (summary, tasks, updates and each
+# command's latest run) for other programs such as a dashboard; see EXPORT
+# FILES in man audit. They are rewritten whenever a command saves something.
+export:
+  enabled: true
+  dir: ""   # empty means <data_dir>/export
 `

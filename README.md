@@ -19,6 +19,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit todo` | the tasks scans create, plus tasks added by hand |
 | `audit history` | saved runs |
 | `audit config` | the effective configuration; `--init` rewrites the default file |
+| `audit export` | write the JSON snapshots other programs read (they are also rewritten after every command that saves) |
 
 `audit` with no command opens the dashboard in a terminal, or prints the summary when output is redirected (or with `--summary`).
 
@@ -82,7 +83,7 @@ Errors and criticals become high-priority tasks, warnings medium, notices low, a
 
 Besides history, freshness thresholds, ignore rules and the AI settings, the file sets how many detail lines each finding shows (`display.details`), the system scanner's limits (log lines read, process CPU/memory/thread thresholds, service restart threshold, user units, programs checked) which environment the packages scan uses (`packages.env`: `login` or `process`), the registry cache ages, concurrency, timeout and unmaintained threshold (`packages.registry.*`), the per-package update timeout and packages never updated (`packages.update.*`), the AI tag vocabulary (`packages.tags`), your GitHub login for the `mine` tag (`github_user`, detected through `gh` when empty), and the environment scanner's shells, startup files, slow-startup threshold and shellcheck severity and excludes.
 
-Data lives in `$XDG_DATA_HOME/audit`: `audit.db` (runs, findings, tasks, package registry cache and tags, saved updates, AI cache) and `reports/` (HTML).
+Data lives in `$XDG_DATA_HOME/audit`: `audit.db` (runs, findings, tasks, package registry cache and tags, saved updates, AI cache) `reports/` (HTML) and `export/`: JSON snapshots for a dashboard or script to read without touching the database. `summary.json` has each command's freshness, finding counts and open tasks, `<command>.json` the latest run's findings (`packages.json` also the annotated inventory), `tasks.json` every task, `updates.json` the saved package updates. Files are replaced atomically and carry `schema_version`, `generated_at` and `host`; raw scanner data and command output are left out. `export.enabled` and `export.dir` control them; `man audit` (EXPORT FILES) documents the fields.
 
 ## Development
 
