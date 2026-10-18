@@ -43,12 +43,21 @@
 <p class="empty" id="none" hidden>No findings match the filter.</p>
 {{end}}
 
-{{range .Tables}}
-<h2>{{.Title}}</h2>
-{{if .Note}}<p class="meta">{{.Note}}</p>{{end}}
-{{if .Rows}}<div class="table-wrap"><table>
-<thead><tr>{{range .Columns}}<th>{{.}}</th>{{end}}</tr></thead>
-<tbody>{{range .Rows}}<tr>{{range .}}<td class="pre">{{.}}</td>{{end}}</tr>{{end}}</tbody>
+{{if .Tags}}
+<h2>Packages</h2>
+<div class="controls">
+<input type="search" id="pq" placeholder="Filter packages" aria-label="Filter packages">
+<select id="ptag" aria-label="Filter by tag"><option value="">all tags</option>{{range .Tags}}<option value="{{.Tag}}">{{.Tag}} ({{.N}})</option>{{end}}</select>
+<label><input type="checkbox" id="pout"> outdated only</label>
+</div>
+<p class="empty" id="pnone" hidden>No packages match the filter.</p>
+{{end}}
+{{range $t := .Tables}}
+<h2>{{$t.Title}}</h2>
+{{if $t.Note}}<p class="meta">{{$t.Note}}</p>{{end}}
+{{if $t.Rows}}<div class="table-wrap"><table>
+<thead><tr>{{range $t.Columns}}<th>{{.}}</th>{{end}}</tr></thead>
+<tbody>{{range $i, $row := $t.Rows}}<tr{{if $t.RowTags}} class="pkg {{index $t.RowClass $i}}" data-tags="{{index $t.RowTags $i}}"{{end}}>{{range $row}}<td class="pre">{{.}}</td>{{end}}</tr>{{end}}</tbody>
 </table></div>{{end}}
 {{end}}
 
@@ -87,6 +96,27 @@
   }
   q.addEventListener('input', apply);
   boxes.forEach(function (b) { b.addEventListener('change', apply); });
+})();
+(function () {
+  var q = document.getElementById('pq');
+  if (!q) return;
+  var tag = document.getElementById('ptag'), out = document.getElementById('pout'), none = document.getElementById('pnone');
+  var rows = Array.prototype.slice.call(document.querySelectorAll('tr.pkg'));
+  var behind = ['gap-patch', 'gap-minor', 'gap-major'];
+  function apply() {
+    var text = q.value.toLowerCase(), t = tag.value, shown = 0;
+    rows.forEach(function (tr) {
+      var ok = (!t || (' ' + tr.dataset.tags + ' ').indexOf(' ' + t + ' ') >= 0) &&
+        (!text || tr.textContent.toLowerCase().indexOf(text) >= 0) &&
+        (!out.checked || behind.some(function (c) { return tr.classList.contains(c); }));
+      tr.hidden = !ok;
+      if (ok) shown++;
+    });
+    none.hidden = shown > 0;
+  }
+  q.addEventListener('input', apply);
+  tag.addEventListener('change', apply);
+  out.addEventListener('change', apply);
 })();
 </script>
 </body>

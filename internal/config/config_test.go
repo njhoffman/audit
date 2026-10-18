@@ -109,6 +109,9 @@ func TestLoadErrors(t *testing.T) {
 		"display: {details: 0}", "ai: {max_details: -1}", "system: {log_max_lines: 0}",
 		"system: {procs: {high_cpu: 0}}", "system: {services: {high_restarts: -1}}",
 		"environment: {shellcheck: {severity: loud}}", "packages: {env: shell}",
+		"packages: {registry: {max_age: 0s}}", "packages: {registry: {metadata_max_age: -1h}}",
+		"packages: {registry: {concurrency: 0}}", "packages: {registry: {timeout: 0s}}",
+		"packages: {registry: {unmaintained_after: -1h}}", "packages: {tags: [Has Space]}", "packages: {tags: [UPPER]}",
 	} {
 		write(t, bad, body)
 		if _, _, err := Load(bad); err == nil {
@@ -133,6 +136,13 @@ func TestTemplateMatchesDefaults(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("template disagrees with defaults:\n got %+v\nwant %+v", got, want)
+	}
+	if got.Packages.Registry.MaxAge != 24*time.Hour || got.Packages.Registry.Concurrency != 8 || len(got.Packages.Tags) != len(DefaultTags) {
+		t.Errorf("registry defaults: %+v tags=%d", got.Packages.Registry, len(got.Packages.Tags))
+	}
+	write(t, path, "packages: {registry: {unmaintained_after: 0s}, tags: [my-tag]}")
+	if c, _, err := Load(path); err != nil || c.Packages.Registry.UnmaintainedAfter != 0 || c.Packages.Tags[0] != "my-tag" {
+		t.Errorf("unmaintained_after 0 disables the check and custom tags load: %v %+v", err, c)
 	}
 	if got.System.Procs.HighCPU != 80 || got.Environment.Shellcheck.Exclude[0] != "SC2034" || got.Display.Details != 5 {
 		t.Errorf("new keys: %+v %+v", got.System.Procs, got.Environment.Shellcheck)

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -54,6 +55,9 @@ type Options struct {
 	Now        time.Time
 	// RescanHint is the command line shown in the age banner.
 	RescanHint string
+	// Packages is the packages inventory joined with cached registry data
+	// and tags; nil builds it from the run alone.
+	Packages []packages.Annotated
 }
 
 // Table is a generic data section.
@@ -62,6 +66,15 @@ type Table struct {
 	Note    string
 	Columns []string
 	Rows    [][]string
+	// RowTags, when set, holds each row's space-separated tags for the tag
+	// filter; RowClass a CSS class per row.
+	RowTags  []string
+	RowClass []string
+}
+
+type tagCount struct {
+	Tag string
+	N   int
 }
 
 type severityCount struct {
@@ -89,6 +102,7 @@ type reportData struct {
 	Issues     []finding.Finding
 	Suggestion []finding.Finding
 	Tables     []Table
+	Tags       []tagCount
 	Todos      []todo.Todo
 	Analysis   template.HTML
 }
@@ -114,6 +128,10 @@ func Write(w io.Writer, r *run.Run, o Options) error {
 		Age: run.HumanAge(r.Age(now)), Ago: run.Ago(r.Age(now)), Freshness: freshness(r.Age(now), o.Thresholds),
 		Tables: Tables(r), Rescan: o.RescanHint,
 	}
+	if r.Command == packages.Command && o.Packages != nil {
+		d.Tables = packageTables(o.Packages, now)
+	}
+	d.Tags = tagCounts(d.Tables)
 	if d.Rescan == "" {
 		d.Rescan = "audit " + r.Command + " --rescan"
 	}
@@ -176,7 +194,7 @@ func Tables(r *run.Run) []Table {
 		if json.Unmarshal(r.Data, &d) != nil {
 			return nil
 		}
-		return packageTables(d)
+		return packageTables(packages.Annotate(d.Inventories, nil, nil, ""), r.FinishedAt)
 	case environment.Command:
 		var d environment.Data
 		if json.Unmarshal(r.Data, &d) != nil {
@@ -187,9 +205,10 @@ func Tables(r *run.Run) []Table {
 	return nil
 }
 
-func packageTables(d packages.Data) []Table {
+func packageTables(as []packages.Annotated, now time.Time) []Table {
 	var out []Table
-	for _, inv := range d.Inventories {
+	for _, a := range as {
+		inv := a.Inventory
 		var note []string
 		if inv.ManagerVersion != "" {
 			note = append(note, inv.ManagerVersion)
@@ -204,14 +223,56 @@ func packageTables(d packages.Data) []Table {
 			note = append(note, "error: "+inv.Error)
 		default:
 			note = append(note, fmt.Sprintf("%d package(s)", len(inv.Packages)))
+			if c := packages.RegistryNote(a, now); c != "" {
+				note = append(note, c)
+			}
 		}
 		t := Table{Title: inv.Manager, Note: strings.Join(note, " · "),
-			Columns: []string{"Name", "Version", "Runtime", "Source", "Executables"}}
-		for _, p := range inv.Packages {
-			t.Rows = append(t.Rows, []string{p.Name, p.Version, p.RuntimeVersion, p.Source, strings.Join(p.Executables, " ")})
+			Columns: []string{"Name", "Version", "Latest", "Released", "Runtime", "Tags", "Description", "Source", "Executables"}}
+		for _, it := range a.Items {
+			latest, released := packages.LatestCells(it, now)
+			desc := ""
+			if it.Meta != nil {
+				desc = it.Meta.Description
+			}
+			tags := strings.Join(it.Tags, " ")
+			t.Rows = append(t.Rows, []string{it.Name, it.Version, latest, released, it.RuntimeVersion, tags, desc,
+				it.Source, strings.Join(it.Executables, " ")})
+			t.RowTags = append(t.RowTags, tags)
+			class := ""
+			if it.Gap != packages.GapUnknown {
+				class = "gap-" + string(it.Gap)
+			}
+			if it.Meta != nil && (it.Meta.Deprecated != "" || it.Meta.Archived) {
+				class = strings.TrimSpace(class + " gap-dead")
+			}
+			t.RowClass = append(t.RowClass, class)
 		}
 		out = append(out, t)
 	}
+	return out
+}
+
+// tagCounts counts the tags of the tables that carry them, most used first.
+func tagCounts(ts []Table) []tagCount {
+	n := map[string]int{}
+	for _, t := range ts {
+		for _, tags := range t.RowTags {
+			for _, tag := range strings.Fields(tags) {
+				n[tag]++
+			}
+		}
+	}
+	out := make([]tagCount, 0, len(n))
+	for tag, c := range n {
+		out = append(out, tagCount{tag, c})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].N != out[j].N {
+			return out[i].N > out[j].N
+		}
+		return out[i].Tag < out[j].Tag
+	})
 	return out
 }
 

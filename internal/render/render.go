@@ -219,7 +219,10 @@ func (p *Printer) table(cols []column, rows [][]string, style func(row, col int)
 	for i, c := range cols {
 		titles[i] = c.title
 	}
-	p.println(line(titles, func(int) lipgloss.Style { return p.faint().Bold(true) }))
+	// A table with no titles is a key/value list and prints no header.
+	if strings.Join(titles, "") != "" {
+		p.println(line(titles, func(int) lipgloss.Style { return p.faint().Bold(true) }))
+	}
 	for ri, r := range rows {
 		p.println(line(r, func(ci int) lipgloss.Style {
 			if style == nil {

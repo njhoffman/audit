@@ -83,7 +83,7 @@ func (a *app) defaultScanner(command string) (core.Scanner, error) {
 	case "environment":
 		return core.NewEnvironment(a.cfg, a.env)
 	case "packages":
-		return core.NewPackages(a.cfg, a.env, nil)
+		return a.packagesScanner(nil)
 	}
 	return nil, fmt.Errorf("unknown command %q", command)
 }

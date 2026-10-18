@@ -125,7 +125,7 @@ func TestTables(t *testing.T) {
 		{Manager: "gh"},
 	}})
 	ts := Tables(&run.Run{Command: packages.Command, Data: pd})
-	if len(ts) != 2 || ts[0].Title != "cargo" || ts[0].Rows[0][0] != "ripgrep" || ts[0].Rows[0][4] != "rg" ||
+	if len(ts) != 2 || ts[0].Title != "cargo" || ts[0].Rows[0][0] != "ripgrep" || ts[0].Rows[0][8] != "rg" ||
 		!strings.Contains(ts[1].Note, "not installed") {
 		t.Errorf("package tables %+v", ts)
 	}
@@ -144,6 +144,33 @@ func TestTables(t *testing.T) {
 	}
 	if Tables(&run.Run{Command: "system", Data: pd}) != nil {
 		t.Error("system has no data tables")
+	}
+}
+
+func TestWritePackages(t *testing.T) {
+	now := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	invs := []packages.Inventory{{Manager: "cargo", Available: true, Packages: []packages.Package{
+		{Manager: "cargo", Name: "ripgrep", Version: "14.1.0", Source: "crates.io"},
+		{Manager: "cargo", Name: "fd", Version: "9.0.0", Source: "crates.io"},
+	}}}
+	metas := map[string]packages.Meta{
+		"cargo:ripgrep": {Latest: "15.0.0", LatestAt: now.Add(-48 * time.Hour), CheckedAt: now.Add(-time.Hour), Description: "grep <fast>"},
+		"cargo:fd":      {Latest: "9.0.0", CheckedAt: now.Add(-time.Hour), Deprecated: "use x"},
+	}
+	r := &run.Run{Command: packages.Command, FinishedAt: now}
+	var b strings.Builder
+	err := Write(&b, r, Options{Thresholds: th, Now: now,
+		Packages: packages.Annotate(invs, metas, map[string][]string{"cargo:ripgrep": {"search"}}, "")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	for _, w := range []string{"registry checked 1 hour ago", `class="pkg gap-major" data-tags="cargo search"`,
+		`class="pkg gap-current gap-dead"`, "15.0.0", "2 days ago", "grep &lt;fast&gt;", "9.0.0 (deprecated)",
+		`<option value="cargo">cargo (2)</option>`, `<option value="search">search (1)</option>`, `id="pout"`} {
+		if !strings.Contains(out, w) {
+			t.Errorf("report missing %q", w)
+		}
 	}
 }
 

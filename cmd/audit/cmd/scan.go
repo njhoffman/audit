@@ -12,7 +12,6 @@ import (
 	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/environment"
 	"github.com/njhoffman/audit/internal/finding"
-	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/system"
@@ -32,7 +31,15 @@ type scanFlags struct {
 	level       string
 	minSeverity string
 	check       string
+	// impliesList, when set and true, turns a plain run into --list (the
+	// packages query flags).
+	impliesList func() bool
+	// jsonExtra, when set, adds a command-specific value to --json output.
+	jsonExtra func(ctx context.Context, r *run.Run) (any, error)
 }
+
+// viewFunc prints a command's inventory for --list.
+type viewFunc func(ctx context.Context, p *render.Printer, r *run.Run)
 
 func (f *scanFlags) register(c *cobra.Command) {
 	fl := c.Flags()
@@ -76,7 +83,7 @@ func (f *scanFlags) filter() (finding.Filter, error) {
 // scanCommand builds one scanning subcommand. build turns the parsed flags
 // into a scanner; view prints the command-specific inventory for --list.
 func scanCommand(a *app, use, short, long string, build func() (core.Scanner, error),
-	view func(*render.Printer, *run.Run)) (*cobra.Command, *scanFlags) {
+	view viewFunc) (*cobra.Command, *scanFlags) {
 	f := &scanFlags{}
 	c := &cobra.Command{
 		Use:   use,
@@ -98,7 +105,10 @@ func scanCommand(a *app, use, short, long string, build func() (core.Scanner, er
 	return c, f
 }
 
-func (a *app) runScan(ctx context.Context, s core.Scanner, f *scanFlags, view func(*render.Printer, *run.Run)) error {
+func (a *app) runScan(ctx context.Context, s core.Scanner, f *scanFlags, view viewFunc) error {
+	if f.impliesList != nil && f.impliesList() && !f.report && !f.summary && !f.json {
+		f.list = true
+	}
 	flt, err := f.filter()
 	if err != nil {
 		return err
@@ -149,10 +159,17 @@ func (a *app) runScan(ctx context.Context, s core.Scanner, f *scanFlags, view fu
 	}
 
 	if f.json {
+		var extra any
+		if f.jsonExtra != nil {
+			if extra, err = f.jsonExtra(ctx, r); err != nil {
+				return err
+			}
+		}
 		return a.writeJSON(struct {
-			Saved bool     `json:"saved"`
-			Run   *run.Run `json:"run"`
-		}{res.Saved, r})
+			Saved    bool     `json:"saved"`
+			Run      *run.Run `json:"run"`
+			Packages any      `json:"packages,omitempty"`
+		}{res.Saved, r, extra})
 	}
 	p := a.printer()
 	o := render.ReportOptions{Thresholds: a.cfg.Stale.For(r.Command), Saved: res.Saved, Filter: flt,
@@ -164,7 +181,7 @@ func (a *app) runScan(ctx context.Context, s core.Scanner, f *scanFlags, view fu
 		p.List(r, o)
 		if view != nil && len(r.Data) > 0 {
 			sayln(a.out)
-			view(p, r)
+			view(ctx, p, r)
 		}
 	default:
 		p.Report(r, o)
@@ -205,28 +222,11 @@ resulting environment and any unexpected output, trace which startup files
 are sourced, then check PATH, environment variables and the startup scripts
 (syntax, shellcheck, start-up time).`,
 		func() (core.Scanner, error) { return core.NewEnvironment(a.cfg, a.env) },
-		func(p *render.Printer, r *run.Run) {
+		func(_ context.Context, p *render.Printer, r *run.Run) {
 			var d environment.Data
 			if json.Unmarshal(r.Data, &d) == nil {
 				p.Environment(d)
 			}
 		})
-	return c
-}
-
-func newPackagesCmd(a *app) *cobra.Command {
-	var managers []string
-	c, _ := scanCommand(a, "packages", "Inventory user package managers and check their installs",
-		`Inventory packages installed by user-level package managers (`+strings.Join(packages.Names(), ", ")+`)
-and check for broken or shadowed executables, runtime drift, stale runtime
-directories and misplaced installs. --list prints the inventory.`,
-		func() (core.Scanner, error) { return core.NewPackages(a.cfg, a.env, splitList(managers)) },
-		func(p *render.Printer, r *run.Run) {
-			var d packages.Data
-			if json.Unmarshal(r.Data, &d) == nil {
-				p.Packages(d)
-			}
-		})
-	c.Flags().StringSliceVarP(&managers, "manager", "M", nil, "inventory only these managers: "+strings.Join(packages.Names(), ", "))
 	return c
 }

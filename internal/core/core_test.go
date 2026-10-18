@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
+	"github.com/njhoffman/audit/internal/registry"
 	"github.com/njhoffman/audit/internal/store"
 	"github.com/njhoffman/audit/internal/todo"
 )
@@ -441,5 +444,107 @@ func TestNewPackagesEnvSource(t *testing.T) {
 	cfg.Packages.Env, cfg.Environment.Shells = config.EnvLogin, nil
 	if s, _ = NewPackages(cfg, env, nil); s.LoginShell != "" {
 		t.Errorf("no shells configured should fall back to the process, got %q", s.LoginShell)
+	}
+}
+
+// uvManager reports two PyPI packages and a local one under the uv name.
+type uvManager struct{ envManager }
+
+func (uvManager) Name() string { return "uv" }
+func (uvManager) Collect(context.Context, *exec.Env) ([]packages.Package, error) {
+	return []packages.Package{
+		{Manager: "uv", Name: "ruff", Version: "0.9.0", Source: "pypi"},
+		{Manager: "uv", Name: "black", Version: "24.1", Source: "pypi"},
+		{Manager: "uv", Name: "mine", Version: "0.1", Source: "path:/src/mine"},
+	}, nil
+}
+
+type memMeta struct {
+	m     map[string]packages.Meta
+	saved []packages.Meta
+}
+
+func (s *memMeta) PackageMeta(context.Context) (map[string]packages.Meta, error) {
+	return maps.Clone(s.m), nil
+}
+
+func (s *memMeta) SavePackageMeta(_ context.Context, ms []packages.Meta) error {
+	s.saved = append(s.saved, ms...)
+	return nil
+}
+
+type tableLooker map[string]packages.Meta
+
+func (l tableLooker) Lookup(_ context.Context, p packages.Package, _ *packages.Meta, _ bool) (packages.Meta, bool, error) {
+	m, ok := l[p.Key()]
+	if !ok {
+		return m, false, errors.New("unknown")
+	}
+	return m, true, nil
+}
+
+func checks(fs []finding.Finding) map[string]string {
+	out := map[string]string{}
+	for _, f := range fs {
+		out[f.Subject] += f.Check + " "
+	}
+	return out
+}
+
+func TestPackagesScanRegistryCache(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "fakepm"), []byte("#!/bin/sh\n"), 0o700); err != nil { // #nosec G306 -- test executable
+		t.Fatal(err)
+	}
+	env := &exec.Env{Vars: map[string]string{"PATH": bin}, Home: t.TempDir(), Runner: &exec.Fake{}}
+	now := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	store := &memMeta{m: map[string]packages.Meta{
+		"uv:ruff": {Manager: "uv", ID: "ruff", Latest: "0.9.3", Installed: "0.9.0", CheckedAt: now.Add(-50 * time.Hour)},
+	}}
+	s := &PackagesScanner{Env: env, Managers: []packages.Manager{uvManager{}}, Meta: store, Now: now}
+
+	// Without a refresh the cache is read and nothing is fetched or saved.
+	out, _ := scanPackages(t, s)
+	if got := checks(out.Findings)["uv:ruff"]; !strings.Contains(got, packages.CheckOutdated) {
+		t.Errorf("cached data should drive the outdated check: %v", checks(out.Findings))
+	}
+	if got := stat(out, "checked"); got != "oldest 2 days ago, 1 never checked" {
+		t.Errorf("checked stat = %q", got)
+	}
+	if len(store.saved) != 0 {
+		t.Errorf("a plain scan saved %v", store.saved)
+	}
+
+	// A refresh fetches the stale and missing entries and saves them.
+	var updated []packages.Meta
+	s.Refresh = &RegistryRefresh{Options: registry.Options{MaxAge: 24 * time.Hour, Concurrency: 2},
+		Looker:  tableLooker{"uv:ruff": {Latest: "0.9.0"}, "uv:black": {Latest: "25.1"}},
+		Updated: func(ms []packages.Meta) { updated = ms }}
+	out, _ = scanPackages(t, s)
+	if len(store.saved) != 2 || len(updated) != 2 {
+		t.Errorf("saved %v, updated %v", store.saved, updated)
+	}
+	got := checks(out.Findings)
+	if strings.Contains(got["uv:ruff"], packages.CheckOutdated) || !strings.Contains(got["uv:black"], packages.CheckMajorBehind) {
+		t.Errorf("findings should use the refreshed data: %v", got)
+	}
+	if v := stat(out, "looked up"); v != "2 (0 failed, 0 already fresh)" {
+		t.Errorf("looked up = %q", v)
+	}
+	if v := stat(out, "checked"); v != "oldest 1 minute ago" {
+		t.Errorf("checked = %q", v)
+	}
+
+	// Named packages are forced; unknown and non-registry names are reported.
+	store.saved = nil
+	s.Refresh.Only = []packages.Ref{packages.ParseRef("uv:ruff"), packages.ParseRef("nope"), packages.ParseRef("mine")}
+	store.m = map[string]packages.Meta{"uv:ruff": {Manager: "uv", ID: "ruff", Latest: "0.9.0", Installed: "0.9.0", CheckedAt: now}}
+	out, _ = scanPackages(t, s)
+	if len(store.saved) != 1 || store.saved[0].ID != "ruff" {
+		t.Errorf("only ruff should be looked up: %v", store.saved)
+	}
+	want := []string{`no installed package matches "nope"`, "uv:mine was installed from path:/src/mine, not a registry"}
+	if !reflect.DeepEqual(out.Errors, want) {
+		t.Errorf("errors = %q", out.Errors)
 	}
 }

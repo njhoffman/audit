@@ -66,3 +66,11 @@ tr.closed td { color: var(--muted); }
 .empty { color: var(--muted); font-style: italic; }
 footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
 @media (max-width: 600px) { main { padding: 16px; } .stats { grid-template-columns: 1fr; } }
+.controls select { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--fg); font: inherit; }
+tr.pkg td:nth-child(3) { font-weight: 600; }
+tr.gap-current td:nth-child(3) { color: var(--fresh); }
+tr.gap-patch td:nth-child(3) { color: var(--notice); }
+tr.gap-minor td:nth-child(3) { color: var(--warning); }
+tr.gap-major td:nth-child(3), tr.gap-dead td:nth-child(3) { color: var(--error); }
+tr.pkg td:nth-child(6) { color: var(--accent); }

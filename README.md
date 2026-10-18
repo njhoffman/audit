@@ -12,7 +12,9 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 |---|---|
 | `audit system` | processes, systemd units, user and group accounts, the journal, dmesg and boot logs, and program configs (sshd, nginx, apache, postgres, docker, cron) |
 | `audit environment` | each configured login shell with and without a terminal: unexpected startup output, which files are sourced, startup time, PATH problems, environment variables, startup script syntax and shellcheck |
-| `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs; checked against a fresh login shell's PATH and variables, not the terminal's |
+| `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs; checked against a fresh login shell's PATH and variables, not the terminal's; latest releases, release age, deprecation and archive status from a cached registry lookup; tags |
+| `audit packages registry` | look packages up on PyPI, npm, crates.io, the Go proxy, rubygems.org and GitHub, cache the results, optionally AI-tag them |
+| `audit packages info` / `tag` | one package's cached details; list, add or remove tags |
 | `audit todo` | the tasks scans create, plus tasks added by hand |
 | `audit history` | saved runs |
 | `audit config` | the effective configuration; `--init` rewrites the default file |
@@ -31,6 +33,12 @@ audit system -r -O logs,services   # rescan only some parts
 audit packages -l              # one line per finding plus the package inventory (never scans)
 audit environment -R           # full saved report (never scans)
 audit packages -j              # saved run as JSON
+audit packages registry        # refresh the registry cache (entries younger than 24h are reused), then report
+audit packages registry -a     # also AI-tag packages that have no AI tags yet
+audit packages -u              # outdated packages, with latest version and release age
+audit packages -t cli -f json  # packages tagged cli whose name or description mentions json
+audit packages info ruff       # cached details and tags of one package (uv:ruff when ambiguous)
+audit packages tag ruff linter # add a tag; -d removes; no arguments lists tag counts
 audit system -m warning -k logs.   # hide findings below warning, only checks starting with logs.
 audit system -a                # add an AI review through the claude CLI (cached per result set)
 audit environment -o           # write the HTML report and open it
@@ -68,9 +76,9 @@ Errors and criticals become high-priority tasks, warnings medium, notices low, a
 
 `~/.config/audit.yaml` (or `$XDG_CONFIG_HOME/audit.yaml`). The first run creates it with every default written out and commented, so the file doubles as the reference; edit or delete any key. `-c FILE` uses another file instead, and that file is never created for you. `audit config` prints the effective settings, `audit config --init --force` restores the defaults, and any key can also be set from the environment as `AUDIT_<KEY>`, dots as underscores (for example `AUDIT_STALE_WARN=12h`).
 
-Besides history, freshness thresholds, ignore rules and the AI settings, the file sets how many detail lines each finding shows (`display.details`), the system scanner's limits (log lines read, process CPU/memory/thread thresholds, service restart threshold, user units, programs checked) which environment the packages scan uses (`packages.env`: `login` or `process`), and the environment scanner's shells, startup files, slow-startup threshold and shellcheck severity and excludes.
+Besides history, freshness thresholds, ignore rules and the AI settings, the file sets how many detail lines each finding shows (`display.details`), the system scanner's limits (log lines read, process CPU/memory/thread thresholds, service restart threshold, user units, programs checked) which environment the packages scan uses (`packages.env`: `login` or `process`), the registry cache ages, concurrency, timeout and unmaintained threshold (`packages.registry.*`), the AI tag vocabulary (`packages.tags`), your GitHub login for the `mine` tag (`github_user`, detected through `gh` when empty), and the environment scanner's shells, startup files, slow-startup threshold and shellcheck severity and excludes.
 
-Data lives in `$XDG_DATA_HOME/audit`: `audit.db` (runs, findings, tasks, AI cache) and `reports/` (HTML).
+Data lives in `$XDG_DATA_HOME/audit`: `audit.db` (runs, findings, tasks, package registry cache and tags, AI cache) and `reports/` (HTML).
 
 ## Development
 

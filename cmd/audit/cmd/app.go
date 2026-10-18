@@ -18,6 +18,7 @@ import (
 	"github.com/njhoffman/audit/internal/htmlreport"
 	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/log"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/run"
@@ -171,10 +172,15 @@ func (a *app) writeReport(ctx context.Context, r *run.Run) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	o := htmlreport.Options{Thresholds: a.cfg.Stale.For(r.Command), Todos: todos, RescanHint: core.RescanHint(r.Command, r.Scope)}
+	if r.Command == packages.Command {
+		if o.Packages, err = a.annotated(ctx, r, packages.Query{}); err != nil {
+			return "", err
+		}
+	}
 	path := filepath.Join(a.cfg.ReportDir(), htmlreport.FileName(r.Command))
 	err = htmlreport.Save(path, func(w io.Writer) error {
-		return htmlreport.Write(w, r, htmlreport.Options{Thresholds: a.cfg.Stale.For(r.Command), Todos: todos,
-			RescanHint: core.RescanHint(r.Command, r.Scope)})
+		return htmlreport.Write(w, r, o)
 	})
 	if err != nil {
 		return "", fmt.Errorf("write report: %w", err)

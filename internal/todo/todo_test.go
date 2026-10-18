@@ -57,6 +57,38 @@ func TestDeriveAggregatesInfoPerCheck(t *testing.T) {
 	}
 }
 
+func TestDeriveGroupsInfoFindings(t *testing.T) {
+	grp := func(id, title string, x finding.Finding) finding.Finding {
+		x.Group = &finding.Group{ID: id, Title: title, Hint: "update " + id}
+		return x
+	}
+	ts := Derive([]finding.Finding{
+		grp("pnpm", "Update 2 outdated pnpm packages", f("registry.outdated", finding.Info, "pnpm:a", "1 -> 2")),
+		grp("uv", "Update 1 outdated uv package", f("registry.outdated", finding.Info, "uv:b", "")),
+		grp("pnpm", "Update 2 outdated pnpm packages", f("registry.outdated", finding.Info, "pnpm:c", "3 -> 4")),
+		f("registry.outdated", finding.Info, "loose", ""),
+		// A group on a finding that gets its own task changes nothing.
+		grp("x", "ignored", f("registry.deprecated", finding.Warning, "pnpm:d", "deprecated")),
+	})
+	if len(ts) != 4 {
+		t.Fatalf("want 4 tasks, got %d: %+v", len(ts), ts)
+	}
+	if ts[0].Key != "packages:registry.deprecated:pnpm:d" {
+		t.Errorf("own task: %+v", ts[0])
+	}
+	pnpm := ts[1]
+	if pnpm.Key != "packages:registry.outdated:pnpm:*" || pnpm.Title != "Update 2 outdated pnpm packages" ||
+		pnpm.Hint != "update pnpm" || strings.Join(pnpm.Details, "|") != "pnpm:a: 1 -> 2|pnpm:c: 3 -> 4" {
+		t.Errorf("pnpm group: %+v", pnpm)
+	}
+	if ts[2].Key != "packages:registry.outdated:uv:*" || ts[2].Priority != Low {
+		t.Errorf("uv group: %+v", ts[2])
+	}
+	if ts[3].Key != "packages:registry.outdated:*" || !strings.HasPrefix(ts[3].Title, "Review 1 item") {
+		t.Errorf("ungrouped findings keep the check aggregate: %+v", ts[3])
+	}
+}
+
 func TestDeriveMergesDuplicateKeys(t *testing.T) {
 	ts := Derive([]finding.Finding{
 		f("x", finding.Notice, "a", "first"),

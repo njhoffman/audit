@@ -9,6 +9,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/environment"
@@ -16,6 +17,7 @@ import (
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
+	"github.com/njhoffman/audit/internal/registry"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/scan/procs"
 	"github.com/njhoffman/audit/internal/scan/services"
@@ -145,7 +147,37 @@ type PackagesScanner struct {
 	// a PATH change does not report stale problems.
 	LoginShell string
 	Capturer   ShellCapturer
-	scope      string
+	// Meta is the registry cache. When set, the registry checks run over it;
+	// nil skips them.
+	Meta MetaStore
+	// Refresh, when set, updates the cache from the registries before the
+	// checks run.
+	Refresh           *RegistryRefresh
+	UnmaintainedAfter time.Duration
+	// Now is the scan's clock; zero means time.Now.
+	Now   time.Time
+	scope string
+}
+
+// MetaStore holds cached registry data (implemented by *store.Store).
+type MetaStore interface {
+	PackageMeta(ctx context.Context) (map[string]packages.Meta, error)
+	SavePackageMeta(ctx context.Context, ms []packages.Meta) error
+}
+
+// RegistryRefresh says what a scan refreshes from the registries.
+type RegistryRefresh struct {
+	Options   registry.Options
+	UserAgent string
+	// Only limits the refresh to these packages, which are looked up whatever
+	// the age of their cache entry. Empty means every package.
+	Only []packages.Ref
+	// Looker answers the lookups; nil uses a registry.Client over the scan's
+	// environment, so GOPROXY and gh come from the login shell.
+	Looker registry.Looker
+	// Updated receives the entries the refresh wrote, for follow-up work
+	// such as tagging.
+	Updated func([]packages.Meta)
 }
 
 // ShellCapturer starts a shell and reports the environment it ends up with.
@@ -175,7 +207,7 @@ func NewPackages(cfg *config.Config, env *exec.Env, only []string) (*PackagesSca
 	for i, d := range cfg.Packages.ScanDirs {
 		dirs[i] = env.Expand(d)
 	}
-	s := &PackagesScanner{Env: env, Managers: ms, ScanDirs: dirs, scope: scope}
+	s := &PackagesScanner{Env: env, Managers: ms, ScanDirs: dirs, scope: scope, UnmaintainedAfter: cfg.Packages.Registry.UnmaintainedAfter}
 	if cfg.Packages.Env == config.EnvLogin && len(cfg.Environment.Shells) > 0 {
 		s.LoginShell = cfg.Environment.Shells[0]
 		s.Capturer = &environment.OSCapturer{Env: env, Timeout: cfg.Environment.StartupTimeout}
@@ -228,8 +260,32 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	now := s.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	var metas map[string]packages.Meta
+	var errs []string
+	var regStats []run.Stat
+	if s.Meta != nil {
+		var err error
+		if metas, err = s.Meta.PackageMeta(ctx); err != nil {
+			return nil, fmt.Errorf("load registry cache: %w", err)
+		}
+		if s.Refresh != nil {
+			st, rerrs, err := s.refresh(ctx, rep, env, invs, metas, now)
+			if err != nil {
+				return nil, err
+			}
+			errs = append(errs, rerrs...)
+			regStats = append(regStats, run.Stat{Group: "registry", Name: "looked up",
+				Value: fmt.Sprintf("%d (%d failed, %d already fresh)", st.Checked, st.Failed, st.Fresh)})
+		}
+		regStats = append(regStats, registryAge(invs, metas, now))
+	}
 	rep.Phase("checking packages", 0)
-	state := &packages.State{Ctx: ctx, Env: env, Inventories: invs, ScanDirs: s.ScanDirs}
+	state := &packages.State{Ctx: ctx, Env: env, Inventories: invs, ScanDirs: s.ScanDirs,
+		Meta: metas, UnmaintainedAfter: s.UnmaintainedAfter, Now: now}
 	fs := packages.Analyze(state)
 	if envFinding != nil {
 		fs = append(fs, *envFinding)
@@ -240,7 +296,102 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 		return nil, err
 	}
 	stats := append([]run.Stat{{Name: "environment", Value: source}}, packageStats(invs)...)
-	return &Outcome{Findings: fs, Stats: stats, Data: data}, nil
+	stats = append(stats, regStats...)
+	return &Outcome{Findings: fs, Stats: stats, Data: data, Errors: errs}, nil
+}
+
+// refresh looks the inventory up in the registries, saves what changed and
+// merges it into metas.
+func (s *PackagesScanner) refresh(ctx context.Context, rep progress.Reporter, env *exec.Env, invs []packages.Inventory,
+	metas map[string]packages.Meta, now time.Time) (registry.Stats, []string, error) {
+	r := s.Refresh
+	opts := r.Options
+	opts.Now = now
+	var pkgs []packages.Package
+	var errs []string
+	if len(r.Only) == 0 {
+		for _, inv := range invs {
+			pkgs = append(pkgs, inv.Packages...)
+		}
+	} else {
+		opts.Force = true
+		for _, ref := range r.Only {
+			found := ref.Find(invs)
+			if len(found) == 0 {
+				errs = append(errs, fmt.Sprintf("no installed package matches %q", ref))
+			}
+			for _, p := range found {
+				if p.Registry() == "" {
+					errs = append(errs, fmt.Sprintf("%s was installed from %s, not a registry", p.Key(), p.Source))
+				}
+			}
+			pkgs = append(pkgs, found...)
+		}
+	}
+	n := 0
+	seen := map[string]bool{}
+	for _, p := range pkgs {
+		if p.Registry() != "" && !seen[p.Key()] {
+			seen[p.Key()] = true
+			n++
+		}
+	}
+	looker := r.Looker
+	if looker == nil {
+		looker = registry.NewClient(env, r.UserAgent, opts.Timeout)
+	}
+	rep.Phase("checking registries", n)
+	opts.OnDone = func(p packages.Package, _ error) { rep.Step(p.Name) }
+	updated, st := registry.Refresh(ctx, looker, pkgs, metas, opts)
+	if err := ctx.Err(); err != nil {
+		return st, nil, err
+	}
+	if err := s.Meta.SavePackageMeta(ctx, updated); err != nil {
+		return st, nil, fmt.Errorf("save registry cache: %w", err)
+	}
+	for _, m := range updated {
+		metas[m.Key()] = m
+	}
+	if r.Updated != nil {
+		r.Updated(updated)
+	}
+	return st, errs, nil
+}
+
+// registryAge reports how old the oldest cached registry answer is.
+func registryAge(invs []packages.Inventory, metas map[string]packages.Meta, now time.Time) run.Stat {
+	st := run.Stat{Group: "registry", Name: "checked"}
+	var oldest time.Time
+	total, unchecked := 0, 0
+	for _, a := range packages.Annotate(invs, metas, nil, "") {
+		total += len(a.Items) - countNoRegistry(a.Items)
+		unchecked += a.Unchecked
+		if !a.CheckedAt.IsZero() && (oldest.IsZero() || a.CheckedAt.Before(oldest)) {
+			oldest = a.CheckedAt
+		}
+	}
+	switch {
+	case total == 0:
+		st.Value = "no packages from a registry"
+	case oldest.IsZero():
+		st.Value = "never; run audit packages registry"
+	default:
+		st.Value = "oldest " + packages.Age(now.Sub(oldest)) + " ago"
+		if unchecked > 0 {
+			st.Value += fmt.Sprintf(", %d never checked", unchecked)
+		}
+	}
+	return st
+}
+
+func countNoRegistry(items []packages.Item) int {
+	n := 0
+	for _, it := range items {
+		if it.Registry() == "" {
+			n++
+		}
+	}
+	return n
 }
 
 // loginEnv starts shell as a fresh login shell and returns env over the

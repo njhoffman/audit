@@ -16,9 +16,12 @@ import (
 // Config is the merged view of defaults, the YAML file and AUDIT_* variables.
 // Command-line flags are applied on top by the cmd package.
 type Config struct {
-	DataDir     string            `mapstructure:"data_dir" yaml:"data_dir"`
-	History     int               `mapstructure:"history" yaml:"history"`
-	NoColor     bool              `mapstructure:"no_color" yaml:"no_color"`
+	DataDir string `mapstructure:"data_dir" yaml:"data_dir"`
+	History int    `mapstructure:"history" yaml:"history"`
+	NoColor bool   `mapstructure:"no_color" yaml:"no_color"`
+	// GitHubUser is the login whose repositories are tagged "mine"; empty
+	// means ask gh once and remember the answer.
+	GitHubUser  string            `mapstructure:"github_user" yaml:"github_user"`
 	Stale       StaleConfig       `mapstructure:"stale" yaml:"stale"`
 	Ignore      []string          `mapstructure:"ignore" yaml:"ignore"`
 	Display     DisplayConfig     `mapstructure:"display" yaml:"display"`
@@ -105,9 +108,26 @@ const (
 type PackagesConfig struct {
 	// Env is where the scan's PATH and variables come from: "login" (a fresh
 	// login shell, the first of environment.shells) or "process" (audit's own).
-	Env      string   `mapstructure:"env" yaml:"env"`
-	Managers []string `mapstructure:"managers" yaml:"managers"`
-	ScanDirs []string `mapstructure:"scan_dirs" yaml:"scan_dirs"`
+	Env      string         `mapstructure:"env" yaml:"env"`
+	Managers []string       `mapstructure:"managers" yaml:"managers"`
+	ScanDirs []string       `mapstructure:"scan_dirs" yaml:"scan_dirs"`
+	Registry RegistryConfig `mapstructure:"registry" yaml:"registry"`
+	// Tags is the vocabulary AI tagging chooses from.
+	Tags []string `mapstructure:"tags" yaml:"tags"`
+}
+
+// RegistryConfig configures `audit packages registry`.
+type RegistryConfig struct {
+	// MaxAge is how old cached versions may be before they are fetched again.
+	MaxAge time.Duration `mapstructure:"max_age" yaml:"max_age"`
+	// MetadataMaxAge is the same for descriptions, where they cost extra
+	// requests (crates.io API, GitHub).
+	MetadataMaxAge time.Duration `mapstructure:"metadata_max_age" yaml:"metadata_max_age"`
+	Concurrency    int           `mapstructure:"concurrency" yaml:"concurrency"`
+	Timeout        time.Duration `mapstructure:"timeout" yaml:"timeout"`
+	// UnmaintainedAfter flags packages with no release for this long; 0
+	// disables the check.
+	UnmaintainedAfter time.Duration `mapstructure:"unmaintained_after" yaml:"unmaintained_after"`
 }
 
 // EnvironmentConfig configures `audit environment`.
@@ -136,10 +156,17 @@ const (
 )
 
 var (
-	DefaultLogs         = []string{"boot", "dmesg", "journal"}
-	DefaultPrograms     = []string{"sshd", "nginx", "postgres", "apache", "docker", "cron"}
-	DefaultManagers     = []string{"uv", "pnpm", "cargo", "go", "gem", "gh"}
-	DefaultScanDirs     = []string{"~/.local/bin"}
+	DefaultLogs     = []string{"boot", "dmesg", "journal"}
+	DefaultPrograms = []string{"sshd", "nginx", "postgres", "apache", "docker", "cron"}
+	DefaultManagers = []string{"uv", "pnpm", "cargo", "go", "gem", "gh"}
+	DefaultScanDirs = []string{"~/.local/bin"}
+	DefaultTags     = []string{
+		"cli", "tui", "gui", "library", "lsp", "formatter", "linter", "compiler", "build", "testing", "debugging",
+		"profiling", "docs", "git", "github", "http", "network", "database", "cloud", "container", "kubernetes",
+		"security", "crypto", "shell", "terminal", "editor", "files", "search", "text", "json", "yaml", "markdown",
+		"monitoring", "system", "package-manager", "version-manager", "ai", "media", "image", "audio", "video",
+		"productivity",
+	}
 	DefaultShells       = []string{"zsh", "bash"}
 	DefaultStartupFiles = []string{
 		"~/.profile", "~/.bash_profile", "~/.bash_login", "~/.bashrc", "~/.bash_aliases",
@@ -155,6 +182,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("data_dir", "")
 	v.SetDefault("history", DefaultHistory)
 	v.SetDefault("no_color", false)
+	v.SetDefault("github_user", "")
 	v.SetDefault("stale.warn", 24*time.Hour)
 	v.SetDefault("stale.old", 7*24*time.Hour)
 	v.SetDefault("stale.commands", map[string]any{
@@ -182,6 +210,12 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("packages.env", EnvLogin)
 	v.SetDefault("packages.managers", DefaultManagers)
 	v.SetDefault("packages.scan_dirs", DefaultScanDirs)
+	v.SetDefault("packages.registry.max_age", 24*time.Hour)
+	v.SetDefault("packages.registry.metadata_max_age", 7*24*time.Hour)
+	v.SetDefault("packages.registry.concurrency", 8)
+	v.SetDefault("packages.registry.timeout", 10*time.Second)
+	v.SetDefault("packages.registry.unmaintained_after", 3*365*24*time.Hour)
+	v.SetDefault("packages.tags", DefaultTags)
 	v.SetDefault("environment.shells", DefaultShells)
 	v.SetDefault("environment.startup_files", DefaultStartupFiles)
 	v.SetDefault("environment.startup_dirs", DefaultStartupDirs)
@@ -254,6 +288,10 @@ func (c *Config) validate() error {
 		{"system.procs.high_cpu", c.System.Procs.HighCPU},
 		{"system.procs.high_mem", c.System.Procs.HighMem},
 		{"system.procs.high_threads", float64(c.System.Procs.HighThreads)},
+		{"packages.registry.max_age", float64(c.Packages.Registry.MaxAge)},
+		{"packages.registry.metadata_max_age", float64(c.Packages.Registry.MetadataMaxAge)},
+		{"packages.registry.concurrency", float64(c.Packages.Registry.Concurrency)},
+		{"packages.registry.timeout", float64(c.Packages.Registry.Timeout)},
 	}
 	for _, p := range positive {
 		if p.n <= 0 {
@@ -262,6 +300,14 @@ func (c *Config) validate() error {
 	}
 	if c.System.Services.HighRestarts < 0 {
 		return fmt.Errorf("system.services.high_restarts must be 0 (off) or more, got %d", c.System.Services.HighRestarts)
+	}
+	if c.Packages.Registry.UnmaintainedAfter < 0 {
+		return fmt.Errorf("packages.registry.unmaintained_after must be 0 (off) or more, got %s", c.Packages.Registry.UnmaintainedAfter)
+	}
+	for _, t := range c.Packages.Tags {
+		if t == "" || strings.Join(strings.Fields(strings.ToLower(t)), "-") != t {
+			return fmt.Errorf("packages.tags: %q must be lowercase words joined by dashes", t)
+		}
 	}
 	if c.Packages.Env != EnvLogin && c.Packages.Env != EnvProcess {
 		return fmt.Errorf("packages.env: %q is not %s or %s", c.Packages.Env, EnvLogin, EnvProcess)
@@ -348,6 +394,10 @@ history: 20
 # Disable colors (also off when NO_COLOR is set or output is not a terminal).
 no_color: false
 
+# GitHub login whose repositories are tagged "mine". Empty means ask
+# gh (gh api user) once and remember the answer.
+github_user: ""
+
 # Saved results older than warn are shown with a yellow notice and, when a
 # command runs without --report/--list/--summary/--json, trigger a rescan.
 # Results older than old are flagged in red. commands overrides per command.
@@ -402,6 +452,21 @@ packages:
   managers: [uv, pnpm, cargo, go, gem, gh]
   # Directories of loose executables checked for broken interpreters.
   scan_dirs: [~/.local/bin]
+  # audit packages registry looks packages up in their registries (PyPI,
+  # npm, crates.io, the Go proxy, rubygems.org, GitHub) and caches the answer;
+  # other scans and the inventory read the cache without network access.
+  registry:
+    max_age: 24h             # refetch versions older than this
+    metadata_max_age: 168h   # refetch descriptions where that costs extra requests
+    concurrency: 8
+    timeout: 10s             # per package
+    unmaintained_after: 26280h   # 3 years without a release; 0 disables
+  # Vocabulary that audit packages registry --ai-tags chooses from.
+  tags: [cli, tui, gui, library, lsp, formatter, linter, compiler, build, testing, debugging,
+         profiling, docs, git, github, http, network, database, cloud, container, kubernetes,
+         security, crypto, shell, terminal, editor, files, search, text, json, yaml, markdown,
+         monitoring, system, package-manager, version-manager, ai, media, image, audio, video,
+         productivity]
 
 environment:
   shells: [zsh, bash]

@@ -25,6 +25,12 @@ The project is renamed from `sysaudit` to `audit` and restructured around saved,
 - The first run creates `~/.config/audit.yaml` with every default written out and commented. A file passed with `-c` is never created; a missing one is an error.
 - Config keys `display.details`, `ai.max_details`, `system.log_max_lines`, `system.log_patterns`, `system.programs`, `system.procs.*`, `system.services.*` and `environment.shellcheck.{severity,exclude}`, replacing values that were hard-coded.
 - `packages` runs against the environment of a fresh login shell (`packages.env: login`, the default; `process` restores the old behaviour), so a terminal opened before a PATH change no longer reports stale problems. If the shell cannot start it falls back and reports `packages.login_env`. The summary shows which environment was used.
+- `packages` phase 2: `audit packages registry [pkg...]` looks packages up on PyPI, npm, crates.io (sparse index, API only on new releases, one request per second), the Go module proxy (honours `GOPROXY`, `GONOPROXY`, `GOPRIVATE`), rubygems.org and GitHub through `gh`, and caches latest version, release date, description, repository, homepage, license, keywords and deprecated, yanked and archived status in the store. `-F/--force` ignores cache age; `-a/--ai-tags` and `-A/--ai-retag` tag packages through the `claude` CLI from the `packages.tags` vocabulary.
+- The packages inventory shows LATEST (colored by how far behind), RELEASED (age of the latest release) and TAGS, read from the cache with a header saying how old it is; plain scans never contact a registry. The HTML report adds tag, text and outdated filters.
+- `audit packages -t/--tag`, `-f/--find`, `-u/--outdated` filter the inventory and imply `--list`; `--json` adds the annotated inventory as `packages`.
+- `audit packages info <pkg>` and `audit packages tag [<pkg> [tag...]] [-d]`. Automatic tags (manager, runtime, `git`, `local`, `mine`) are derived; user and AI tags are stored.
+- Checks `registry.outdated` (one task per manager), `registry.major_behind`, `registry.deprecated`, `registry.yanked`, `registry.archived`, `registry.unmaintained` and `registry.error`.
+- Config keys `github_user`, `packages.registry.{max_age,metadata_max_age,concurrency,timeout,unmaintained_after}` and `packages.tags`.
 - A `justfile` with `build`, `run`, `install`, `test` (runner argument), `test-one`, `cover`, `lint`, `vet`, `fmt`, `fmt-check`, `check`, `manpage` and `clean`.
 
 ### Changed

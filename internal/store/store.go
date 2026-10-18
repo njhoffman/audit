@@ -68,6 +68,34 @@ CREATE TABLE IF NOT EXISTS todos (
 	last_seen_at TEXT NOT NULL,
 	resolved_at TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS package_meta (
+	manager TEXT NOT NULL,
+	id TEXT NOT NULL,
+	registry TEXT NOT NULL DEFAULT '',
+	latest TEXT NOT NULL DEFAULT '',
+	latest_at TEXT NOT NULL DEFAULT '',
+	installed TEXT NOT NULL DEFAULT '',
+	installed_yanked INTEGER NOT NULL DEFAULT 0,
+	deprecated TEXT NOT NULL DEFAULT '',
+	archived INTEGER NOT NULL DEFAULT 0,
+	description TEXT NOT NULL DEFAULT '',
+	repo TEXT NOT NULL DEFAULT '',
+	homepage TEXT NOT NULL DEFAULT '',
+	license TEXT NOT NULL DEFAULT '',
+	keywords TEXT NOT NULL DEFAULT '[]',
+	checked_at TEXT NOT NULL DEFAULT '',
+	described_at TEXT NOT NULL DEFAULT '',
+	tagged_at TEXT NOT NULL DEFAULT '',
+	error TEXT NOT NULL DEFAULT '',
+	PRIMARY KEY (manager, id)
+);
+CREATE TABLE IF NOT EXISTS package_tags (
+	manager TEXT NOT NULL,
+	id TEXT NOT NULL,
+	tag TEXT NOT NULL,
+	source TEXT NOT NULL,
+	PRIMARY KEY (manager, id, tag)
+);
 CREATE TABLE IF NOT EXISTS llm_cache (
 	hash TEXT PRIMARY KEY,
 	model TEXT NOT NULL,
@@ -77,7 +105,9 @@ CREATE TABLE IF NOT EXISTS llm_cache (
 );
 `
 
-// Store is an open audit database.
+// Store is an open audit database. Its tables are created with IF NOT EXISTS,
+// so tables added later appear in an existing database without a version
+// bump; only changes to existing tables need one.
 type Store struct {
 	db *sql.DB
 }

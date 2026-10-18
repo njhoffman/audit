@@ -148,14 +148,19 @@ func PriorityFor(f finding.Finding) Priority {
 // AggregateKey is the task key for a check's rolled-up info findings.
 func AggregateKey(command, check string) string { return command + ":" + check + ":*" }
 
+// GroupKey is the task key for the info findings of one finding.Group.
+func GroupKey(command, check, group string) string { return command + ":" + check + ":" + group + ":*" }
+
 // Derive builds the task list a set of findings calls for. Each issue or
 // suggestion gets its own task; info issues get one low-priority task per check
-// asking whether the items can be deleted or ignored.
+// asking whether the items can be deleted or ignored, or one per group when
+// the finding names one.
 func Derive(fs []finding.Finding) []Todo {
 	var out []Todo
 	seen := map[string]int{}
 	type agg struct {
 		command, check string
+		group          *finding.Group
 		items          []string
 	}
 	aggs := map[string]*agg{}
@@ -165,9 +170,12 @@ func Derive(fs []finding.Finding) []Todo {
 		p := PriorityFor(f)
 		if p == "" {
 			k := AggregateKey(f.Command, f.Check)
+			if f.Group != nil {
+				k = GroupKey(f.Command, f.Check, f.Group.ID)
+			}
 			a, ok := aggs[k]
 			if !ok {
-				a = &agg{command: f.Command, check: f.Check}
+				a = &agg{command: f.Command, check: f.Check, group: f.Group}
 				aggs[k] = a
 				aggOrder = append(aggOrder, k)
 			}
@@ -199,12 +207,19 @@ func Derive(fs []finding.Finding) []Todo {
 		if len(a.items) == 1 {
 			noun = "item"
 		}
-		out = append(out, Todo{
+		t := Todo{
 			Key: k, Command: a.command, Check: a.check, Priority: Low, Status: Open, Source: FromAggregate,
 			Title:   fmt.Sprintf("Review %d %s from %s: resolve them, or add the check to ignore", len(a.items), noun, a.check),
 			Hint:    fmt.Sprintf("ignore with %q or %q in the audit config", a.command+":"+a.check, a.check),
 			Details: a.items,
-		})
+		}
+		if a.group != nil {
+			t.Title = a.group.Title
+			if a.group.Hint != "" {
+				t.Hint = a.group.Hint
+			}
+		}
+		out = append(out, t)
 	}
 	return out
 }

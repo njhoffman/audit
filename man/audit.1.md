@@ -13,7 +13,13 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **environment** [_scan options_]
 
-**audit** **packages** [_scan options_] [**-M** _managers_]
+**audit** **packages** [_scan options_] [**-M** _managers_] [**-t** _tag_]... [**-f** _text_] [**-u**]
+
+**audit** **packages** **registry** [**-M** _managers_] [**-F**] [**-a**|**-A**] [**-j**|**-l**] [_package_...]
+
+**audit** **packages** **info** [**-j**] _package_
+
+**audit** **packages** **tag** [**-d**] [**-j**] [_package_ [_tag_...]]
 
 **audit** **todo** [**show**|**set**|**note**|**add**|**rm**] ...
 
@@ -37,6 +43,19 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **packages**
 :   Inventories uv, pnpm, cargo, go, gem and gh, and checks for broken or shadowed executables, runtime drift, stale runtime directories and misplaced installs. By default it runs against the environment of a fresh login shell (the first of **environment.shells**), so a terminal opened before a PATH change does not report stale problems; if that shell cannot start, it falls back to its own environment and reports **packages.login_env**.
+
+    The inventory (**\-\-list**) shows each package's latest release, how long ago it was published and its tags, read from the registry cache. The header says when the cache was last refreshed; a plain scan never contacts a registry. Cached data adds the checks **registry.outdated** (info, one task per manager), **registry.major_behind** (notice), **registry.deprecated**, **registry.yanked** and **registry.archived** (warnings), **registry.unmaintained** (a suggestion when the latest release is older than **packages.registry.unmaintained_after**) and **registry.error** (info, a failed lookup).
+
+**packages registry** [_package_...]
+:   Looks installed packages up on PyPI, npm, crates.io, the Go module proxy, rubygems.org and GitHub (through **gh**), caches the latest version, release date, description, repository, homepage, license, keywords and deprecation, archive and yank status, then rescans so findings and tasks reflect it. Entries younger than **packages.registry.max_age** are reused unless **-F** is given; named packages are always looked up. Descriptions are refreshed after **packages.registry.metadata_max_age** where that costs extra requests. Go modules matched by **GONOPROXY**/**GOPRIVATE**, or with **GOPROXY** set to **direct** or **off**, are not looked up. Requests to crates.io are spaced one second apart, as its crawler policy asks.
+
+**packages info** _package_
+:   Shows the cached details and tags of one package from the saved inventory, without scanning.
+
+**packages tag** [_package_ [_tag_...]]
+:   Without arguments, lists every tag with how many packages carry it and where the tags came from. With a package, shows its tags; with tags, adds them as user tags, or removes them with **-d**. Automatic tags (the manager, the runtime, **git**, **local** and **mine** for repositories owned by **github_user**) are derived and cannot be removed. Tags are lowercased with words joined by dashes.
+
+    A _package_ is a name or Go module path, or _manager_**:**_name_ when the name is ambiguous.
 
 **todo**
 :   Lists open and in-progress tasks. Subcommands: **show** _ID_, **set** _ID_ _STATUS_ [**-N** _note_], **note** _ID_ _TEXT_, **add** _TITLE_ [**-p** _priority_] [**-C** _command_] [**-H** _hint_] [**-N** _note_], **rm** _ID_ (manual tasks only).
@@ -127,10 +146,43 @@ These apply to **system**, **environment** and **packages**. Without an output o
 **-O**, **\-\-only** _parts_ (system)
 :   Scan only these parts: **procs**, **services**, **users**, **logs**, **programs**.
 
-**-M**, **\-\-manager** _names_ (packages)
+**-M**, **\-\-manager** _names_ (packages, packages registry)
 :   Inventory only these managers.
 
+**-t**, **\-\-tag** _tag_ (packages)
+:   List only packages carrying every given tag. Repeatable; implies **\-\-list**.
+
+**-f**, **\-\-find** _text_ (packages)
+:   List only packages whose name, description or executables contain _text_, ignoring case. Implies **\-\-list**.
+
+**-u**, **\-\-outdated** (packages)
+:   List only packages behind their latest release. Implies **\-\-list**.
+
+With **\-\-json**, **packages** adds the inventory joined with the registry cache and tags (filtered by **-t**, **-f** and **-u**) as **packages**.
+
 **\-\-report**, **\-\-list**, **\-\-summary** and **\-\-json** are mutually exclusive.
+
+# PACKAGES REGISTRY OPTIONS
+
+**-F**, **\-\-force**
+:   Look everything up, ignoring the age of cached entries.
+
+**-a**, **\-\-ai-tags**
+:   After the lookup, ask the **claude** CLI to tag packages that have registry data and no AI tags yet, choosing up to four tags each from **packages.tags**.
+
+**-A**, **\-\-ai-retag**
+:   Like **-a**, but tag every package again and bypass the AI cache. Tags removed with **packages tag -d** are only put back by this option.
+
+**-j**, **\-\-json** / **-l**, **\-\-list**
+:   Print the result as JSON, or as findings plus the inventory, instead of the report.
+
+# PACKAGES TAG OPTIONS
+
+**-d**, **\-\-delete**
+:   Remove the given tags, whatever assigned them.
+
+**-j**, **\-\-json**
+:   Print as JSON (also for **packages info**).
 
 # TODO OPTIONS
 
@@ -164,6 +216,7 @@ Errors and criticals become **high** tasks, warnings **medium**, notices **low**
 The first run creates **~/.config/audit.yaml** with every key set to its default and commented; edit or delete any key. **audit config \-\-init \-\-force** restores it. The defaults:
 
     data_dir: ""               # empty: $XDG_DATA_HOME/audit
+    github_user: ""            # empty: detected with gh api user on the first registry run
     history: 20                # saved runs kept per command
     no_color: false
     stale:
@@ -192,6 +245,13 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       env: login               # login (fresh login shell) or process
       managers: [uv, pnpm, cargo, go, gem, gh]
       scan_dirs: [~/.local/bin]
+      registry:
+        max_age: 24h           # reuse cached versions younger than this
+        metadata_max_age: 168h # refetch descriptions that cost extra requests
+        concurrency: 8
+        timeout: 10s           # per package
+        unmaintained_after: 26280h  # 3 years; 0 disables registry.unmaintained
+      tags: [cli, tui, gui, library, lsp, formatter, linter, ...]  # AI tag vocabulary
     environment:
       shells: [zsh, bash]
       startup_files: [~/.profile, ~/.bash_profile, ~/.bashrc, ~/.zshenv, ~/.zshrc, ...]
@@ -217,6 +277,16 @@ Show saved package problems at warning or worse, with the inventory:
 
     audit packages -l -m warning
 
+Refresh the registry cache, tag new packages with AI, then list outdated Python tools:
+
+    audit packages registry -a
+    audit packages -u -t uv
+
+Tag a package and show it:
+
+    audit packages tag ripgrep search
+    audit packages info cargo:ripgrep
+
 Ask for a deep AI review of the environment results and open the HTML report:
 
     audit environment -a -L deep -o
@@ -235,7 +305,7 @@ Mark task 12 done with a note:
 :   Configuration, created with the defaults on first run.
 
 **~/.local/share/audit/audit.db**
-:   Runs, findings, tasks and the AI response cache.
+:   Runs, findings, tasks, the package registry cache and tags, and the AI response cache.
 
 **~/.local/share/audit/reports/**
 :   HTML reports and **index.html**.

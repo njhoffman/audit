@@ -222,17 +222,27 @@ func TestTodos(t *testing.T) {
 }
 
 func TestPackages(t *testing.T) {
-	p, b := printer(100)
+	p, b := printer(140)
+	now := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	p.Now = func() time.Time { return now }
 	p.Verbose = true
-	p.Packages(packages.Data{Inventories: []packages.Inventory{
+	invs := []packages.Inventory{
 		{Manager: "cargo", Available: true, ManagerVersion: "1.90", Runtime: &packages.Runtime{Name: "rust", Version: "1.90"},
-			Packages: []packages.Package{{Name: "ripgrep", Version: "14.1.0", RuntimeVersion: "1.88",
-				Source: "crates.io", Executables: []string{"rg"}}}},
+			Packages: []packages.Package{
+				{Manager: "cargo", Name: "ripgrep", Version: "14.1.0", RuntimeVersion: "1.88", Source: "crates.io", Executables: []string{"rg"}},
+				{Manager: "cargo", Name: "fd-find", Version: "9.0.0", Source: "crates.io"},
+				{Manager: "cargo", Name: "mine", Version: "0.1.0", Source: "path:/src/mine"},
+			}},
 		{Manager: "gh"},
 		{Manager: "uv", Available: true, Error: "boom"},
-	}})
+	}
+	metas := map[string]packages.Meta{
+		"cargo:ripgrep": {Latest: "15.0.0", LatestAt: now.Add(-72 * time.Hour), CheckedAt: now.Add(-3 * time.Hour), Archived: true},
+	}
+	p.Packages(packages.Annotate(invs, metas, map[string][]string{"cargo:ripgrep": {"search"}}, ""))
 	out := b.String()
-	for _, w := range []string{"cargo  1.90  rust 1.90  1 package(s)", "ripgrep", "14.1.0", "crates.io", "rg",
+	for _, w := range []string{"cargo  1.90  rust 1.90  3 package(s)", "registry checked 3 hours ago (1 unchecked)",
+		"ripgrep", "14.1.0", "15.0.0 (archived)", "3 days ago", "cargo search", "crates.io", "rg", "unchecked",
 		"EXECUTABLES", "gh  not installed", "uv  error: boom"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("packages missing %q:\n%s", w, out)
@@ -288,5 +298,45 @@ func TestTrimPadding(t *testing.T) {
 		if got := trimPadding(c.in); got != c.want {
 			t.Errorf("trimPadding(%q) = %q want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestPackageInfoAndTable(t *testing.T) {
+	p, b := printer(120)
+	now := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	p.Now = func() time.Time { return now }
+	it := packages.Item{
+		Package: packages.Package{Manager: "cargo", Name: "ripgrep", Version: "14.1.0", Source: "crates.io",
+			Executables: []string{"rg"}},
+		Meta: &packages.Meta{Latest: "15.0.0", LatestAt: now.Add(-72 * time.Hour), CheckedAt: now.Add(-time.Hour),
+			Description: "line-oriented search", Repo: "https://github.com/BurntSushi/ripgrep", License: "MIT",
+			Keywords: []string{"grep", "regex"}, Archived: true, Error: "HTTP 502"},
+		Gap:  packages.GapMajor,
+		Tags: []string{"cargo", "search"},
+	}
+	p.PackageInfo(it, []packages.Tag{{Manager: "cargo", ID: "ripgrep", Tag: "search", Source: packages.TagAI}})
+	out := b.String()
+	for _, w := range []string{"ripgrep", "14.1.0", "15.0.0", "major", "3 days ago", "1 hour ago", "line-oriented search",
+		"https://github.com/BurntSushi/ripgrep", "MIT", "grep, regex", "archived", "HTTP 502", "search (ai)", "cargo (auto)", "rg"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("info missing %q:\n%s", w, out)
+		}
+	}
+
+	b.Reset()
+	p.PackageInfo(packages.Item{Package: packages.Package{Manager: "uv", Name: "x", Version: "1", Source: "pypi"}}, nil)
+	if !strings.Contains(b.String(), "unchecked") || strings.Contains(b.String(), "description") {
+		t.Errorf("unchecked package:\n%s", b)
+	}
+
+	b.Reset()
+	p.Table([]string{"TAG", "PACKAGES"}, [][]string{{"cli", "3"}, {"search", "1"}})
+	if out := b.String(); !strings.Contains(out, "TAG") || !strings.Contains(out, "cli") || !strings.Contains(out, "search") {
+		t.Errorf("table:\n%s", out)
+	}
+	b.Reset()
+	p.Table([]string{"", ""}, [][]string{{"k", "v"}})
+	if out := b.String(); strings.Contains(strings.SplitN(out, "\n", 2)[0], "  \n") || !strings.HasPrefix(strings.TrimSpace(out), "k") {
+		t.Errorf("empty titles should print no header:\n%q", out)
 	}
 }

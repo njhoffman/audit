@@ -15,6 +15,7 @@ import (
 
 	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/finding"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/todo"
@@ -414,5 +415,228 @@ func TestSplitList(t *testing.T) {
 	got := splitList([]string{"a, b", "", "c,,"})
 	if strings.Join(got, "|") != "a|b|c" {
 		t.Errorf("got %v", got)
+	}
+}
+
+// seedPackages saves a packages run with a small inventory and registry
+// cache, for the commands that read them.
+func seedPackages(t *testing.T) {
+	t.Helper()
+	a, _, _ := loadedApp(t)
+	ctx := context.Background()
+	d := packages.Data{Inventories: []packages.Inventory{
+		{Manager: "uv", Available: true, Packages: []packages.Package{
+			{Manager: "uv", Name: "ruff", Version: "0.9.0", Source: "pypi", Executables: []string{"ruff"}},
+			{Manager: "uv", Name: "black", Version: "25.1", Source: "pypi"},
+			{Manager: "uv", Name: "dup", Version: "1.0", Source: "pypi"},
+		}},
+		{Manager: "cargo", Available: true, Packages: []packages.Package{
+			{Manager: "cargo", Name: "dup", Version: "1.0", Source: "crates.io"},
+			{Manager: "cargo", Name: "mine", Source: "path:/src/mine"},
+		}},
+	}}
+	raw, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &run.Run{Command: packages.Command, Host: "h", StartedAt: testNow, FinishedAt: testNow, Data: raw}
+	if err := a.store.SaveRun(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	err = a.store.SavePackageMeta(ctx, []packages.Meta{
+		{Manager: "uv", ID: "ruff", Registry: packages.RegistryPyPI, Installed: "0.9.0", Latest: "0.10.0",
+			LatestAt: testNow.Add(-72 * time.Hour), Description: "An extremely fast Python linter",
+			Repo: "https://github.com/astral-sh/ruff", CheckedAt: testNow, DescribedAt: testNow},
+		{Manager: "uv", ID: "black", Registry: packages.RegistryPyPI, Installed: "25.1", Latest: "25.1",
+			Description: "The uncompromising code formatter", CheckedAt: testNow, DescribedAt: testNow},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.close()
+}
+
+func TestPackagesQueryFlags(t *testing.T) {
+	env(t)
+	seedPackages(t)
+
+	r := runArgs(t, "packages", "-u")
+	if r.e != nil {
+		t.Fatal(r.e)
+	}
+	if !strings.Contains(r.out, "ruff") || strings.Contains(r.out, "black") || !strings.Contains(r.out, "0.10.0") {
+		t.Errorf("--outdated should list only ruff with its latest version:\n%s", r.out)
+	}
+	if !strings.Contains(r.out, "3 days ago") {
+		t.Errorf("want the release age:\n%s", r.out)
+	}
+
+	r = runArgs(t, "packages", "-f", "FORMATTER")
+	if r.e != nil || !strings.Contains(r.out, "black") || strings.Contains(r.out, "ruff") {
+		t.Errorf("--find should match the description ignoring case: %v\n%s", r.e, r.out)
+	}
+
+	r = runArgs(t, "packages", "-t", "cargo", "-t", "local")
+	if r.e != nil || !strings.Contains(r.out, "mine") || strings.Contains(r.out, "dup") {
+		t.Errorf("--tag should need every tag: %v\n%s", r.e, r.out)
+	}
+
+	r = runArgs(t, "packages", "-t", "nothing-has-this")
+	if r.e != nil || !strings.Contains(r.out, "No packages match the filter.") {
+		t.Errorf("empty filter result: %v\n%s", r.e, r.out)
+	}
+
+	r = runArgs(t, "packages", "-j", "-u")
+	if r.e != nil {
+		t.Fatal(r.e)
+	}
+	var got struct {
+		Packages []packages.Annotated `json:"packages"`
+	}
+	if err := json.Unmarshal([]byte(r.out), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Packages) != 1 || len(got.Packages[0].Items) != 1 || got.Packages[0].Items[0].Name != "ruff" {
+		t.Errorf("json should carry the filtered inventory: %+v", got.Packages)
+	}
+}
+
+func TestPackagesInfo(t *testing.T) {
+	env(t)
+	r := runArgs(t, "packages", "info", "ruff")
+	if !errors.Is(r.e, core.ErrNoSavedRun) {
+		t.Errorf("info with no run: %v", r.e)
+	}
+	seedPackages(t)
+
+	r = runArgs(t, "packages", "info", "ruff")
+	if r.e != nil {
+		t.Fatal(r.e)
+	}
+	for _, want := range []string{"0.9.0", "0.10.0", "An extremely fast Python linter", "https://github.com/astral-sh/ruff"} {
+		if !strings.Contains(r.out, want) {
+			t.Errorf("info missing %q:\n%s", want, r.out)
+		}
+	}
+	if r = runArgs(t, "packages", "info", "dup"); r.e == nil || !strings.Contains(r.e.Error(), "cargo:dup") ||
+		!strings.Contains(r.e.Error(), "uv:dup") {
+		t.Errorf("ambiguous name should list the keys: %v", r.e)
+	}
+	if r = runArgs(t, "packages", "info", "cargo:dup"); r.e != nil || !strings.Contains(r.out, "1.0") {
+		t.Errorf("manager:name picks one: %v\n%s", r.e, r.out)
+	}
+	if r = runArgs(t, "packages", "info", "nope"); r.e == nil || !strings.Contains(r.e.Error(), `no installed package matches "nope"`) {
+		t.Errorf("unknown package: %v", r.e)
+	}
+	r = runArgs(t, "packages", "info", "-j", "black")
+	var got struct {
+		Name string `json:"name"`
+		Meta struct {
+			Description string `json:"description"`
+		} `json:"meta"`
+	}
+	if r.e != nil || json.Unmarshal([]byte(r.out), &got) != nil || got.Name != "black" || got.Meta.Description == "" {
+		t.Errorf("info --json: %v\n%s", r.e, r.out)
+	}
+}
+
+func TestPackagesTag(t *testing.T) {
+	env(t)
+	seedPackages(t)
+
+	r := runArgs(t, "packages", "tag", "ruff", "Lint Tool", "linter")
+	if r.e != nil || !strings.Contains(r.out, "uv:ruff: ") || !strings.Contains(r.out, "lint-tool") || !strings.Contains(r.out, "linter") {
+		t.Fatalf("add tags: %v\n%s", r.e, r.out)
+	}
+	if r = runArgs(t, "packages", "-t", "lint-tool"); r.e != nil || !strings.Contains(r.out, "ruff") || strings.Contains(r.out, "black") {
+		t.Errorf("user tag should filter: %v\n%s", r.e, r.out)
+	}
+
+	r = runArgs(t, "packages", "tag")
+	if r.e != nil {
+		t.Fatal(r.e)
+	}
+	if !strings.Contains(r.out, "lint-tool") || !strings.Contains(r.out, "user 1") || !strings.Contains(r.out, "auto 3") {
+		t.Errorf("tag list should count packages per source:\n%s", r.out)
+	}
+
+	r = runArgs(t, "packages", "tag", "-d", "ruff", "linter", "uv")
+	if r.e != nil || strings.Contains(r.out, "linter") || !strings.Contains(r.out, "uv") {
+		t.Errorf("delete: %v\n%s", r.e, r.out)
+	}
+	if !strings.Contains(r.err, "1 of 2 tag(s) were not stored") {
+		t.Errorf("want the automatic-tag notice, got %q", r.err)
+	}
+
+	r = runArgs(t, "packages", "tag", "-j")
+	var uses []tagUse
+	if r.e != nil || json.Unmarshal([]byte(r.out), &uses) != nil || len(uses) == 0 || uses[0].Packages < uses[len(uses)-1].Packages {
+		t.Errorf("tag --json should sort by count: %v\n%s", r.e, r.out)
+	}
+
+	for _, args := range [][]string{{"tag", "-d"}, {"tag", "-d", "ruff"}, {"tag", "dup", "x"}} {
+		if r = runArgs(t, append([]string{"packages"}, args...)...); r.e == nil {
+			t.Errorf("%v should fail", args)
+		}
+	}
+}
+
+func TestPackagesAITag(t *testing.T) {
+	env(t)
+	seedPackages(t)
+	a, _, errOut := loadedApp(t)
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	answer := `{"subtype":"success","result":"{\"uv:ruff\": [\"linter\", \"Not-In-Vocab\", \"cli\"], \"uv:other\": [\"cli\"]}"}`
+	script := filepath.Join(dir, "claude")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\ncat >/dev/null\nprintf '%s' '"+answer+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a.cfg.AI.Command = script
+	r, err := a.store.LatestRun(ctx, packages.Command, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Only ruff is named; black has meta but is not asked about.
+	if err := a.aiTag(ctx, r, []packages.Ref{packages.ParseRef("ruff")}, false, true); err != nil {
+		t.Fatal(err)
+	}
+	tags, err := a.store.PackageTags(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, tg := range tags {
+		if tg.Source != packages.TagAI || tg.ID != "ruff" {
+			t.Errorf("unexpected tag %+v", tg)
+		}
+		got = append(got, tg.Tag)
+	}
+	if strings.Join(got, ",") != "cli,linter" {
+		t.Errorf("ai tags = %v", got)
+	}
+	metas, err := a.store.PackageMeta(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !metas["uv:ruff"].TaggedAt.Equal(testNow) || !metas["uv:black"].TaggedAt.IsZero() {
+		t.Errorf("TaggedAt: ruff %v black %v", metas["uv:ruff"].TaggedAt, metas["uv:black"].TaggedAt)
+	}
+
+	// Already tagged: nothing to ask without retag.
+	errOut.Reset()
+	if err := a.aiTag(ctx, r, []packages.Ref{packages.ParseRef("ruff")}, false, true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(errOut.String(), "every package with registry data is tagged") {
+		t.Errorf("want the nothing-to-tag notice, got %q", errOut)
+	}
+
+	// A failing command is reported, not fatal to the other batches.
+	a.cfg.AI.Command = filepath.Join(dir, "missing")
+	if err := a.aiTag(ctx, r, nil, true, false); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("missing command: %v", err)
 	}
 }

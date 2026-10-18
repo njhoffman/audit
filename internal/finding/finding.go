@@ -74,6 +74,17 @@ type Finding struct {
 	Message  string   `json:"message"`
 	Hint     string   `json:"hint,omitempty"`
 	Details  []string `json:"details,omitempty"`
+	// Group files an info finding under a task shared with the findings of
+	// the same check and group, instead of the check's catch-all review
+	// task. Only task derivation reads it, so it is not saved with the run.
+	Group *Group `json:"-"`
+}
+
+// Group names the task that collects related info findings.
+type Group struct {
+	ID    string
+	Title string
+	Hint  string
 }
 
 // Key identifies a finding across scans: command:check:subject.

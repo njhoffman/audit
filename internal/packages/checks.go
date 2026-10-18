@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -30,6 +31,14 @@ type State struct {
 	// ScanDirs are extra directories inspected for broken links and scripts
 	// (packages.scan_dirs in the config).
 	ScanDirs []string
+	// Meta is cached registry data by Package.Key. Packages without an entry
+	// are skipped by the registry checks.
+	Meta map[string]Meta
+	// UnmaintainedAfter is the age of a latest release past which a package
+	// counts as unmaintained; 0 turns the check off.
+	UnmaintainedAfter time.Duration
+	// Now dates release ages.
+	Now time.Time
 }
 
 func (s *State) inv(manager string) *Inventory {
@@ -64,9 +73,9 @@ var Checks = []finding.Check[*State]{
 	{ID: "npm.stray_globals", Fn: npmStrayGlobals},
 }
 
-// Analyze runs every package check.
+// Analyze runs every package check, including the registry checks.
 func Analyze(s *State) []finding.Finding {
-	return finding.RunChecks(Command, s, Checks)
+	return finding.RunChecks(Command, s, append(slices.Clone(Checks), RegistryChecks...))
 }
 
 func under(path string, dirs ...string) bool {
