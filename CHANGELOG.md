@@ -35,6 +35,8 @@ The project is renamed from `sysaudit` to `audit` and restructured around saved,
 
 ### Changed
 
+- The "N task(s) updated" notice counts only tasks created, reopened, resolved or with new content; a rescan that only sees the same problems again is silent. Content changes now bump a task's `updated_at`.
+- Registry findings carry the release date (`released 2026-10-13`, `no release since ...`) instead of a relative age, so task titles do not change every day.
 - Config moves to `~/.config/audit.yaml`; environment overrides use the `AUDIT_` prefix.
 - Shell start-up time excludes background jobs a startup file leaves running; the time is stamped by the shell itself.
 - Task titles no longer repeat the subject when the finding message already starts with it.

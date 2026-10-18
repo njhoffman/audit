@@ -131,8 +131,8 @@ func TestReconcileLifecycle(t *testing.T) {
 		f("c", finding.Warning, "3", "m"),
 		f("d", finding.Warning, "4", "m"),
 	})
-	created := Reconcile("packages", nil, derived, t0)
-	if len(created) != 4 || created[0].Status != Open || !created[0].CreatedAt.Equal(t0) {
+	created, n := Reconcile("packages", nil, derived, t0)
+	if len(created) != 4 || n != 4 || created[0].Status != Open || !created[0].CreatedAt.Equal(t0) {
 		t.Fatalf("creation wrong: %+v", created)
 	}
 	stored := byKey(created)
@@ -149,10 +149,14 @@ func TestReconcileLifecycle(t *testing.T) {
 	existing := []Todo{stored["packages:a:1"], stored["packages:b:2"], stored["packages:c:3"], stored["packages:d:4"], manual, other}
 
 	// Rescan: a and b gone, c (done) still present, d still present.
-	changed := byKey(Reconcile("packages", existing, Derive([]finding.Finding{
+	writes, n := Reconcile("packages", existing, Derive([]finding.Finding{
 		f("c", finding.Warning, "3", "m"),
 		f("d", finding.Error, "4", "now worse"),
-	}), t1))
+	}), t1)
+	changed := byKey(writes)
+	if n != 3 {
+		t.Errorf("a resolved, c reopened and d refreshed are 3 changes, got %d", n)
+	}
 
 	if got := changed["packages:a:1"]; got.Status != Resolved || !got.ResolvedAt.Equal(t1) {
 		t.Errorf("vanished open task should resolve: %+v", got)
@@ -176,14 +180,43 @@ func TestReconcileLifecycle(t *testing.T) {
 	// A resolved task reopens when its finding returns; won't-do never reopens.
 	resolved := changed["packages:a:1"]
 	wont := stored["packages:b:2"]
-	again := byKey(Reconcile("packages", []Todo{resolved, wont}, Derive([]finding.Finding{
+	writes, _ = Reconcile("packages", []Todo{resolved, wont}, Derive([]finding.Finding{
 		f("a", finding.Error, "1", "m"), f("b", finding.Warning, "2", "m"),
-	}), t1.Add(time.Hour)))
+	}), t1.Add(time.Hour))
+	again := byKey(writes)
 	if again["packages:a:1"].Status != Open || !again["packages:a:1"].ResolvedAt.IsZero() {
 		t.Errorf("resolved task should reopen: %+v", again["packages:a:1"])
 	}
 	if again["packages:b:2"].Status != WontDo {
 		t.Errorf("won't-do must stay closed: %+v", again["packages:b:2"])
+	}
+}
+
+// A rescan that finds the same problems writes LastSeenAt but changes nothing.
+func TestReconcileUnchangedCountsNothing(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Hour)
+	fs := []finding.Finding{f("a", finding.Error, "1", "m"), f("b", finding.Info, "2", "m"), f("b", finding.Info, "3", "m")}
+	stored, _ := Reconcile("packages", nil, Derive(fs), t0)
+	writes, n := Reconcile("packages", stored, Derive(fs), t1)
+	if n != 0 || len(writes) != len(stored) {
+		t.Fatalf("unchanged rescan: %d changes, %d writes (want 0, %d)", n, len(writes), len(stored))
+	}
+	for _, w := range writes {
+		if !w.LastSeenAt.Equal(t1) || !w.UpdatedAt.Equal(t0) {
+			t.Errorf("%s: last seen %v, updated %v", w.Key, w.LastSeenAt, w.UpdatedAt)
+		}
+	}
+
+	// One more aggregated item changes the details of that task only.
+	writes, n = Reconcile("packages", writes, Derive(append(fs, f("b", finding.Info, "4", "m"))), t1.Add(time.Hour))
+	if n != 1 {
+		t.Errorf("new aggregated item: %d changes, want 1", n)
+	}
+	for _, w := range writes {
+		if bumped := w.UpdatedAt.Equal(t1.Add(time.Hour)); bumped != (w.Check == "b") {
+			t.Errorf("%s: UpdatedAt %v", w.Key, w.UpdatedAt)
+		}
 	}
 }
 

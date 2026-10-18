@@ -4,6 +4,7 @@ package todo
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -239,42 +240,51 @@ func titleFor(f finding.Finding) string {
 	}
 }
 
-// Reconcile merges freshly derived tasks for one command into the stored ones
-// and returns every task that must be written (new or changed).
+// Reconcile merges freshly derived tasks for one command into the stored ones.
+// It returns every task that must be written and how many of them really
+// changed: created, reopened, resolved or with new content. Tasks that were
+// only seen again are written for their LastSeenAt but not counted.
 //
 //   - A new key becomes an open task.
-//   - A known key refreshes its title, hint, details and priority. A resolved
+//   - A known key refreshes its title, hint, details and priority, bumping
+//     UpdatedAt when any of them differ. A resolved
 //     or done task whose finding is still present reopens; won't-do stays.
 //   - A stored, scanner-made task whose key is gone becomes resolved, unless
 //     the user marked it won't do.
 //
 // Manual tasks and tasks of other commands are never touched.
-func Reconcile(command string, existing, derived []Todo, now time.Time) []Todo {
+func Reconcile(command string, existing, derived []Todo, now time.Time) (writes []Todo, changes int) {
 	byKey := map[string]Todo{}
 	for _, t := range existing {
 		if t.Command == command && t.Source != Manual {
 			byKey[t.Key] = t
 		}
 	}
-	var changed []Todo
 	present := map[string]bool{}
 	for _, d := range derived {
 		present[d.Key] = true
 		old, ok := byKey[d.Key]
 		if !ok {
 			d.CreatedAt, d.UpdatedAt, d.LastSeenAt = now, now, now
-			changed = append(changed, d)
+			writes = append(writes, d)
+			changes++
 			continue
 		}
 		t := old
 		t.Title, t.Hint, t.Details, t.Priority, t.Check, t.Source = d.Title, d.Hint, d.Details, d.Priority, d.Check, d.Source
 		t.LastSeenAt = now
+		changed := t.Title != old.Title || t.Hint != old.Hint || !slices.Equal(t.Details, old.Details) ||
+			t.Priority != old.Priority || t.Check != old.Check || t.Source != old.Source
 		if t.Status == Resolved || t.Status == Done {
 			t.Status = Open
 			t.ResolvedAt = time.Time{}
-			t.UpdatedAt = now
+			changed = true
 		}
-		changed = append(changed, t)
+		if changed {
+			t.UpdatedAt = now
+			changes++
+		}
+		writes = append(writes, t)
 	}
 	for _, old := range existing {
 		if old.Command != command || old.Source == Manual || present[old.Key] {
@@ -285,9 +295,10 @@ func Reconcile(command string, existing, derived []Todo, now time.Time) []Todo {
 		}
 		old.Status = Resolved
 		old.ResolvedAt, old.UpdatedAt = now, now
-		changed = append(changed, old)
+		writes = append(writes, old)
+		changes++
 	}
-	return changed
+	return writes, changes
 }
 
 // Sort orders tasks: open work first, then by priority, command and title.

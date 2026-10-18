@@ -167,14 +167,14 @@ func (e *Engine) reconcile(ctx context.Context, s Scanner, r *run.Run) (int, err
 	if r.Scope != "" {
 		existing = inScope(s, existing, derived)
 	}
-	changed := todo.Reconcile(r.Command, existing, derived, r.FinishedAt)
-	if len(changed) == 0 {
+	writes, changes := todo.Reconcile(r.Command, existing, derived, r.FinishedAt)
+	if len(writes) == 0 {
 		return 0, nil
 	}
-	if err := e.Store.SaveTodos(ctx, changed); err != nil {
+	if err := e.Store.SaveTodos(ctx, writes); err != nil {
 		return 0, fmt.Errorf("save tasks: %w", err)
 	}
-	return len(changed), nil
+	return changes, nil
 }
 
 // inScope keeps the stored tasks a scoped run may touch: those of checks the

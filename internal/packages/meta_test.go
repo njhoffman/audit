@@ -242,7 +242,7 @@ func TestRegistryChecks(t *testing.T) {
 		case "pnpm:typescript " + CheckOutdated:
 			if f.Severity != finding.Info || f.Group == nil || f.Group.Title != "Update 1 outdated pnpm package" ||
 				f.Group.Hint != "pnpm update -g --latest" || f.Hint != "pnpm add -g typescript@latest" ||
-				f.Message != "5.9.0 -> 5.9.3 (patch; released 2 days ago)" {
+				f.Message != "5.9.0 -> 5.9.3 (patch; released 2026-09-29)" {
 				t.Errorf("typescript: %+v %+v", f, f.Group)
 			}
 		case "pnpm:eslint " + CheckMajorBehind:
@@ -254,7 +254,7 @@ func TestRegistryChecks(t *testing.T) {
 				t.Errorf("go hint: %q", f.Hint)
 			}
 		case "uv:old " + CheckUnmaintained:
-			if f.Kind != finding.Suggestion || !strings.Contains(f.Message, "no release in 4 years") {
+			if f.Kind != finding.Suggestion || !strings.Contains(f.Message, "no release since 2022-") {
 				t.Errorf("unmaintained: %+v", f)
 			}
 		}

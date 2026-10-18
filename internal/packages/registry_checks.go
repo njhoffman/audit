@@ -111,11 +111,13 @@ func Age(d time.Duration) string {
 	return plural(int(d/(365*day)), "year")
 }
 
+// released dates the latest release. Findings become stored task titles, so
+// they carry the date rather than an age that would change every day.
 func (s *State) released(m Meta) string {
-	if m.LatestAt.IsZero() || s.Now.IsZero() {
+	if m.LatestAt.IsZero() {
 		return ""
 	}
-	return "released " + Age(s.Now.Sub(m.LatestAt)) + " ago"
+	return "released " + m.LatestAt.UTC().Format(time.DateOnly)
 }
 
 func outdated(major bool) func(*State) []finding.Finding {
@@ -216,7 +218,7 @@ func unmaintained(s *State) []finding.Finding {
 		}
 		out = append(out, finding.Finding{
 			Kind: finding.Suggestion, Severity: finding.Info, Subject: subject(it.Package),
-			Message: fmt.Sprintf("%s has had no release in %s (latest %s)", it.Name, Age(s.Now.Sub(it.Meta.LatestAt)), it.Meta.Latest),
+			Message: fmt.Sprintf("%s has had no release since %s (latest %s)", it.Name, it.Meta.LatestAt.UTC().Format(time.DateOnly), it.Meta.Latest),
 			Hint:    "Check whether it is still maintained, or set packages.registry.unmaintained_after.",
 		})
 	}
