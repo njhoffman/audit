@@ -210,7 +210,7 @@ programs (nginx, apache, sshd, postgres, docker, cron).
 
 Results are saved. Without --rescan, saved results younger than the stale
 warn threshold are shown instead of scanning again.`,
-		func() (core.Scanner, error) { return core.NewSystem(a.cfg, splitList(only)) }, nil)
+		func() (core.Scanner, error) { return core.NewSystem(a.cfg, a.env, splitList(only)) }, nil)
 	c.Flags().StringSliceVarP(&only, "only", "O", nil, "scan only these parts: "+strings.Join(system.Kinds, ", "))
 	return c
 }

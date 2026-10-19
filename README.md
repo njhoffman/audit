@@ -10,7 +10,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 
 | Command | What it scans |
 |---|---|
-| `audit system` | processes, systemd units, user and group accounts, the journal, dmesg and boot logs, and program configs (sshd, nginx, apache, postgres, docker, cron) |
+| `audit system` | processes, systemd units, user and group accounts, the journal, dmesg and boot logs, program configs (sshd, nginx, apache, postgres, docker, cron), storage (fullness, inodes, read-only mounts, opt-in SMART), resources (PSI pressure, memory, swap, OOM kills, load, temperatures, throttling, battery wear), updates (reboot pending, newer kernel, security updates, failed unattended upgrades, old kernels) and security (firewall, exposed ports, ~/.ssh permissions and passphrases, world-writable PATH, time sync) |
 | `audit environment` | each configured login shell with and without a terminal: unexpected startup output, which files are sourced, startup time, PATH problems, environment variables, startup script syntax and shellcheck |
 | `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh) and system ones (apt, snap, flatpak, no sudo needed to scan): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs; checked against a fresh login shell's PATH and variables, not the terminal's; latest releases, release age, deprecation and archive status from a cached registry lookup; tags |
 | `audit packages registry` | look packages up on PyPI, npm, crates.io, the Go proxy, rubygems.org and GitHub, cache the results, optionally AI-tag them |

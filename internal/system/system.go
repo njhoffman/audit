@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/progress"
 	"github.com/njhoffman/audit/internal/run"
@@ -16,7 +17,11 @@ import (
 	"github.com/njhoffman/audit/internal/scan/logs"
 	"github.com/njhoffman/audit/internal/scan/procs"
 	"github.com/njhoffman/audit/internal/scan/programs"
+	"github.com/njhoffman/audit/internal/scan/resources"
+	"github.com/njhoffman/audit/internal/scan/security"
 	"github.com/njhoffman/audit/internal/scan/services"
+	"github.com/njhoffman/audit/internal/scan/storage"
+	"github.com/njhoffman/audit/internal/scan/updates"
 	"github.com/njhoffman/audit/internal/scan/users"
 )
 
@@ -30,7 +35,7 @@ type Part struct {
 }
 
 // Kinds lists every part in scan order.
-var Kinds = []string{"procs", "services", "users", "logs", "programs"}
+var Kinds = []string{"procs", "services", "users", "logs", "programs", "storage", "resources", "updates", "security"}
 
 // Options configures the parts built by NewScanner.
 type Options struct {
@@ -42,6 +47,11 @@ type Options struct {
 	LogPatterns int      // normalized patterns reported per source; 0 uses the default
 	Procs       procs.Options
 	Services    services.Options
+	// Env runs the commands of the storage, resources, updates and security
+	// parts; nil leaves their command-based checks out.
+	Env         *exec.Env
+	Storage     storage.Options
+	KeepKernels int
 }
 
 // Scanner runs the configured parts in order.
@@ -102,6 +112,27 @@ func NewScanner(o Options) (*Scanner, error) {
 		{"users", func(ctx context.Context) (*scan.Result, error) { return users.Scan(ctx, users.DefaultOptions()) }},
 		{"logs", func(ctx context.Context) (*scan.Result, error) { return logs.Scan(ctx, logOpts) }},
 		{"programs", func(ctx context.Context) (*scan.Result, error) { return programs.Scan(ctx, progOpts) }},
+		{"storage", func(ctx context.Context) (*scan.Result, error) {
+			so := o.Storage
+			if so.WarnPct == 0 {
+				so = storage.DefaultOptions()
+			}
+			so.Env = o.Env
+			return storage.Scan(ctx, so)
+		}},
+		{"resources", func(ctx context.Context) (*scan.Result, error) {
+			return resources.Scan(ctx, resources.Options{Env: o.Env})
+		}},
+		{"updates", func(ctx context.Context) (*scan.Result, error) {
+			return updates.Scan(ctx, updates.Options{Env: o.Env, KeepKernels: o.KeepKernels})
+		}},
+		{"security", func(ctx context.Context) (*scan.Result, error) {
+			so := security.Options{Env: o.Env}
+			if o.Env != nil {
+				so.Home, so.Path = o.Env.Home, o.Env.Path()
+			}
+			return security.Scan(ctx, so)
+		}},
 	}
 	s := &Scanner{}
 	for _, p := range all {

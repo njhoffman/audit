@@ -64,7 +64,15 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 # COMMANDS
 
 **system**
-:   Processes, systemd units, user and group accounts, logs (journal, dmesg, boot, auth, kern, misc) and program configurations (sshd, nginx, apache, postgres, docker, cron).
+:   Processes, systemd units, user and group accounts, logs (journal, dmesg, boot, auth, kern, misc), program configurations (sshd, nginx, apache, postgres, docker, cron), and:
+
+    **storage**: filesystem space and inode use per mount against **system.storage.warn_pct** and **error_pct**, filesystems mounted read-only (the kernel does so after errors), zfs pools that are not healthy, and with **system.storage.smart** each disk's SMART health (**smartctl -H**) and btrfs device errors, both through **sudo -n**, so they need cached credentials or a NOPASSWD rule.
+
+    **resources**: memory, I/O and CPU stall time over five minutes (PSI), available memory and swap use, OOM kills in the last week's kernel log, the 15-minute load against the core count, temperatures within 5 C of their critical trip point, thermal throttling since boot, and battery wear (peripheral batteries left out).
+
+    **updates**: a reboot a package asked for, a newer kernel installed than the one running, security updates pending in apt's cached lists, failed **unattended-upgrades**, **apt-daily** and **apt-daily-upgrade** runs and errors in the unattended-upgrades log of the last week, and more kernels installed than **system.keep_kernels**.
+
+    **security**: no active firewall service (ufw, firewalld, nftables), TCP ports listening beyond loopback (a warning for risky services such as rpcbind, smb, nfs, databases, redis, vnc; UDP only for those), **~/.ssh** permissions (directory, private keys, config, authorized_keys) and private keys without a passphrase (checked with **ssh-keygen -y -P ""**), world-writable PATH directories and files, and clock synchronization.
 
 **environment**
 :   Starts each configured login shell with and without a terminal, records unexpected output and which startup files are sourced, times start-up, and checks PATH, environment variables and the startup scripts (syntax and shellcheck).
@@ -227,7 +235,7 @@ These apply to **system**, **environment** and **packages**. Without an output o
 :   Show only findings whose check id starts with _prefix_.
 
 **-O**, **\-\-only** _parts_ (system)
-:   Scan only these parts: **procs**, **services**, **users**, **logs**, **programs**.
+:   Scan only these parts: **procs**, **services**, **users**, **logs**, **programs**, **storage**, **resources**, **updates**, **security**.
 
 **-M**, **\-\-manager** _names_ (packages, packages registry)
 :   Inventory only these managers.
@@ -391,6 +399,8 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       programs: [sshd, nginx, postgres, apache, docker, cron]
       procs: {top: 10, high_cpu: 80, high_mem: 25, high_threads: 1000}
       services: {user_units: true, high_restarts: 5, unit_file_perms: true}
+      storage: {warn_pct: 90, error_pct: 97, smart: false}
+      keep_kernels: 3
     packages:
       env: login               # login (fresh login shell) or process
       managers: [uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak, bins]

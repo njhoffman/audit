@@ -142,6 +142,18 @@ type SystemConfig struct {
 	Programs    []string       `mapstructure:"programs" yaml:"programs"`
 	Procs       ProcsConfig    `mapstructure:"procs" yaml:"procs"`
 	Services    ServicesConfig `mapstructure:"services" yaml:"services"`
+	Storage     StorageConfig  `mapstructure:"storage" yaml:"storage"`
+	// KeepKernels is how many installed kernels are normal.
+	KeepKernels int `mapstructure:"keep_kernels" yaml:"keep_kernels"`
+}
+
+// StorageConfig sets the filesystem checks of `audit system`.
+type StorageConfig struct {
+	// WarnPct and ErrorPct are the space and inode fullness thresholds.
+	WarnPct  float64 `mapstructure:"warn_pct" yaml:"warn_pct"`
+	ErrorPct float64 `mapstructure:"error_pct" yaml:"error_pct"`
+	// SMART runs smartctl and btrfs device stats through sudo -n.
+	SMART bool `mapstructure:"smart" yaml:"smart"`
 }
 
 // ProcsConfig sets the process thresholds of `audit system`.
@@ -284,6 +296,10 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("system.services.user_units", true)
 	v.SetDefault("system.services.high_restarts", 5)
 	v.SetDefault("system.services.unit_file_perms", true)
+	v.SetDefault("system.storage.warn_pct", 90.0)
+	v.SetDefault("system.storage.error_pct", 97.0)
+	v.SetDefault("system.storage.smart", false)
+	v.SetDefault("system.keep_kernels", 3)
 	v.SetDefault("packages.env", EnvLogin)
 	v.SetDefault("packages.managers", DefaultManagers)
 	v.SetDefault("packages.scan_dirs", DefaultScanDirs)
@@ -387,6 +403,8 @@ func (c *Config) validate() error {
 		{"packages.registry.timeout", float64(c.Packages.Registry.Timeout)},
 		{"packages.update.timeout", float64(c.Packages.Update.Timeout)},
 		{"repos.max_depth", float64(c.Repos.MaxDepth)},
+		{"system.storage.warn_pct", c.System.Storage.WarnPct},
+		{"system.keep_kernels", float64(c.System.KeepKernels)},
 		{"repos.concurrency", float64(c.Repos.Concurrency)},
 		{"repos.fetch_timeout", float64(c.Repos.FetchTimeout)},
 		{"repos.meta_max_age", float64(c.Repos.MetaMaxAge)},
@@ -573,6 +591,11 @@ system:
     user_units: true     # also scan the user systemd manager
     high_restarts: 5     # flag units restarted this often; 0 disables
     unit_file_perms: true
+  storage:
+    warn_pct: 90         # filesystem or inode use that is a warning
+    error_pct: 97        # and an error
+    smart: false         # smartctl -H per disk via sudo -n (needs cached sudo or NOPASSWD)
+  keep_kernels: 3        # installed kernels beyond this are reported
 
 packages:
   # Where PATH and the other variables come from: login (a fresh login shell,

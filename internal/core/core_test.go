@@ -296,11 +296,11 @@ func TestNewSystemUsesConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewSystem(cfg, nil); err != nil {
+	if _, err := NewSystem(cfg, nil, nil); err != nil {
 		t.Fatalf("defaults: %v", err)
 	}
 	cfg.System.Programs = []string{"bogus"}
-	if _, err := NewSystem(cfg, nil); err == nil {
+	if _, err := NewSystem(cfg, nil, nil); err == nil {
 		t.Error("system.programs must reach the scanner")
 	}
 }

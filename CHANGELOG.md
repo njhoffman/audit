@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit system` parts `storage` (space and inode fullness per mount, read-only remounts, zfs pool health; opt-in `system.storage.smart` runs `smartctl -H` and btrfs device stats through `sudo -n`), `resources` (PSI memory/I/O/CPU pressure, available memory, swap, OOM kills in the last week, load against cores, temperatures near critical, thermal throttling, battery wear), `updates` (reboot required, newer kernel installed than running, pending security updates, failed unattended-upgrades/apt-daily runs and recent log errors, old kernels beyond `system.keep_kernels`) and `security` (no active firewall, ports listening beyond loopback with risky services as warnings, `~/.ssh` permissions and passphrase-less keys, world-writable PATH entries, clock sync). Config `system.storage.{warn_pct,error_pct,smart}` and `system.keep_kernels`.
+
 ## [0.6.0] - 2026-10-19
 
 ### Added

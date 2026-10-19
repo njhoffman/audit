@@ -22,6 +22,7 @@ import (
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/scan/procs"
 	"github.com/njhoffman/audit/internal/scan/services"
+	"github.com/njhoffman/audit/internal/scan/storage"
 	"github.com/njhoffman/audit/internal/system"
 )
 
@@ -58,10 +59,13 @@ type SystemScanner struct {
 }
 
 // NewSystem builds the system scanner; only restricts it to some parts.
-func NewSystem(cfg *config.Config, only []string) (*SystemScanner, error) {
+// env runs the command-based parts.
+func NewSystem(cfg *config.Config, env *exec.Env, only []string) (*SystemScanner, error) {
 	sc := cfg.System
 	s, err := system.NewScanner(system.Options{
-		Only: only, LogSources: sc.Logs, JournalArgs: sc.Journal, Programs: sc.Programs,
+		Env: env, KeepKernels: sc.KeepKernels,
+		Storage: storage.Options{WarnPct: sc.Storage.WarnPct, ErrorPct: sc.Storage.ErrorPct, SMART: sc.Storage.SMART},
+		Only:    only, LogSources: sc.Logs, JournalArgs: sc.Journal, Programs: sc.Programs,
 		LogMaxLines: sc.LogMaxLines, LogPatterns: sc.LogPatterns,
 		Procs: procs.Options{
 			TopN: sc.Procs.Top, HighCPUPct: sc.Procs.HighCPU,

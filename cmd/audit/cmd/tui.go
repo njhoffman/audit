@@ -95,7 +95,7 @@ func (b tuiBackend) Explain(ctx context.Context, id int64, width int, refresh bo
 func (a *app) defaultScanner(command string) (core.Scanner, error) {
 	switch command {
 	case "system":
-		return core.NewSystem(a.cfg, nil)
+		return core.NewSystem(a.cfg, a.env, nil)
 	case "environment":
 		return core.NewEnvironment(a.cfg, a.env)
 	case "packages":
