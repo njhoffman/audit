@@ -20,10 +20,26 @@ const (
 	GapAhead Gap = "ahead"
 	// GapUnknown means one of the versions could not be parsed.
 	GapUnknown Gap = ""
+	// GapUpdate is an update a system manager (apt, snap, flatpak) offers
+	// whose size the version strings do not tell: a new build, a snap
+	// revision, an unparseable Debian version.
+	GapUpdate Gap = "update"
 )
 
 // Behind reports whether the gap calls for an update.
-func (g Gap) Behind() bool { return g == GapPatch || g == GapMinor || g == GapMajor }
+func (g Gap) Behind() bool { return g == GapPatch || g == GapMinor || g == GapMajor || g == GapUpdate }
+
+// LocalGap is the gap of a system package: the manager's word decides
+// whether it is behind, the versions only how far when they parse.
+func LocalGap(installed, available string) Gap {
+	if available == "" || available == installed {
+		return GapCurrent
+	}
+	if g := VersionGap("", installed, available); g.Behind() {
+		return g
+	}
+	return GapUpdate
+}
 
 // version is a parsed version: dotted release numbers, then an optional
 // qualifier ranked against a final release.

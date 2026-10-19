@@ -27,7 +27,7 @@ type Manager interface {
 }
 
 // Registry lists the supported managers in display order.
-var Registry = []Manager{Uv{}, Pnpm{}, Cargo{}, Golang{}, Gem{}, Gh{}}
+var Registry = []Manager{Uv{}, Pnpm{}, Cargo{}, Golang{}, Gem{}, Gh{}, Apt{}, Snap{}, Flatpak{}}
 
 // Names returns the registered manager names.
 func Names() []string {

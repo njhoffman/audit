@@ -29,6 +29,9 @@ type Options struct {
 	Dir     string   // working directory; defaults to the environment's home
 	Unset   []string // environment variables removed for this call
 	Stdin   string
+	// Terminal runs the command on audit's own stdin, stdout and stderr,
+	// for prompts such as sudo's password; nothing is captured.
+	Terminal bool
 }
 
 // Result is the outcome of one invocation.
@@ -208,6 +211,9 @@ func (r *OSRunner) Run(ctx context.Context, name string, args []string, opts Opt
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if opts.Terminal {
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stderr, os.Stderr
+	}
 	cmd.WaitDelay = time.Second
 
 	err := cmd.Run()

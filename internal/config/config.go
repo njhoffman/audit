@@ -206,7 +206,7 @@ const (
 var (
 	DefaultLogs     = []string{"boot", "dmesg", "journal"}
 	DefaultPrograms = []string{"sshd", "nginx", "postgres", "apache", "docker", "cron"}
-	DefaultManagers = []string{"uv", "pnpm", "cargo", "go", "gem", "gh"}
+	DefaultManagers = []string{"uv", "pnpm", "cargo", "go", "gem", "gh", "apt", "snap", "flatpak"}
 	DefaultScanDirs = []string{"~/.local/bin"}
 	DefaultTags     = []string{
 		"cli", "tui", "gui", "library", "lsp", "formatter", "linter", "compiler", "build", "testing", "debugging",
@@ -540,7 +540,7 @@ packages:
   # the first of environment.shells, so a stale terminal session does not
   # cause false findings) or process (the environment audit was started in).
   env: login
-  managers: [uv, pnpm, cargo, go, gem, gh]
+  managers: [uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak]
   # Directories of loose executables checked for broken interpreters.
   scan_dirs: [~/.local/bin]
   # audit packages registry looks packages up in their registries (PyPI,

@@ -164,6 +164,8 @@ type PackagesScanner struct {
 	UnmaintainedAfter time.Duration
 	// Now is the scan's clock; zero means time.Now.
 	Now time.Time
+	// AptStamp overrides apt's last-update stamp file (tests).
+	AptStamp string
 	// ScanEnv is the environment the last Scan ran in, so follow-up commands
 	// (audit packages update) run against the same PATH.
 	ScanEnv *exec.Env
@@ -353,7 +355,7 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 	}
 	rep.Phase("checking packages", 0)
 	state := &packages.State{Ctx: ctx, Env: env, Inventories: invs, ScanDirs: s.ScanDirs,
-		Meta: metas, UnmaintainedAfter: s.UnmaintainedAfter, Now: now, UpdateFailures: failures,
+		Meta: packages.LocalMeta(invs, metas, now), AptStamp: s.AptStamp, UnmaintainedAfter: s.UnmaintainedAfter, Now: now, UpdateFailures: failures,
 		Runtimes: runtimes, NodeMajor: nodeMajor}
 	fs := packages.Analyze(state)
 	if envFinding != nil {

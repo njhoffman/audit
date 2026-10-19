@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `packages` phase 5a: apt, snap and flatpak managers (on by default). apt inventories manually installed packages plus anything upgradable (`dpkg-query`, `apt-mark`, `apt list --upgradable` over the cached lists), snap uses `snap refresh --list`, flatpak covers system and user installations with `flatpak remote-ls --updates`. Scans never use sudo. Pending updates show in LATEST and `--outdated` and count as `registry.outdated` (gap `update` when the versions do not say how far), never as major.
+- `packages update` updates them with one command per manager (`sudo -n apt-get install -y --only-upgrade ...` non-interactively, keeping config files; `sudo -n snap refresh ...`; `sudo -n flatpak update --system ...`; `flatpak update --user ...`), verifying each package. apt lists are refreshed first (`sudo apt-get update`) when apt is covered. Sudo is authenticated once (`sudo -v`, password on the terminal) and kept alive; without a terminal or cached credentials the root items are skipped with the reason. Held apt packages are skipped.
+- Checks `apt.stale_lists` (lists older than a week) and `apt.held` (held packages with upgrades waiting).
+
 ## [0.2.0] - 2026-10-19
 
 The project is renamed from `sysaudit` to `audit` and restructured around saved, task-tracked scans.

@@ -47,6 +47,9 @@ type State struct {
 	// NodeMajor is the node major the pnpm globals were last installed
 	// under; "" when unknown.
 	NodeMajor string
+	// AptStamp is apt's last-successful-update stamp file; "" uses
+	// AptListsStamp.
+	AptStamp string
 }
 
 func (s *State) inv(manager string) *Inventory {
@@ -80,6 +83,8 @@ var Checks = []finding.Check[*State]{
 	{ID: "runtime.outdated", Fn: runtimeOutdated},
 	{ID: "runtime.stale_dirs", Fn: staleDirs},
 	{ID: "npm.stray_globals", Fn: npmStrayGlobals},
+	{ID: "apt.stale_lists", Fn: aptStaleLists},
+	{ID: "apt.held", Fn: aptHeld},
 }
 
 // Analyze runs every package check, including the registry checks.

@@ -12,9 +12,9 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 |---|---|
 | `audit system` | processes, systemd units, user and group accounts, the journal, dmesg and boot logs, and program configs (sshd, nginx, apache, postgres, docker, cron) |
 | `audit environment` | each configured login shell with and without a terminal: unexpected startup output, which files are sourced, startup time, PATH problems, environment variables, startup script syntax and shellcheck |
-| `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs; checked against a fresh login shell's PATH and variables, not the terminal's; latest releases, release age, deprecation and archive status from a cached registry lookup; tags |
+| `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh) and system ones (apt, snap, flatpak, no sudo needed to scan): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs; checked against a fresh login shell's PATH and variables, not the terminal's; latest releases, release age, deprecation and archive status from a cached registry lookup; tags |
 | `audit packages registry` | look packages up on PyPI, npm, crates.io, the Go proxy, rubygems.org and GitHub, cache the results, optionally AI-tag them |
-| `audit packages update` | update outdated packages one at a time with their own managers, verify the new versions, save and itemize failures |
+| `audit packages update` | update outdated packages one at a time with their own managers (apt, snap and flatpak in one command each, under one `sudo -v` session; apt lists refreshed first), verify the new versions, save and itemize failures |
 | `audit packages runtimes` | python, node, rust, go and ruby: installed version, owner (uv, pnpm, rustup, system), newest release of the line and overall, packages on another version |
 | `audit packages runtimes update` / `migrate` | update uv pythons, pnpm's node and rustup toolchains (same line by default, `-m` for a new python minor or node LTS); reinstall packages onto the current runtime, then offer to trash stale runtime dirs |
 | `audit packages info` / `tag` | one package's cached details; list, add or remove tags |

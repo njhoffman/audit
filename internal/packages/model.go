@@ -17,8 +17,13 @@ type Package struct {
 	Location    string   `json:"location,omitempty"`
 	Executables []string `json:"executables,omitempty"`
 	// Ident is the registry identifier for version lookups when it differs
-	// from Name (go module path, gh owner/repo).
+	// from Name (go module path, gh owner/repo, flatpak ref).
 	Ident string `json:"ident,omitempty"`
+	// Available is the newer version a system manager (apt, snap, flatpak)
+	// offers itself; "" when it is current.
+	Available string `json:"available,omitempty"`
+	// Held marks an apt package pinned with apt-mark hold.
+	Held bool `json:"held,omitempty"`
 }
 
 // Runtime is the interpreter or toolchain a manager installs against.

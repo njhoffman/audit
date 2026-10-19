@@ -135,6 +135,7 @@ func (a *app) annotated(ctx context.Context, r *run.Run, q packages.Query) ([]pa
 	if err != nil {
 		return nil, err
 	}
+	metas = packages.LocalMeta(d.Inventories, metas, r.FinishedAt)
 	as := packages.Annotate(d.Inventories, metas, store.TagsByKey(tags), a.githubUser(ctx, false))
 	return q.Filter(as), nil
 }

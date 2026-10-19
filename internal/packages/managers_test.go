@@ -286,7 +286,7 @@ func TestResolve(t *testing.T) {
 		t.Errorf("%v %v", ms, err)
 	}
 	if _, err := Resolve([]string{"uv", "nope"}); err == nil ||
-		err.Error() != "unknown manager(s): nope (known: uv, pnpm, cargo, go, gem, gh)" {
+		err.Error() != "unknown manager(s): nope (known: uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak)" {
 		t.Errorf("err = %v", err)
 	}
 }

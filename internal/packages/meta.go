@@ -109,6 +109,9 @@ type Meta struct {
 	// Error is the last fetch failure; the other fields keep the last good
 	// answer.
 	Error string `json:"error,omitempty"`
+	// Local marks an entry LocalMeta built from a system manager's own
+	// answer; it is never saved.
+	Local bool `json:"local,omitempty"`
 }
 
 // Key is the meta's manager:id.
@@ -199,7 +202,10 @@ func Annotate(invs []Inventory, metas map[string]Meta, tags map[string][]string,
 			it := Item{Package: p}
 			if m, ok := metas[p.Key()]; ok {
 				it.Meta = &m
-				if m.Latest != "" {
+				switch {
+				case m.Local:
+					it.Gap = LocalGap(p.Version, m.Latest)
+				case m.Latest != "":
 					it.Gap = VersionGap(p.Manager, p.Version, m.Latest)
 				}
 			}

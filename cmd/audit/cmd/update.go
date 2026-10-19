@@ -86,6 +86,20 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 		return err
 	}
 	s.Refresh = a.registryRefresh(refs, false)
+	var stopSudo func()
+	defer func() {
+		if stopSudo != nil {
+			stopSudo()
+		}
+	}()
+	if !f.dryRun && refreshesApt(s, refs) && a.env.Which("apt-get") != "" {
+		if stop, err := a.sudoSession(ctx, a.env, "refreshing apt's package lists and system package updates"); err != nil {
+			a.log.Warn("not refreshing apt's package lists", "err", err)
+		} else {
+			stopSudo = stop
+			a.refreshApt(ctx, a.env, !f.json)
+		}
+	}
 	res, err := a.engine.Execute(ctx, s, a.progress(!f.json))
 	if err != nil {
 		return err
@@ -98,10 +112,20 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 	if err != nil {
 		return err
 	}
+	metas = packages.LocalMeta(d.Inventories, metas, timeNow())
 	plan := packages.PlanUpdates(d.Inventories, metas, packages.PlanOptions{
 		Refs: refs, Major: f.major, Exclude: parseRefs(a.cfg.Packages.Update.Exclude)})
 	if len(plan.Unmatched) > 0 {
 		return fmt.Errorf("no installed package matches %s", strings.Join(plan.Unmatched, ", "))
+	}
+	if !f.dryRun && plan.NeedsRoot() && stopSudo == nil && !a.interactive() {
+		// No terminal to ask for a password on: find out now, so the plan
+		// shows which items cannot run.
+		if stop, err := a.sudoSession(ctx, s.ScanEnv, "apt, snap and system flatpak updates"); err != nil {
+			plan = skipRoot(plan, "needs sudo: "+err.Error())
+		} else {
+			stopSudo = stop
+		}
 	}
 	runnable := len(plan.Runnable())
 	switch {
@@ -120,6 +144,14 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 		ok, err := a.confirm(fmt.Sprintf("Update %d package(s)?", runnable))
 		if err != nil || !ok {
 			return err
+		}
+	}
+	if plan.NeedsRoot() && stopSudo == nil {
+		stop, err := a.sudoSession(ctx, s.ScanEnv, "apt, snap and system flatpak updates")
+		if err != nil {
+			plan = skipRoot(plan, "needs sudo: "+err.Error())
+		} else {
+			stopSudo = stop
 		}
 	}
 
@@ -202,6 +234,34 @@ func (a *app) runUpdates(ctx context.Context, s *core.PackagesScanner, plan pack
 	return u
 }
 
+// refreshesApt reports whether an update covers apt: apt is among the
+// scanned managers and either no package is named or one is named apt:NAME.
+func refreshesApt(s *core.PackagesScanner, refs []packages.Ref) bool {
+	has := false
+	for _, m := range s.Managers {
+		has = has || m.Name() == "apt"
+	}
+	if !has || len(refs) == 0 {
+		return has
+	}
+	for _, r := range refs {
+		if r.Manager == "apt" {
+			return true
+		}
+	}
+	return false
+}
+
+// skipRoot skips every runnable item that runs through sudo.
+func skipRoot(plan packages.Plan, reason string) packages.Plan {
+	for i, it := range plan.Items {
+		if it.Skip == "" && len(it.Command) > 0 && it.Command[0] == "sudo" {
+			plan.Items[i].Skip = reason
+		}
+	}
+	return plan
+}
+
 // execPlan runs the plan's commands behind a progress bar with one status
 // line per item.
 func (a *app) execPlan(ctx context.Context, env *exec.Env, plan packages.Plan, phase string, stopOnError, bar, show bool) []packages.UpdateResult {
@@ -260,12 +320,16 @@ func (a *app) printPlan(plan packages.Plan, dryRun bool) {
 			head = "COMMAND"
 		}
 		rows := make([][]string, len(plan.Items))
+		shown := map[string]bool{}
 		for i, it := range plan.Items {
 			action := "update"
 			switch {
 			case it.Skip != "":
 				action = "skip: " + it.Skip
+			case dryRun && it.Batch != "" && shown[it.Batch]:
+				action = "(in the " + it.Batch + " command above)"
 			case dryRun:
+				shown[it.Batch] = it.Batch != ""
 				action = strings.Join(it.Command, " ")
 			case it.Gap != packages.GapUnknown:
 				action += " (" + string(it.Gap) + ")"

@@ -82,7 +82,7 @@ func (p *Printer) gapStyle(it packages.Item) lipgloss.Style {
 		return p.fg("9")
 	case packages.GapMinor:
 		return p.fg("11")
-	case packages.GapPatch:
+	case packages.GapPatch, packages.GapUpdate:
 		return p.fg("3")
 	case packages.GapCurrent:
 		return p.fg("10")

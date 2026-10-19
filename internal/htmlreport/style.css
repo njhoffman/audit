@@ -70,7 +70,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
   background: var(--panel); color: var(--fg); font: inherit; }
 tr.pkg td:nth-child(3) { font-weight: 600; }
 tr.gap-current td:nth-child(3) { color: var(--fresh); }
-tr.gap-patch td:nth-child(3) { color: var(--notice); }
+tr.gap-patch td:nth-child(3), tr.gap-update td:nth-child(3) { color: var(--notice); }
 tr.gap-minor td:nth-child(3) { color: var(--warning); }
 tr.gap-major td:nth-child(3), tr.gap-dead td:nth-child(3) { color: var(--error); }
 tr.pkg td:nth-child(6) { color: var(--accent); }

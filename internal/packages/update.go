@@ -41,6 +41,12 @@ func UpdateCommand(p Package) []string {
 		return []string{"gem", "update", "--user-install", p.Name}
 	case "gh":
 		return []string{"gh", "extension", "upgrade", p.Name}
+	case "apt", "snap", "flatpak":
+		target := p.Name
+		if p.Manager == "flatpak" {
+			target = p.Ident
+		}
+		return batchCommand(batchKey(p), []string{target})
 	}
 	return nil
 }
@@ -64,7 +70,10 @@ type PlanOptions struct {
 type Planned struct {
 	Package
 	// Kind is KindPackage (""), KindRuntime or KindMigration.
-	Kind    string   `json:"kind,omitempty"`
+	Kind string `json:"kind,omitempty"`
+	// Batch groups items run by one command (apt, snap, a flatpak
+	// installation); "" runs alone.
+	Batch   string   `json:"batch,omitempty"`
 	Latest  string   `json:"latest,omitempty"`
 	Gap     Gap      `json:"gap,omitempty"`
 	Command []string `json:"command,omitempty"`
@@ -132,7 +141,7 @@ func PlanUpdates(invs []Inventory, metas map[string]Meta, o PlanOptions) Plan {
 				if named {
 					continue
 				}
-				if p.Registry() == "" {
+				if p.Registry() == "" && !metas[p.Key()].Local {
 					plan.NotFromRegistry++
 				}
 				continue
@@ -146,13 +155,27 @@ func PlanUpdates(invs []Inventory, metas map[string]Meta, o PlanOptions) Plan {
 			plan.Unmatched = append(plan.Unmatched, r.String())
 		}
 	}
-	return plan
+	return Batch(plan)
 }
 
 // planOne plans p. ok is false when p is not part of the plan at all: an
 // unnamed package that is current, or whose position cannot be told.
 func planOne(p Package, metas map[string]Meta, o PlanOptions, named bool) (Planned, bool) {
 	it := Planned{Package: p}
+	if m, ok := metas[p.Key()]; ok && m.Local {
+		it.Latest = m.Latest
+		it.Gap = LocalGap(p.Version, m.Latest)
+		switch {
+		case it.Gap == GapCurrent:
+			it.Skip = "already at the latest release"
+			return it, named
+		case p.Held:
+			it.Skip = "held with apt-mark hold"
+		case slices.ContainsFunc(o.Exclude, func(r Ref) bool { return r.Matches(p) }):
+			it.Skip = "excluded by packages.update.exclude"
+		}
+		return it, true
+	}
 	if p.Registry() == "" {
 		switch {
 		case p.Manager == "go" && p.Version == "(devel)":
@@ -274,16 +297,26 @@ type RunOptions struct {
 func RunUpdates(ctx context.Context, env *exec.Env, plan Plan, o RunOptions) []UpdateResult {
 	out := make([]UpdateResult, 0, len(plan.Items))
 	stop := ""
+	// batches holds the result of each batch command once it ran.
+	batches := map[string]UpdateResult{}
 	for _, it := range plan.Items {
 		r := UpdateResult{Manager: it.Manager, Name: it.Name, ID: it.ID(), From: it.Version, Latest: it.Latest,
 			Status: UpdateSkipped, Command: strings.Join(it.Command, " "), Reason: it.Skip, Kind: it.Kind}
 		if ctx.Err() != nil {
 			stop = "not run: interrupted"
 		}
+		prev, ran := batches[it.Batch]
 		switch {
 		case it.Skip != "":
 		case stop != "":
 			r.Reason = stop
+		case it.Batch != "" && ran:
+			// Shares the command of an earlier item; its output and status
+			// apply here too, and Verify sorts out each package.
+			r.Status, r.Code, r.Output, r.Reason = prev.Status, prev.Code, prev.Output, prev.Reason
+			if o.OnDone != nil {
+				o.OnDone(it, r)
+			}
 		default:
 			if o.OnStart != nil {
 				o.OnStart(it)
@@ -306,6 +339,9 @@ func RunUpdates(ctx context.Context, env *exec.Env, plan Plan, o RunOptions) []U
 				if o.StopOnError {
 					stop = "not run: an earlier update failed"
 				}
+			}
+			if it.Batch != "" {
+				batches[it.Batch] = r
 			}
 			if o.OnDone != nil {
 				o.OnDone(it, r)
@@ -349,6 +385,10 @@ func Verify(results []UpdateResult, invs []Inventory) {
 		switch {
 		case !ok:
 			r.Status, r.Reason = UpdateFailed, "no longer installed after the update"
+		case IsSystem(r.Manager) && p.Available == "":
+			// Some flatpak and snap updates keep the version string; what
+			// counts is that nothing is pending any more.
+			r.To = p.Version
 		case p.Version == r.From:
 			r.Status, r.Reason = UpdateFailed, "the command succeeded but the version is still "+r.From
 		default:

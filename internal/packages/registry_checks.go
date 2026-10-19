@@ -45,7 +45,7 @@ func (s *State) withMeta() []metaItem {
 	for _, inv := range s.Inventories {
 		for _, p := range inv.Packages {
 			m, ok := s.Meta[p.Key()]
-			if !ok || seen[p.Key()] || p.Registry() == "" {
+			if !ok || seen[p.Key()] || p.Registry() == "" && !m.Local {
 				continue
 			}
 			seen[p.Key()] = true
@@ -62,12 +62,15 @@ func UpdateHint(p Package) string { return strings.Join(UpdateCommand(p), " ") }
 
 // ManagerUpdateHint updates every package of a manager at once.
 var ManagerUpdateHint = map[string]string{
-	"uv":    "uv tool upgrade --all",
-	"pnpm":  "pnpm update -g --latest",
-	"cargo": "cargo install-update -a (cargo-update), or cargo install each crate",
-	"go":    "go install <package>@latest for each binary",
-	"gem":   "gem update --user-install",
-	"gh":    "gh extension upgrade --all",
+	"uv":      "uv tool upgrade --all",
+	"pnpm":    "pnpm update -g --latest",
+	"cargo":   "cargo install-update -a (cargo-update), or cargo install each crate",
+	"go":      "go install <package>@latest for each binary",
+	"gem":     "gem update --user-install",
+	"gh":      "gh extension upgrade --all",
+	"apt":     "audit packages update -M apt (or sudo apt-get upgrade)",
+	"snap":    "audit packages update -M snap (or sudo snap refresh)",
+	"flatpak": "audit packages update -M flatpak (or flatpak update)",
 }
 
 // Age renders how long ago t was in the largest whole unit ("3 months").
@@ -107,7 +110,13 @@ func outdated(major bool) func(*State) []finding.Finding {
 		count := map[string]int{}
 		for _, it := range s.withMeta() {
 			g := VersionGap(it.Manager, it.Version, it.Meta.Latest)
-			if !g.Behind() || (g == GapMajor) != major {
+			if it.Meta.Local {
+				// The system manager's own word decides, and its version
+				// jumps are vetted upgrades, not major releases to review.
+				if major || it.Meta.Latest == it.Version {
+					continue
+				}
+			} else if !g.Behind() || (g == GapMajor) != major {
 				continue
 			}
 			hits = append(hits, it)
@@ -115,7 +124,11 @@ func outdated(major bool) func(*State) []finding.Finding {
 		}
 		out := make([]finding.Finding, 0, len(hits))
 		for _, it := range hits {
-			msg := fmt.Sprintf("%s -> %s (%s", it.Version, it.Meta.Latest, VersionGap(it.Manager, it.Version, it.Meta.Latest))
+			gap := string(VersionGap(it.Manager, it.Version, it.Meta.Latest))
+			if it.Meta.Local {
+				gap = string(LocalGap(it.Version, it.Meta.Latest))
+			}
+			msg := fmt.Sprintf("%s -> %s (%s", it.Version, it.Meta.Latest, gap)
 			if r := s.released(it.Meta); r != "" {
 				msg += "; " + r
 			}
