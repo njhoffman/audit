@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit files clean [path...] [-C categories]`: plans the cleanup of the saved files results. Default categories `cache` (each cache's own cleaner, `sudo -n` for apt, the journal and snap revisions, else deleted), `build` and `cores` (deleted); opt-in `orphaned`, `downloads`, `duplicates` (to the trash with `gio trash`, the first duplicate kept) and `trash` (emptied). Targets must exist, lie inside `files.roots` and be neither a root nor home. Confirmed, verified and saved like updates (`-N`, `-y`, `-x`, `-j`, `-L`, `-e`).
+
 ## [0.8.0] - 2026-10-19
 
 ### Added

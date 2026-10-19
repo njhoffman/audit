@@ -345,11 +345,17 @@ func (a *app) printPlan(plan packages.Plan, dryRun bool) {
 			from, to = "RUNS ON", "MOVES TO"
 		case only("sync"):
 			first, from, to = "STEP", "FROM", "TO"
+		case only("clean"):
+			first, from, to = "STEP", "SIZE", "RESULT"
 		}
 		p.Table([]string{first, from, to, head}, rows)
 	}
 	runnable := len(plan.Runnable())
-	msg := fmt.Sprintf("%d to update, %d skipped.", runnable, len(plan.Items)-runnable)
+	verb := "to update"
+	if len(plan.Items) > 0 && (plan.Items[0].Kind == "clean" || plan.Items[0].Kind == "sync") {
+		verb = "to run"
+	}
+	msg := fmt.Sprintf("%d %s, %d skipped.", runnable, verb, len(plan.Items)-runnable)
 	if plan.NotFromRegistry > 0 {
 		msg += fmt.Sprintf(" %d package(s) installed from git or a path are not updated.", plan.NotFromRegistry)
 	}

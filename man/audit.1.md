@@ -47,6 +47,10 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **files** [_scan options_]
 
+**audit** **files** **clean** [**-C** _categories_] [**-N**] [**-y**] [**-x**] [**-j**|**-e**] [_path_...]
+
+**audit** **files** **clean** **-L** [**-j**|**-e**]
+
 **audit** **todo** [**show**|**set**|**note**|**add**|**rm**|**explain**] ...
 
 **audit** **analyze** [**-t**] [**-A**] [**-L** _level_] [**-j**]
@@ -143,6 +147,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **files**
 :   Measures **files.roots** (home by default) in one parallel walk that stays on each root's filesystem and counts allocated blocks, like **du**, and finds space to reclaim: **files.cache** (tool caches with their own cleaners: uv, pip, go build and modules, pnpm store, npm, yarn, cargo registry, thumbnails; apt archives, the systemd journal, disabled snap revisions, docker's reclaimable space; other large children of **~/.cache**), **files.build** (node_modules, target, .venv, venv, .tox, .gradle and .next of projects unchanged for **files.stale_after**; a tool's own install, such as an LSP under ~/.local/share or a gh extension, never counts), **files.orphaned** (children of ~/.local/share and ~/.local/state whose name matches no installed program: PATH executables, apt packages, flatpaks, snaps, desktop entries), **files.large**, **files.downloads** (files in **files.downloads** older than **files.old_downloads**), **files.trash**, **files.duplicates** (same size, then the same hash of both ends, then of the whole file, reading at most **files.hash_limit_gb**), **files.core_dumps**, **files.empty_dirs** and **files.broken_links**. Version-control internals, caches, dependency trees and files inside git working trees are never listed as large files or duplicates. **\-\-list** shows the largest directories and every candidate; nothing is deleted.
+
+**files clean** [_path_...]
+:   Plans the cleanup of the saved files results by category (**-C**, default **cache,build,cores**; **all** for every one): **cache** runs each cache's own cleaner (**uv cache clean**, **go clean -cache** and **-modcache**, **pnpm store prune**, **npm cache clean**, **pip cache purge**, **yarn cache clean**, **docker system prune**, and through **sudo -n** **apt-get clean**, **journalctl \-\-vacuum-size=500M** and **snap remove \-\-revision**) or deletes it; **build** and **cores** delete; **orphaned**, **downloads** and **duplicates** (every copy but the first in sorted order) move to the trash with **gio trash**; **trash** empties it, which cannot be undone. Paths limit the plan. Each target must still exist, lie inside **files.roots** and be neither a root nor home. Confirmed like **packages update**; sudo is asked once when system caches are planned; results are saved and **-L** shows the last cleanup.
 
 **todo**
 :   Lists open and in-progress tasks. Subcommands: **show** _ID_, **set** _ID_ _STATUS_ [**-N** _note_], **note** _ID_ _TEXT_, **add** _TITLE_ [**-p** _priority_] [**-C** _command_] [**-H** _hint_] [**-N** _note_], **rm** _ID_ (manual tasks only), and **explain** _ID_ [**-A**] [**-L** _level_] [**-j**], which sends the task with every detail of the saved findings behind it to the AI CLI and prints the likely cause, whether it matters, the fix and how to confirm it. **e** in the task editor does the same for the selected task.
