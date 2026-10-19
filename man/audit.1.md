@@ -45,6 +45,10 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **repos** **info** [**-j**] _repo_
 
+**audit** **configs** [_scan options_] [**-O**]
+
+**audit** **configs** **clean** [**-N**] [**-y**] [**-x**] [**-j**|**-e**] [_path_...]
+
 **audit** **files** [_scan options_]
 
 **audit** **files** **clean** [**-C** _categories_] [**-N**] [**-y**] [**-x**] [**-j**|**-e**] [_path_...]
@@ -144,6 +148,12 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **repos info** _repo_
 :   Shows the saved state, GitHub data and tags of one repo.
+
+**configs**
+:   Parses the json, jsonc, yaml, toml, ini and xml files under **configs.roots** (default **~/.config**, to **configs.max_depth**, skipping **configs.exclude** and files over **configs.max_kb**) and reports **config.syntax** errors (JSON with comments and concatenated JSON values are accepted; a byte-order mark is ignored). **config.validator** runs the read-only checks programs offer: **git config \-\-global \-\-list**, **ssh -G -F ~/.ssh/config**, **systemd-analyze \-\-user verify** on user units, **i3 -C** and **sway -C**, **fish -n**, and **tmux source-file -n** when a tmux server is already running (audit never starts one). **config.permissions** reports config files others can read that hold a credential-looking value, naming the key only. Every ~/.config entry and home dotfile is matched to the program it belongs to (package inventories, apt packages with executables traced through dpkg's file lists, flatpaks, snaps, PATH executables, a program name plus a common suffix such as **.zshenv** or **.rgignore**); **config.orphaned** lists the rest, with an uninstalled apt package of the same name when apt-cache knows one. audit's own config is never an orphan. **-O** lists only the orphans and implies **\-\-list**.
+
+**configs clean** [_path_...]
+:   Moves the orphaned configs of the saved results to the trash (**gio trash**), confirmed like **packages update**. Orphans you ignored (**configs:config.orphaned:**_path_) are never planned; each must still exist and lie in home.
 
 **files**
 :   Measures **files.roots** (home by default) in one parallel walk that stays on each root's filesystem and counts allocated blocks, like **du**, and finds space to reclaim: **files.cache** (tool caches with their own cleaners: uv, pip, go build and modules, pnpm store, npm, yarn, cargo registry, thumbnails; apt archives, the systemd journal, disabled snap revisions, docker's reclaimable space; other large children of **~/.cache**), **files.build** (node_modules, target, .venv, venv, .tox, .gradle and .next of projects unchanged for **files.stale_after**; a tool's own install, such as an LSP under ~/.local/share or a gh extension, never counts), **files.orphaned** (children of ~/.local/share and ~/.local/state whose name matches no installed program: PATH executables, apt packages, flatpaks, snaps, desktop entries), **files.large**, **files.downloads** (files in **files.downloads** older than **files.old_downloads**), **files.trash**, **files.duplicates** (same size, then the same hash of both ends, then of the whole file, reading at most **files.hash_limit_gb**), **files.core_dumps**, **files.empty_dirs** and **files.broken_links**. Version-control internals, caches, dependency trees and files inside git working trees are never listed as large files or duplicates. **\-\-list** shows the largest directories and every candidate; nothing is deleted.
@@ -438,6 +448,11 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     export:
       enabled: true            # rewrite the export files after commands that save
       dir: ""                  # empty: <data_dir>/export; ~ is expanded
+    configs:
+      roots: [~/.config]
+      max_depth: 4
+      exclude: [.git, node_modules, plugins, plugged, pack, site-packages, __pycache__]
+      max_kb: 1024
     files:
       roots: ["~"]
       exclude: []

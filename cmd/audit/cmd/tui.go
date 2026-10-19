@@ -104,6 +104,8 @@ func (a *app) defaultScanner(command string) (core.Scanner, error) {
 		return a.reposScanner(), nil
 	case "files":
 		return core.NewFiles(a.cfg, a.env), nil
+	case "configs":
+		return a.configsScanner(context.Background()), nil
 	}
 	return nil, fmt.Errorf("unknown command %q", command)
 }

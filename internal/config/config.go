@@ -33,6 +33,18 @@ type Config struct {
 	Export      ExportConfig      `mapstructure:"export" yaml:"export"`
 	Repos       ReposConfig       `mapstructure:"repos" yaml:"repos"`
 	Files       FilesConfig       `mapstructure:"files" yaml:"files"`
+	Configs     ConfigsConfig     `mapstructure:"configs" yaml:"configs"`
+}
+
+// ConfigsConfig configures the configs scanner.
+type ConfigsConfig struct {
+	// Roots are walked for structured config files.
+	Roots    []string `mapstructure:"roots" yaml:"roots"`
+	MaxDepth int      `mapstructure:"max_depth" yaml:"max_depth"`
+	// Exclude are directory names never descended into.
+	Exclude []string `mapstructure:"exclude" yaml:"exclude"`
+	// MaxKB skips larger files.
+	MaxKB int64 `mapstructure:"max_kb" yaml:"max_kb"`
 }
 
 // FilesConfig configures the files scanner.
@@ -342,6 +354,10 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("environment.shellcheck.exclude", []string{"SC2034"})
 	v.SetDefault("export.enabled", true)
 	v.SetDefault("export.dir", "")
+	v.SetDefault("configs.roots", []string{"~/.config"})
+	v.SetDefault("configs.max_depth", 4)
+	v.SetDefault("configs.exclude", []string{".git", "node_modules", "plugins", "plugged", "pack", "site-packages", "__pycache__"})
+	v.SetDefault("configs.max_kb", 1024)
 	v.SetDefault("files.roots", []string{"~"})
 	v.SetDefault("files.exclude", []string{})
 	v.SetDefault("files.downloads", "~/Downloads")
@@ -438,6 +454,8 @@ func (c *Config) validate() error {
 		{"packages.update.timeout", float64(c.Packages.Update.Timeout)},
 		{"repos.max_depth", float64(c.Repos.MaxDepth)},
 		{"files.large_mb", float64(c.Files.LargeMB)},
+		{"configs.max_depth", float64(c.Configs.MaxDepth)},
+		{"configs.max_kb", float64(c.Configs.MaxKB)},
 		{"files.dup_min_mb", float64(c.Files.DupMinMB)},
 		{"files.hash_limit_gb", float64(c.Files.HashLimitGB)},
 		{"files.top", float64(c.Files.Top)},
@@ -684,6 +702,14 @@ environment:
 export:
   enabled: true
   dir: ""   # empty means <data_dir>/export
+
+configs:
+  # Walked for json, jsonc, yaml, toml, ini and xml files to parse.
+  roots: [~/.config]
+  max_depth: 4
+  # Directory names never descended into (plugin checkouts, dependencies).
+  exclude: [.git, node_modules, plugins, plugged, pack, site-packages, __pycache__]
+  max_kb: 1024          # larger files are not parsed
 
 files:
   # Measured without crossing into other filesystems.
