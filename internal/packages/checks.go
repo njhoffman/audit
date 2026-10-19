@@ -85,6 +85,7 @@ var Checks = []finding.Check[*State]{
 	{ID: "npm.stray_globals", Fn: npmStrayGlobals},
 	{ID: "apt.stale_lists", Fn: aptStaleLists},
 	{ID: "apt.held", Fn: aptHeld},
+	{ID: "bins.untracked", Fn: binsUntracked},
 }
 
 // Analyze runs every package check, including the registry checks.

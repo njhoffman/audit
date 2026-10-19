@@ -206,7 +206,7 @@ const (
 var (
 	DefaultLogs     = []string{"boot", "dmesg", "journal"}
 	DefaultPrograms = []string{"sshd", "nginx", "postgres", "apache", "docker", "cron"}
-	DefaultManagers = []string{"uv", "pnpm", "cargo", "go", "gem", "gh", "apt", "snap", "flatpak"}
+	DefaultManagers = []string{"uv", "pnpm", "cargo", "go", "gem", "gh", "apt", "snap", "flatpak", "bins"}
 	DefaultScanDirs = []string{"~/.local/bin"}
 	DefaultTags     = []string{
 		"cli", "tui", "gui", "library", "lsp", "formatter", "linter", "compiler", "build", "testing", "debugging",
@@ -540,8 +540,9 @@ packages:
   # the first of environment.shells, so a stale terminal session does not
   # cause false findings) or process (the environment audit was started in).
   env: login
-  managers: [uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak]
-  # Directories of loose executables checked for broken interpreters.
+  managers: [uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak, bins]
+  # Directories of loose executables: checked for broken interpreters, and
+  # their regular files (not symlinks) are the bins manager's inventory.
   scan_dirs: [~/.local/bin]
   # audit packages registry looks packages up in their registries (PyPI,
   # npm, crates.io, the Go proxy, rubygems.org, GitHub) and caches the answer;

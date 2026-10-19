@@ -41,6 +41,11 @@ func UpdateCommand(p Package) []string {
 		return []string{"gem", "update", "--user-install", p.Name}
 	case "gh":
 		return []string{"gh", "extension", "upgrade", p.Name}
+	case BinsManager:
+		if p.Ident == "" {
+			return nil
+		}
+		return []string{SelfCommand, "packages", "bins", "install", p.Name}
 	case "apt", "snap", "flatpak":
 		target := p.Name
 		if p.Manager == "flatpak" {

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Bare `audit` is a Bubble Tea dashboard.
 
-Planned commands not yet built: `repos`, `files`, `configs`, `scripts`, `ai`, and the system-package phase (apt, snap, flatpak) of `packages`.
+Planned commands not yet built: `repos`, `files`, `configs`, `scripts`, `ai`.
 
 ## Commands
 

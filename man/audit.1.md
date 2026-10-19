@@ -58,9 +58,11 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 :   Starts each configured login shell with and without a terminal, records unexpected output and which startup files are sourced, times start-up, and checks PATH, environment variables and the startup scripts (syntax and shellcheck).
 
 **packages**
-:   Inventories uv, pnpm, cargo, go, gem, gh, apt, snap and flatpak, and checks for broken or shadowed executables, runtime drift, stale runtime directories and misplaced installs. By default it runs against the environment of a fresh login shell (the first of **environment.shells**), so a terminal opened before a PATH change does not report stale problems; if that shell cannot start, it falls back to its own environment and reports **packages.login_env**.
+:   Inventories uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak and loose binaries (**bins**), and checks for broken or shadowed executables, runtime drift, stale runtime directories and misplaced installs. By default it runs against the environment of a fresh login shell (the first of **environment.shells**), so a terminal opened before a PATH change does not report stale problems; if that shell cannot start, it falls back to its own environment and reports **packages.login_env**.
 
     System packages come from the managers themselves and never need sudo to scan: apt lists manually installed packages plus any package with an upgrade pending, from **dpkg-query**, **apt-mark** and **apt list \-\-upgradable** over apt's cached lists; snap lists installed snaps with **snap refresh \-\-list**; flatpak lists apps and runtimes of the system and user installations with **flatpak remote-ls \-\-updates**. Their pending updates count as **registry.outdated** (never **registry.major_behind**: distribution upgrades are not releases to review), with the gap **update** when the versions do not tell how far (a new flatpak build, a snap revision). **apt.stale_lists** (notice) says when apt's lists were last refreshed more than a week ago; **apt.held** (info) lists held packages with upgrades waiting.
+
+    Loose binaries are the regular executable files in **packages.scan_dirs** (symlinks belong to the managers that made them), with their kind (**elf** or **script**, also an automatic tag). A binary tracked with **packages bins track** carries its GitHub repo and installed release, so the registry lookup finds its latest release and **packages update** plans it like any package. **bins.untracked** (info, one task) lists compiled binaries with no recorded origin.
 
     The inventory (**\-\-list**) shows each package's latest release, how long ago it was published and its tags, read from the registry cache. The header says when the cache was last refreshed; a plain scan never contacts a registry. Cached data adds the checks **registry.outdated** (info, one task per manager), **registry.major_behind** (notice), **registry.deprecated**, **registry.yanked** and **registry.archived** (warnings), **registry.unmaintained** (a suggestion when the latest release is older than **packages.registry.unmaintained_after**) and **registry.error** (info, a failed lookup).
 
@@ -82,6 +84,15 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **packages runtimes migrate** [_runtime_...]
 :   Reinstalls packages that run on another version of their runtime: uv tools with **uv tool upgrade \-\-reinstall \-\-python** _minor_ (uv tools keep the exact interpreter they were installed with, so a new patch needs this too, and the tool is also upgraded within its constraints); every pnpm global after a node major change with **pnpm add -g \-\-force** _name_**@**_version_; user gems found only in another ruby's gem directory with **gem install \-\-user-install** _name_ **-v** _version_; and with **-b**, cargo crates and go binaries built by an older toolchain (**cargo install \-\-locked \-\-force**, **go install** _pkg_**@**_version_). **packages.update.exclude** entries and git or path installs are skipped. Results are checked against a fresh inventory. Afterwards audit lists stale runtime directories (**runtime.stale_dirs**), to be moved to the trash with **gio trash**, and uv-managed python patches that a newer patch replaced and no tool uses, to be removed with **uv python uninstall**; it asks before removing them, and with **-y** keeps them unless **-P** is given.
+
+**packages bins**
+:   Lists the loose binaries now, with kind, tracked repo, installed release and the latest release from the registry cache. Nothing is scanned or downloaded.
+
+**packages bins track** _name_ _owner/repo_[**:**_asset-glob_] [**-s** _version_]
+:   Records that _name_ comes from the GitHub releases of _owner/repo_ and looks the latest release up. The glob picks the release asset when the automatic choice is ambiguous or wrong; automatically, audit takes the asset built for this OS and architecture, preferring glibc over musl builds and tar.gz over other archives over a bare file, and ignores packages (.deb, .rpm), checksums and signatures. The installed version is **-s**, or the first version in the output of _name_ **\-\-version** (the binary is run for this). **packages bins untrack** _name_ forgets it; the file stays.
+
+**packages bins install** _name_ [**-r** _tag_] [**-k**] [**-F**]
+:   Downloads the release asset of a tracked binary with **gh release download**, checks its sha256 against GitHub's asset digest or a checksum file in the release (**checksums.txt**, **SHA256SUMS**, _asset_**.sha256**), unpacks it (tar, tar.gz, tar.bz2, zip and gzip in process; tar.xz and tar.zst through **tar**), and replaces the binary through a temporary file and a rename, after copying the old one to _data_dir_**/bins/**_name_**-**_version_. A release without a checksum is refused unless **-k** is given; a mismatch always is. **-r** installs another release, **-F** reinstalls the tracked one. **packages update** runs this for tracked binaries behind their latest release.
 
 **packages info** _package_
 :   Shows the cached details and tags of one package from the saved inventory, without scanning.
@@ -353,7 +364,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       services: {user_units: true, high_restarts: 5, unit_file_perms: true}
     packages:
       env: login               # login (fresh login shell) or process
-      managers: [uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak]
+      managers: [uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak, bins]
       scan_dirs: [~/.local/bin]
       registry:
         max_age: 24h           # reuse cached versions younger than this
@@ -435,6 +446,9 @@ Mark task 12 done with a note:
 
 **~/.local/share/audit/reports/**
 :   HTML reports and **index.html**.
+
+**~/.local/share/audit/bins/**
+:   The previous file of each binary **packages bins install** replaced.
 
 **~/.local/share/audit/export/**
 :   JSON snapshots for other programs; see **EXPORT FILES**.

@@ -252,6 +252,12 @@ func NewPackages(cfg *config.Config, env *exec.Env, only []string) (*PackagesSca
 	for i, d := range cfg.Packages.ScanDirs {
 		dirs[i] = env.Expand(d)
 	}
+	for i, m := range ms {
+		if b, ok := m.(packages.Bins); ok {
+			b.Dirs = dirs
+			ms[i] = b
+		}
+	}
 	s := &PackagesScanner{Env: env, Managers: ms, ScanDirs: dirs, scope: scope, UnmaintainedAfter: cfg.Packages.Registry.UnmaintainedAfter}
 	if cfg.Packages.Env == config.EnvLogin && len(cfg.Environment.Shells) > 0 {
 		s.LoginShell = cfg.Environment.Shells[0]

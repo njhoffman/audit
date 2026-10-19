@@ -58,7 +58,7 @@ func (p Package) Registry() string {
 		if p.Source == "rubygems" {
 			return RegistryRubygems
 		}
-	case "gh":
+	case "gh", BinsManager:
 		if p.Ident != "" {
 			return RegistryGitHub
 		}
@@ -145,6 +145,9 @@ func AutoTags(p Package, m *Meta, githubUser string) []string {
 	tags := []string{p.Manager}
 	if p.Runtime != "" {
 		tags = append(tags, NormalizeTag(p.Runtime))
+	}
+	if p.Kind != "" {
+		tags = append(tags, p.Kind)
 	}
 	if k := p.SourceKind(); k != "registry" {
 		tags = append(tags, k)

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/njhoffman/audit/internal/core"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/version"
 )
 
@@ -21,6 +22,9 @@ var timeNow = time.Now
 func Execute() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if exe, err := os.Executable(); err == nil {
+		packages.SelfCommand = exe
+	}
 	a := newApp(os.Stdout, os.Stderr)
 	root := newRootCmd(a)
 	err := root.ExecuteContext(ctx)

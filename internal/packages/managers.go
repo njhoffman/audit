@@ -27,7 +27,7 @@ type Manager interface {
 }
 
 // Registry lists the supported managers in display order.
-var Registry = []Manager{Uv{}, Pnpm{}, Cargo{}, Golang{}, Gem{}, Gh{}, Apt{}, Snap{}, Flatpak{}}
+var Registry = []Manager{Uv{}, Pnpm{}, Cargo{}, Golang{}, Gem{}, Gh{}, Apt{}, Snap{}, Flatpak{}, Bins{}}
 
 // Names returns the registered manager names.
 func Names() []string {
@@ -69,7 +69,7 @@ func Resolve(names []string) ([]Manager, error) {
 func Collect(ctx context.Context, env *exec.Env, m Manager) (inv Inventory) {
 	start := time.Now()
 	inv = Inventory{Manager: m.Name()}
-	if env.Which(m.Binary()) == "" {
+	if m.Binary() != "" && env.Which(m.Binary()) == "" {
 		return inv
 	}
 	inv.Available = true

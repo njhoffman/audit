@@ -56,7 +56,7 @@ func TestLoadDefaults(t *testing.T) {
 	if got := cfg.ExportDir(); got != filepath.Join(home, "dash", "audit") {
 		t.Errorf("export dir with ~: %q", got)
 	}
-	if len(cfg.Packages.Managers) != 9 || cfg.Environment.StartupTimeout != 15*time.Second {
+	if len(cfg.Packages.Managers) != 10 || cfg.Environment.StartupTimeout != 15*time.Second {
 		t.Errorf("command defaults: %+v %+v", cfg.Packages, cfg.Environment)
 	}
 }

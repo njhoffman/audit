@@ -59,7 +59,7 @@ old it is. --tag, --find and --outdated filter the inventory and imply
 	fl.BoolVarP(&q.Outdated, "outdated", "u", false, "list only packages behind their latest release (implies --list)")
 	f.impliesList = func() bool { return !q.Empty() }
 	f.jsonExtra = func(ctx context.Context, r *run.Run) (any, error) { return a.annotated(ctx, r, q) }
-	c.AddCommand(newPackagesRegistryCmd(a), newPackagesUpdateCmd(a), newPackagesInfoCmd(a), newPackagesTagCmd(a), newRuntimesCmd(a))
+	c.AddCommand(newPackagesRegistryCmd(a), newPackagesUpdateCmd(a), newPackagesInfoCmd(a), newPackagesTagCmd(a), newRuntimesCmd(a), newBinsCmd(a))
 	return c
 }
 
@@ -70,6 +70,12 @@ func (a *app) packagesScanner(managers []string) (*core.PackagesScanner, error) 
 		return nil, err
 	}
 	s.Meta, s.Updates, s.Runtimes, s.Now = a.store, a.store, a.store, timeNow()
+	for i, m := range s.Managers {
+		if b, ok := m.(packages.Bins); ok {
+			b.Tracked = func() (map[string]packages.TrackedBin, error) { return a.store.TrackedBins(context.Background()) }
+			s.Managers[i] = b
+		}
+	}
 	return s, nil
 }
 

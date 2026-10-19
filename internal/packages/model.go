@@ -24,6 +24,8 @@ type Package struct {
 	Available string `json:"available,omitempty"`
 	// Held marks an apt package pinned with apt-mark hold.
 	Held bool `json:"held,omitempty"`
+	// Kind is "elf" or "script" for loose binaries.
+	Kind string `json:"kind,omitempty"`
 }
 
 // Runtime is the interpreter or toolchain a manager installs against.

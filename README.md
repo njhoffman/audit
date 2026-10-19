@@ -17,6 +17,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit packages update` | update outdated packages one at a time with their own managers (apt, snap and flatpak in one command each, under one `sudo -v` session; apt lists refreshed first), verify the new versions, save and itemize failures |
 | `audit packages runtimes` | python, node, rust, go and ruby: installed version, owner (uv, pnpm, rustup, system), newest release of the line and overall, packages on another version |
 | `audit packages runtimes update` / `migrate` | update uv pythons, pnpm's node and rustup toolchains (same line by default, `-m` for a new python minor or node LTS); reinstall packages onto the current runtime, then offer to trash stale runtime dirs |
+| `audit packages bins` | loose binaries in `packages.scan_dirs`; `bins track NAME OWNER/REPO[:GLOB]` records a GitHub origin, then `packages update` (or `bins install`) keeps it at the latest release: `gh release download`, sha256 check, atomic replace, backup |
 | `audit packages info` / `tag` | one package's cached details; list, add or remove tags |
 | `audit todo` | the tasks scans create, plus tasks added by hand; `todo explain ID` asks the AI about one |
 | `audit analyze` | AI review across every command's saved results, open tasks and failed updates; `-t` files AI suggestions as tasks |

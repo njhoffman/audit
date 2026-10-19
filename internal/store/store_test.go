@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/njhoffman/audit/internal/finding"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/todo"
 )
@@ -271,5 +272,27 @@ func TestMigrateV1(t *testing.T) {
 	_ = db.Close()
 	if _, err := Open(path); err == nil || err.Error() != "database schema version 3 is not supported (want 2)" {
 		t.Errorf("a newer database is refused: %v", err)
+	}
+}
+
+func TestTrackedBins(t *testing.T) {
+	s := open(t)
+	at := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+	if err := s.SaveTrackedBin(ctx, packages.TrackedBin{Name: "bat", Repo: "sharkdp/bat"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveTrackedBin(ctx, packages.TrackedBin{Name: "bat", Repo: "sharkdp/bat", Asset: "*musl*", Version: "v0.26.1",
+		SHA256: "abc", InstalledAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.TrackedBins(ctx)
+	if err != nil || len(got) != 1 || got["bat"].Asset != "*musl*" || got["bat"].Version != "v0.26.1" || !got["bat"].InstalledAt.Equal(at) {
+		t.Errorf("tracked: %+v %v", got, err)
+	}
+	if ok, err := s.DeleteTrackedBin(ctx, "bat"); !ok || err != nil {
+		t.Errorf("delete: %v %v", ok, err)
+	}
+	if ok, _ := s.DeleteTrackedBin(ctx, "bat"); ok {
+		t.Error("deleting twice")
 	}
 }
