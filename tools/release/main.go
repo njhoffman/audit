@@ -177,7 +177,7 @@ func run(level string, dry, noPush, allowMajor bool) error {
 	}
 	if dry {
 		fmt.Println("would rewrite CHANGELOG.md and release", tag)
-	} else if err := os.WriteFile(changelog, []byte(text), 0o644); err != nil { // #nosec G306 -- tracked doc
+	} else if err := os.WriteFile(changelog, []byte(text), 0o644); err != nil { // #nosec G306 G703 -- fixed path of a tracked doc
 		return err
 	}
 	steps := [][]string{
