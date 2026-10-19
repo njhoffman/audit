@@ -90,6 +90,8 @@ type RunFile struct {
 	Runtimes []packages.RuntimeStatus `json:"runtimes,omitempty"`
 	// Repos is the annotated repo list, in repos.json.
 	Repos any `json:"repos,omitempty"`
+	// Files is the files run's sizes and candidates, in files.json.
+	Files any `json:"files,omitempty"`
 }
 
 // Tasks is tasks.json: every task, closed ones included.
@@ -122,6 +124,8 @@ type Input struct {
 	Runtimes []packages.RuntimeStatus
 	// Repos is the annotated repo list added to repos.json.
 	Repos any
+	// Files is the files data added to files.json.
+	Files any
 }
 
 // Build turns in into the export files, by file name.
@@ -146,8 +150,11 @@ func Build(in Input) map[string]any {
 			if c == packages.Command {
 				rf.Packages, rf.Runtimes = in.Packages, in.Runtimes
 			}
-			if c == "repos" {
+			switch c {
+			case "repos":
 				rf.Repos = in.Repos
+			case "files":
+				rf.Files = in.Files
 			}
 			files[row.File] = rf
 		}

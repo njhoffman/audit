@@ -110,7 +110,7 @@ Run without a command in a terminal for the interactive dashboard, or with
 	fl.BoolVarP(&html, "html", "H", false, "write the HTML index and every command's latest report")
 	fl.BoolVarP(&open, "open", "o", false, "like --html, then open the index")
 
-	root.AddCommand(newSystemCmd(a), newEnvironmentCmd(a), newPackagesCmd(a), newReposCmd(a),
+	root.AddCommand(newSystemCmd(a), newEnvironmentCmd(a), newPackagesCmd(a), newReposCmd(a), newFilesCmd(a),
 		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a))
 	return root
 }

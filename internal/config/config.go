@@ -32,6 +32,27 @@ type Config struct {
 	Environment EnvironmentConfig `mapstructure:"environment" yaml:"environment"`
 	Export      ExportConfig      `mapstructure:"export" yaml:"export"`
 	Repos       ReposConfig       `mapstructure:"repos" yaml:"repos"`
+	Files       FilesConfig       `mapstructure:"files" yaml:"files"`
+}
+
+// FilesConfig configures the files scanner.
+type FilesConfig struct {
+	// Roots are measured without crossing into other filesystems.
+	Roots   []string `mapstructure:"roots" yaml:"roots"`
+	Exclude []string `mapstructure:"exclude" yaml:"exclude"`
+	// Downloads is checked for files older than OldDownloads.
+	Downloads   string `mapstructure:"downloads" yaml:"downloads"`
+	LargeMB     int64  `mapstructure:"large_mb" yaml:"large_mb"`
+	DupMinMB    int64  `mapstructure:"dup_min_mb" yaml:"dup_min_mb"`
+	CacheMinMB  int64  `mapstructure:"cache_min_mb" yaml:"cache_min_mb"`
+	BuildMinMB  int64  `mapstructure:"build_min_mb" yaml:"build_min_mb"`
+	OrphanMinMB int64  `mapstructure:"orphan_min_mb" yaml:"orphan_min_mb"`
+	// DownloadsMinMB is how much old downloads must add up to be reported.
+	DownloadsMinMB int64         `mapstructure:"downloads_min_mb" yaml:"downloads_min_mb"`
+	StaleAfter     time.Duration `mapstructure:"stale_after" yaml:"stale_after"`
+	OldDownloads   time.Duration `mapstructure:"old_downloads" yaml:"old_downloads"`
+	HashLimitGB    int64         `mapstructure:"hash_limit_gb" yaml:"hash_limit_gb"`
+	Top            int           `mapstructure:"top" yaml:"top"`
 }
 
 // ReposConfig configures the repos scanner.
@@ -321,6 +342,19 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("environment.shellcheck.exclude", []string{"SC2034"})
 	v.SetDefault("export.enabled", true)
 	v.SetDefault("export.dir", "")
+	v.SetDefault("files.roots", []string{"~"})
+	v.SetDefault("files.exclude", []string{})
+	v.SetDefault("files.downloads", "~/Downloads")
+	v.SetDefault("files.large_mb", 1024)
+	v.SetDefault("files.dup_min_mb", 50)
+	v.SetDefault("files.cache_min_mb", 200)
+	v.SetDefault("files.build_min_mb", 50)
+	v.SetDefault("files.orphan_min_mb", 50)
+	v.SetDefault("files.downloads_min_mb", 100)
+	v.SetDefault("files.stale_after", 90*24*time.Hour)
+	v.SetDefault("files.old_downloads", 180*24*time.Hour)
+	v.SetDefault("files.hash_limit_gb", 10)
+	v.SetDefault("files.top", 20)
 	v.SetDefault("repos.roots", []string{"~/ghq", "~"})
 	v.SetDefault("repos.max_depth", 4)
 	v.SetDefault("repos.exclude", DefaultReposExclude)
@@ -403,6 +437,10 @@ func (c *Config) validate() error {
 		{"packages.registry.timeout", float64(c.Packages.Registry.Timeout)},
 		{"packages.update.timeout", float64(c.Packages.Update.Timeout)},
 		{"repos.max_depth", float64(c.Repos.MaxDepth)},
+		{"files.large_mb", float64(c.Files.LargeMB)},
+		{"files.dup_min_mb", float64(c.Files.DupMinMB)},
+		{"files.hash_limit_gb", float64(c.Files.HashLimitGB)},
+		{"files.top", float64(c.Files.Top)},
 		{"system.storage.warn_pct", c.System.Storage.WarnPct},
 		{"system.keep_kernels", float64(c.System.KeepKernels)},
 		{"repos.concurrency", float64(c.Repos.Concurrency)},
@@ -646,6 +684,22 @@ environment:
 export:
   enabled: true
   dir: ""   # empty means <data_dir>/export
+
+files:
+  # Measured without crossing into other filesystems.
+  roots: ["~"]
+  exclude: []
+  downloads: ~/Downloads
+  large_mb: 1024        # files this big are listed
+  dup_min_mb: 50        # files this big are compared for duplicates
+  cache_min_mb: 200     # caches reported from this size
+  build_min_mb: 50      # node_modules, target, .venv... reported from this size
+  orphan_min_mb: 50     # data of uninstalled programs reported from this size
+  downloads_min_mb: 100 # old downloads reported once they add up to this
+  stale_after: 2160h    # a build dir unchanged this long counts as idle
+  old_downloads: 4320h  # downloads older than this are reported
+  hash_limit_gb: 10     # bytes read in full to confirm duplicates
+  top: 20               # largest directories listed
 
 repos:
   # Walked for git repositories, up to max_depth directories deep; a repo

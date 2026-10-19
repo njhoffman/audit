@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit files`: one parallel, single-filesystem walk of `files.roots` measuring allocated space, the largest directories, and reclaimable space: tool and system caches (uv, pip, go, pnpm, npm, yarn, cargo, thumbnails, apt archives, the journal, disabled snap revisions, docker), idle projects' build and dependency directories (tools' own installs excluded), data of programs that look uninstalled, large files, old downloads, the trash, hash-confirmed duplicates, core dumps, empty directories and broken links. Git internals, caches, dependency trees and repo working trees are never offered as large files or duplicates. Config section `files`.
+
 ## [0.7.0] - 2026-10-19
 
 ### Added

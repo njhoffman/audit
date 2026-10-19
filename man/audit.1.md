@@ -45,6 +45,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **repos** **info** [**-j**] _repo_
 
+**audit** **files** [_scan options_]
+
 **audit** **todo** [**show**|**set**|**note**|**add**|**rm**|**explain**] ...
 
 **audit** **analyze** [**-t**] [**-A**] [**-L** _level_] [**-j**]
@@ -138,6 +140,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **repos info** _repo_
 :   Shows the saved state, GitHub data and tags of one repo.
+
+**files**
+:   Measures **files.roots** (home by default) in one parallel walk that stays on each root's filesystem and counts allocated blocks, like **du**, and finds space to reclaim: **files.cache** (tool caches with their own cleaners: uv, pip, go build and modules, pnpm store, npm, yarn, cargo registry, thumbnails; apt archives, the systemd journal, disabled snap revisions, docker's reclaimable space; other large children of **~/.cache**), **files.build** (node_modules, target, .venv, venv, .tox, .gradle and .next of projects unchanged for **files.stale_after**; a tool's own install, such as an LSP under ~/.local/share or a gh extension, never counts), **files.orphaned** (children of ~/.local/share and ~/.local/state whose name matches no installed program: PATH executables, apt packages, flatpaks, snaps, desktop entries), **files.large**, **files.downloads** (files in **files.downloads** older than **files.old_downloads**), **files.trash**, **files.duplicates** (same size, then the same hash of both ends, then of the whole file, reading at most **files.hash_limit_gb**), **files.core_dumps**, **files.empty_dirs** and **files.broken_links**. Version-control internals, caches, dependency trees and files inside git working trees are never listed as large files or duplicates. **\-\-list** shows the largest directories and every candidate; nothing is deleted.
 
 **todo**
 :   Lists open and in-progress tasks. Subcommands: **show** _ID_, **set** _ID_ _STATUS_ [**-N** _note_], **note** _ID_ _TEXT_, **add** _TITLE_ [**-p** _priority_] [**-C** _command_] [**-H** _hint_] [**-N** _note_], **rm** _ID_ (manual tasks only), and **explain** _ID_ [**-A**] [**-L** _level_] [**-j**], which sends the task with every detail of the saved findings behind it to the AI CLI and prints the likely cause, whether it matters, the fix and how to confirm it. **e** in the task editor does the same for the selected task.
@@ -360,7 +365,7 @@ The export directory (**export.dir**, by default **~/.local/share/audit/export/*
 :   One row per scanning command under **commands**: **command**, **file** (its own export file, absent when it never ran), **freshness** (**fresh**, **stale**, **old** or **none**, graded at **generated_at**), **stale_after_seconds** and **old_after_seconds** to regrade it later, **last_run** (**id**, **scope**, **started_at**, **finished_at**, **findings** counted by severity, **ignored**, **errors**) and **open_tasks** by priority. Then **open_tasks** totals and **last_update** (**id**, **finished_at**, **updated**, **failed**, **skipped**) once a package update has run.
 
 _command_**.json**
-:   The command's latest full run under **run**, with its findings and errors but without the scanner's raw data, which can hold environment values. **repos.json** adds the annotated repo list as **repos**. **packages.json** adds the annotated inventory as **packages**, as **audit packages \-\-json** prints it, and the runtimes as **runtimes**, as **audit packages runtimes \-\-json** prints them.
+:   The command's latest full run under **run**, with its findings and errors but without the scanner's raw data, which can hold environment values. **repos.json** adds the annotated repo list as **repos**; **files.json** adds the sizes and cleanup candidates as **files**. **packages.json** adds the annotated inventory as **packages**, as **audit packages \-\-json** prints it, and the runtimes as **runtimes**, as **audit packages runtimes \-\-json** prints them.
 
 **tasks.json**
 :   Every task under **tasks**, closed ones included.
@@ -426,6 +431,20 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     export:
       enabled: true            # rewrite the export files after commands that save
       dir: ""                  # empty: <data_dir>/export; ~ is expanded
+    files:
+      roots: ["~"]
+      exclude: []
+      downloads: ~/Downloads
+      large_mb: 1024
+      dup_min_mb: 50
+      cache_min_mb: 200
+      build_min_mb: 50
+      orphan_min_mb: 50
+      downloads_min_mb: 100
+      stale_after: 2160h
+      old_downloads: 4320h
+      hash_limit_gb: 10
+      top: 20
     repos:
       roots: [~/ghq, "~"]
       max_depth: 4

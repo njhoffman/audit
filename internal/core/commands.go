@@ -14,6 +14,7 @@ import (
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/environment"
 	"github.com/njhoffman/audit/internal/exec"
+	"github.com/njhoffman/audit/internal/files"
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
@@ -27,7 +28,7 @@ import (
 )
 
 // Commands lists the audit commands in dashboard order.
-var Commands = []string{system.Command, environment.Command, packages.Command, repos.Command}
+var Commands = []string{system.Command, environment.Command, packages.Command, repos.Command, files.Command}
 
 // ScopeFlags names the flag that selects each command's scope.
 var ScopeFlags = map[string]string{system.Command: "--only", packages.Command: "--manager"}

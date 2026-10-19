@@ -17,6 +17,7 @@ import (
 	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/export"
+	"github.com/njhoffman/audit/internal/files"
 	"github.com/njhoffman/audit/internal/htmlreport"
 	"github.com/njhoffman/audit/internal/log"
 	"github.com/njhoffman/audit/internal/packages"
@@ -177,6 +178,12 @@ func (a *app) export(ctx context.Context, dir string) error {
 			var d packages.Data
 			if err := json.Unmarshal(r.Data, &d); err == nil {
 				in.Runtimes = d.Runtimes
+			}
+		}
+		if c == files.Command {
+			var fd files.Data
+			if err := json.Unmarshal(r.Data, &fd); err == nil {
+				in.Files = fd
 			}
 		}
 		if c == repos.Command {
