@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-19
+
 ### Added
 
 - `audit scripts`: inventories scripts under `scripts.roots` (~/bin, ~/.local/bin, ~/.config/*/scripts), describes each from its header comment or docstring, and checks them without running them: shellcheck (batched), `zsh -n`, a Python ast parse plus ruff syntax rules, `node --check`, `luac -p`, `ruby -c`, `fish -n`, missing shebang interpreters, missing exec bits, CRLF endings, PATH shadowing, commands not installed (heuristic) and dead scripts (suggestion). `-f/--find` filters the list. Config section `scripts`.
