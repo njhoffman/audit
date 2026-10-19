@@ -234,3 +234,42 @@ func SuggestedTodos(s Suggestions, commands []string) []todo.Todo {
 	}
 	return out
 }
+
+// ScriptInput is one script sent for a description.
+type ScriptInput struct {
+	Path    string
+	Lang    string
+	Content string
+}
+
+// ScriptDescriptions is the structured answer of DescribeScriptsRequest.
+type ScriptDescriptions struct {
+	Descriptions []struct {
+		Path        string `json:"path"`
+		Description string `json:"description"`
+	} `json:"descriptions"`
+}
+
+const scriptSchema = `{"type":"object","additionalProperties":false,"required":["descriptions"],
+"properties":{"descriptions":{"type":"array","items":{"type":"object","additionalProperties":false,
+"required":["path","description"],"properties":{"path":{"type":"string"},"description":{"type":"string"}}}}}}`
+
+// maxScriptBytes bounds each script's content in the prompt.
+const maxScriptBytes = 4000
+
+// DescribeScriptsRequest asks for a one-sentence description of each script.
+func DescribeScriptsRequest(ss []ScriptInput) Request {
+	var b strings.Builder
+	b.WriteString("Describe each of these scripts.\n")
+	for _, s := range ss {
+		content := s.Content
+		if len(content) > maxScriptBytes {
+			content = content[:maxScriptBytes] + "\n[truncated]"
+		}
+		fmt.Fprintf(&b, "\n=== %s (%s) ===\n%s\n", s.Path, s.Lang, content)
+	}
+	sys := workstation + "You receive scripts from the owner's bin directories. For each, write one plain sentence " +
+		"(under 25 words) saying what it does and when it is used, starting with a verb (\"Opens...\", \"Syncs...\"). " +
+		"Use the path exactly as given. Do not use emojis."
+	return Request{System: sys, Prompt: b.String(), Schema: scriptSchema}
+}

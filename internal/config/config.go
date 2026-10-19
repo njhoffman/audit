@@ -34,6 +34,19 @@ type Config struct {
 	Repos       ReposConfig       `mapstructure:"repos" yaml:"repos"`
 	Files       FilesConfig       `mapstructure:"files" yaml:"files"`
 	Configs     ConfigsConfig     `mapstructure:"configs" yaml:"configs"`
+	Scripts     ScriptsConfig     `mapstructure:"scripts" yaml:"scripts"`
+}
+
+// ScriptsConfig configures the scripts scanner.
+type ScriptsConfig struct {
+	// Roots are script directories; globs are expanded.
+	Roots    []string `mapstructure:"roots" yaml:"roots"`
+	MaxDepth int      `mapstructure:"max_depth" yaml:"max_depth"`
+	Exclude  []string `mapstructure:"exclude" yaml:"exclude"`
+	MaxKB    int64    `mapstructure:"max_kb" yaml:"max_kb"`
+	// StaleAfter is how long a broken script goes unchanged before it is
+	// reported as dead.
+	StaleAfter time.Duration `mapstructure:"stale_after" yaml:"stale_after"`
 }
 
 // ConfigsConfig configures the configs scanner.
@@ -354,6 +367,11 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("environment.shellcheck.exclude", []string{"SC2034"})
 	v.SetDefault("export.enabled", true)
 	v.SetDefault("export.dir", "")
+	v.SetDefault("scripts.roots", []string{"~/bin", "~/.local/bin", "~/.config/*/scripts"})
+	v.SetDefault("scripts.max_depth", 2)
+	v.SetDefault("scripts.exclude", []string{".git", "node_modules", "__pycache__", "venv", ".venv"})
+	v.SetDefault("scripts.max_kb", 512)
+	v.SetDefault("scripts.stale_after", 2*365*24*time.Hour)
 	v.SetDefault("configs.roots", []string{"~/.config"})
 	v.SetDefault("configs.max_depth", 4)
 	v.SetDefault("configs.exclude", []string{".git", "node_modules", "plugins", "plugged", "pack", "site-packages", "__pycache__"})
@@ -455,6 +473,8 @@ func (c *Config) validate() error {
 		{"repos.max_depth", float64(c.Repos.MaxDepth)},
 		{"files.large_mb", float64(c.Files.LargeMB)},
 		{"configs.max_depth", float64(c.Configs.MaxDepth)},
+		{"scripts.max_depth", float64(c.Scripts.MaxDepth)},
+		{"scripts.max_kb", float64(c.Scripts.MaxKB)},
 		{"configs.max_kb", float64(c.Configs.MaxKB)},
 		{"files.dup_min_mb", float64(c.Files.DupMinMB)},
 		{"files.hash_limit_gb", float64(c.Files.HashLimitGB)},
@@ -702,6 +722,14 @@ environment:
 export:
   enabled: true
   dir: ""   # empty means <data_dir>/export
+
+scripts:
+  # Script directories (globs expanded), walked max_depth levels deep.
+  roots: [~/bin, ~/.local/bin, "~/.config/*/scripts"]
+  max_depth: 2
+  exclude: [.git, node_modules, __pycache__, venv, .venv]
+  max_kb: 512           # larger files are not treated as scripts
+  stale_after: 17520h   # a broken script unchanged this long is reported as dead
 
 configs:
   # Walked for json, jsonc, yaml, toml, ini and xml files to parse.
