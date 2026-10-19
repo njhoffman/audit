@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-19
+
 ### Added
 
 - `audit configs`: parses json/jsonc/yaml/toml/ini/xml files under `configs.roots` (`config.syntax`), runs read-only validators (`git config --global --list`, `ssh -G`, `systemd-analyze --user verify`, `i3 -C`, `sway -C`, `fish -n`, `tmux source-file -n` with a running server; `config.validator`), flags readable files holding credential-looking values by key name only (`config.permissions`), and matches every ~/.config entry and home dotfile to its program (inventories, apt with dpkg file lists, flatpak, snap, PATH) so orphans are reported with a likely apt package (`config.orphaned`). `-O/--orphans` lists them. Config section `configs`.
