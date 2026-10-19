@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-19
+
 ### Added
 
 - `audit repos`: finds git repositories under `repos.roots` (ghq root and home to `repos.max_depth`, skipping `repos.exclude`) and checks them with local git only (remote URLs saved without credentials): operations in progress, uncommitted changes, unpushed commits, no remote, duplicate clones, behind, untracked, stashes, no upstream, detached HEAD, stale fetch, ghq layout, broken links in `repos.link_dirs`, plus `repo.missing`, `repo.moved`, `repo.default_branch` and `repo.archived` from the GitHub cache. The list shows branch, state, last commit, last fetch and tags (mine/others, host, language, local, fork, archived, GitHub topics); `-t`, `-f`, `-O mine|others|OWNER`, `-d`, `-u` filter it.
