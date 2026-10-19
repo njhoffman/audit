@@ -26,6 +26,12 @@ default:
 # Lint, test and build: the pre-commit gate.
 check: fmt-check lint test build
 
+# Cut a release after the gate passes: bump from CHANGELOG (or patch|minor|major),
+# date the Unreleased section, commit, tag vX.Y.Z and push main with the tag.
+# Flags: -n dry run, --no-push, --allow-major (leave 0.x).
+release *args: check
+    go run ./tools/release {{ args }}
+
 # Build bin/audit.
 build:
     mkdir -p {{ bin_dir }}

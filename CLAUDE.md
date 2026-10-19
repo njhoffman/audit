@@ -18,6 +18,7 @@ Planned commands not yet built: `repos`, `files`, `configs`, `scripts`, `ai`, an
 - `just manpage` — render `man/audit.1` from `man/audit.1.md`.
 - The justfile exports `GOTOOLCHAIN=local` so the system Go is used.
 - Pre-commit gate: `just check` (gofmt check, lint, test, build).
+- `just release [patch|minor|major]` — run the gate, then `tools/release`: bump from the CHANGELOG's Unreleased headings (Removed or BREAKING major, Added/Changed/Deprecated minor, else patch; before 1.0 a major bump moves the minor unless `--allow-major`), date the section, commit `Release vX.Y.Z`, annotated tag, `git push --atomic origin main vX.Y.Z`. `-n` is a dry run.
 
 ## Architecture
 
@@ -50,3 +51,4 @@ A new scanning command implements `core.Scanner` (and `core.Owner` if it support
 - Never persist raw shell xtrace output; it echoes variable values. Keep file paths only.
 - A new config key goes in `defaults()`, the `Template` (with a comment) and `validate()` if it has a range; `TestTemplateMatchesDefaults` fails if the template drifts.
 - When adding or changing a command or flag, update `man/audit.1.md`, `README.md` and `CHANGELOG.md` in the same change.
+- Versioning is semver through git tags (`vX.Y.Z`; the binary reports `git describe`). After each finished feature or fix is committed, cut a release with `just release` so every update is tagged and pushed.

@@ -105,6 +105,8 @@ just test               # go test -race -count=1 ./...
 just test tparse        # or gotestsum, gotestfmt
 just test-one ./internal/config TestLoad
 just check              # gofmt check, lint, test, build: run before committing
+just release -n         # dry run of a release: version bump inferred from CHANGELOG.md
+just release            # gate, bump, date the changelog, commit, tag vX.Y.Z, push main + tag
 just manpage            # man/audit.1 from man/audit.1.md
 just cover              # coverage.html
 ```

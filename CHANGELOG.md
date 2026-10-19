@@ -40,6 +40,7 @@ The project is renamed from `sysaudit` to `audit` and restructured around saved,
 - Check `runtime.outdated` (from the runtime cache). `runtime.drift` now covers pnpm globals after a node major change (audit remembers the major they were installed under), is a notice for uv and pnpm, and hints at `audit packages runtimes migrate`.
 - `packages.json` in the export carries the runtimes; `updates.json` items carry `kind` (`package`, `runtime`, `migration`).
 - Export files for dashboards and scripts: `summary.json`, `<command>.json`, `tasks.json` and `updates.json` in `export.dir` (default `$XDG_DATA_HOME/audit/export`), versioned with `schema_version`, written atomically after every command that saves something (also when it then fails) and on demand with `audit export [-d DIR]`. Raw scanner data and update command output are not exported. Config `export.enabled` and `export.dir`.
+- `just release [patch|minor|major]` (`tools/release`): semver bump inferred from this file, dated section, `Release vX.Y.Z` commit, annotated tag, atomic push of `main` and the tag.
 - A `justfile` with `build`, `run`, `install`, `test` (runner argument), `test-one`, `cover`, `lint`, `vet`, `fmt`, `fmt-check`, `check`, `manpage` and `clean`.
 
 ### Changed
