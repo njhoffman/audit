@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -15,12 +17,15 @@ import (
 )
 
 // ghOnly runs git for real and answers gh: the user is "me", and GitHub
-// says me/tool moved to me/tool2.
+// knows every repo asked about under its own name except those in moves.
 type ghOnly struct {
-	mu   sync.Mutex
-	real exec.Runner
-	gh   []string
+	mu    sync.Mutex
+	real  exec.Runner
+	gh    []string
+	moves map[string]string
 }
+
+var graphqlRepo = regexp.MustCompile(`(r\d+): repository\(owner: "([^"]+)", name: "([^"]+)"\)`)
 
 func (g *ghOnly) Run(ctx context.Context, name string, args []string, opts exec.Options) exec.Result {
 	if name != "gh" {
@@ -33,8 +38,16 @@ func (g *ghOnly) Run(ctx context.Context, name string, args []string, opts exec.
 	case len(args) > 1 && args[0] == "api" && args[1] == "user":
 		return exec.Result{Stdout: "me\n"}
 	case len(args) > 1 && args[0] == "api" && args[1] == "graphql":
-		return exec.Result{Stdout: `{"data":{"r0":{"nameWithOwner":"me/tool2","defaultBranchRef":{"name":"main"},` +
-			`"repositoryTopics":{"nodes":[{"topic":{"name":"cli"}}]}}}}`}
+		var parts []string
+		for _, m := range graphqlRepo.FindAllStringSubmatch(strings.Join(args, " "), -1) {
+			full := m[2] + "/" + m[3]
+			if to, ok := g.moves[full]; ok {
+				full = to
+			}
+			parts = append(parts, fmt.Sprintf(`%q:{"nameWithOwner":%q,"defaultBranchRef":{"name":"main"},`+
+				`"repositoryTopics":{"nodes":[{"topic":{"name":"cli"}}]}}`, m[1], full))
+		}
+		return exec.Result{Stdout: `{"data":{` + strings.Join(parts, ",") + `}}`}
 	}
 	return exec.Result{Code: exec.ExitNotFound}
 }
@@ -106,7 +119,7 @@ func runRepos(t *testing.T, g *ghOnly, args ...string) result {
 
 func TestReposScanAndFilters(t *testing.T) {
 	home := reposEnv(t)
-	g := &ghOnly{real: exec.NewOSRunner(exec.FromOS())}
+	g := &ghOnly{real: exec.NewOSRunner(exec.FromOS()), moves: map[string]string{"me/tool": "me/tool2"}}
 	r := runRepos(t, g, "repos", "-l")
 	if r.e == nil {
 		t.Fatal("--list with no saved run must fail")
@@ -164,5 +177,109 @@ func TestReposScanAndFilters(t *testing.T) {
 	var got map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(r.out), &got); err != nil || !strings.Contains(r.out, `"cli"`) {
 		t.Errorf("GitHub topics become tags:\n%s", r.out)
+	}
+}
+
+// syncEnv makes two clones of bare upstreams whose GitHub-looking URLs map to
+// local paths through url.insteadOf: me/behind is one commit behind, me/ahead
+// one ahead, and me/moved lives at the wrong ghq path.
+func syncEnv(t *testing.T) (home string) {
+	t.Helper()
+	if _, err := osexec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	cfgHome, _ := env(t)
+	home = t.TempDir()
+	t.Setenv("HOME", home)
+	bare := filepath.Join(home, "bare")
+	gitconfig := filepath.Join(home, ".gitconfig")
+	if err := os.WriteFile(gitconfig, []byte("[url \""+bare+"/\"]\n\tinsteadOf = https://github.com/\n[init]\n\tdefaultBranch = main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", gitconfig)
+	ghq := filepath.Join(home, "ghq", "github.com")
+	for _, name := range []string{"behind", "ahead", "moved"} {
+		up := filepath.Join(bare, "me", name+".git")
+		gitIn(t, home, "init", "-q", "--bare", up)
+		seed := filepath.Join(home, "seed", name)
+		gitIn(t, home, "clone", "-q", "https://github.com/me/"+name+".git", seed)
+		if err := os.WriteFile(filepath.Join(seed, "f"), []byte("1"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, seed, "add", ".")
+		gitIn(t, seed, "commit", "-q", "-m", "one")
+		gitIn(t, seed, "push", "-q", "origin", "main")
+		dest := filepath.Join(ghq, "me", name)
+		if name == "moved" {
+			dest = filepath.Join(ghq, "old", name)
+		}
+		gitIn(t, home, "clone", "-q", "https://github.com/me/"+name+".git", dest)
+		switch name {
+		case "behind":
+			if err := os.WriteFile(filepath.Join(seed, "f"), []byte("2"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			gitIn(t, seed, "commit", "-q", "-am", "two")
+			gitIn(t, seed, "push", "-q", "origin", "main")
+		case "ahead":
+			if err := os.WriteFile(filepath.Join(dest, "f"), []byte("local"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			gitIn(t, dest, "commit", "-q", "-am", "local")
+		}
+	}
+	if err := os.RemoveAll(filepath.Join(home, "seed")); err != nil {
+		t.Fatal(err)
+	}
+	links := filepath.Join(home, "git")
+	if err := os.MkdirAll(links, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(ghq, "old", "moved"), filepath.Join(links, "moved")); err != nil {
+		t.Fatal(err)
+	}
+	writeConfig(t, cfgHome, "github_user: me\nrepos: {roots: ["+filepath.Join(home, "ghq")+"], link_dirs: ["+links+"], ghq_root: "+
+		filepath.Join(home, "ghq")+"}\n")
+	return home
+}
+
+func TestReposSync(t *testing.T) {
+	home := syncEnv(t)
+	g := &ghOnly{real: exec.NewOSRunner(exec.FromOS())}
+	ghq := filepath.Join(home, "ghq", "github.com")
+	r := runRepos(t, g, "repos", "sync", "-N", "-p", "-m")
+	if r.e != nil {
+		t.Fatal(r.e, r.err)
+	}
+	for _, want := range []string{"fast-forward:github.com/me/behind", "push:github.com/me/ahead", "move:github.com/me/moved", "relink:github.com/me/moved"} {
+		if !strings.Contains(r.out, want) {
+			t.Errorf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if r := runRepos(t, g, "repos", "sync", "-p", "-m"); r.e == nil || !strings.Contains(r.e.Error(), "refusing to update without --yes") {
+		t.Errorf("no terminal: %v", r.e)
+	}
+	r = runRepos(t, g, "repos", "sync", "-y", "-p", "-m")
+	if r.e != nil || !strings.Contains(r.out, "4 updated, 0 failed") {
+		t.Fatalf("sync: %v\n%s\n%s", r.e, r.out, r.err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(ghq, "me", "behind", "f")); string(b) != "2" { // #nosec G304 -- test file
+		t.Errorf("not fast-forwarded: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(ghq, "me", "moved", ".git")); err != nil {
+		t.Errorf("not moved: %v", err)
+	}
+	if target, _ := os.Readlink(filepath.Join(home, "git", "moved")); target != filepath.Join(ghq, "me", "moved") {
+		t.Errorf("link not repointed: %s", target)
+	}
+	r = runRepos(t, g, "repos", "sync", "-N")
+	if r.e != nil || !strings.Contains(r.out, "Nothing to sync.") {
+		t.Errorf("after the sync: %v\n%s", r.e, r.out)
+	}
+	if r := runRepos(t, g, "repos", "sync", "-L"); r.e != nil || !strings.Contains(r.out, "4 updated") {
+		t.Errorf("--last: %v\n%s", r.e, r.out)
+	}
+	if r := runRepos(t, g, "repos", "sync", "-N", "nope"); r.e == nil {
+		t.Error("unknown repo")
 	}
 }

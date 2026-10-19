@@ -3,12 +3,14 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/njhoffman/audit/internal/core"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/repos"
 	"github.com/njhoffman/audit/internal/run"
@@ -49,7 +51,7 @@ last fetch, which the list shows. --tag, --find, --owner, --dirty and
 	fl.BoolVarP(&q.Outdated, "outdated", "u", false, "list only repos behind their upstream (implies --list)")
 	f.impliesList = func() bool { return !q.Empty() }
 	f.jsonExtra = func(ctx context.Context, r *run.Run) (any, error) { return a.repoItems(ctx, r, q) }
-	c.AddCommand(newReposRefreshCmd(a), newReposTagCmd(a), newReposInfoCmd(a))
+	c.AddCommand(newReposRefreshCmd(a), newReposSyncCmd(a), newReposTagCmd(a), newReposInfoCmd(a))
 	return c
 }
 
@@ -239,4 +241,102 @@ func newReposInfoCmd(a *app) *cobra.Command {
 	}
 	c.Flags().BoolVarP(&asJSON, "json", "j", false, "print the repo as JSON")
 	return c
+}
+
+type syncFlags struct {
+	dryRun, yes, push, move, offline, stopOnError, last, json, explain bool
+}
+
+func newReposSyncCmd(a *app) *cobra.Command {
+	var f syncFlags
+	c := &cobra.Command{
+		Use:   "sync [repo...]",
+		Short: "Fast-forward clean repos and apply GitHub renames",
+		Long: `Fetch every repo (unless --offline), refresh stale GitHub data, then plan:
+
+  set-url        origin's new URL after GitHub reports a rename or transfer
+                 (same form: ssh stays ssh)
+  set-head       origin/HEAD after the default branch was renamed, and when
+                 you are on the old branch and the tree is clean, rename it
+                 and track the new upstream
+  fast-forward   git merge --ff-only for clean repos on a branch behind its
+                 upstream
+  push           with --push, git push for your own repos that are only ahead
+  move           with --move, clones under the ghq root moved to their
+                 host/owner/name path, and links in repos.link_dirs repointed
+
+Nothing is merged, rebased, stashed or force-pushed: repos with local
+changes, an operation in progress or diverged history are listed with the
+reason and left alone. The plan is confirmed like a package update (--yes,
+--dry-run), each step is checked against a rescan, and the results are
+saved; --last shows the last sync.`,
+		RunE: func(c *cobra.Command, args []string) error {
+			if err := a.load(); err != nil {
+				return err
+			}
+			if f.last {
+				if len(args) > 0 || f.dryRun || f.yes {
+					return errors.New("--last takes no repos, --dry-run or --yes")
+				}
+				return a.lastUpdate(c.Context(), f.json, f.explain, repos.KindSync)
+			}
+			return a.syncRepos(c.Context(), args, f)
+		},
+	}
+	fl := c.Flags()
+	fl.BoolVarP(&f.dryRun, "dry-run", "N", false, "print the plan and the commands it would run, then stop")
+	fl.BoolVarP(&f.yes, "yes", "y", false, "sync without asking")
+	fl.BoolVarP(&f.push, "push", "p", false, "also push your own repos that are only ahead of their upstream")
+	fl.BoolVarP(&f.move, "move", "m", false, "also move clones to their ghq path and repoint links")
+	fl.BoolVarP(&f.offline, "offline", "o", false, "plan from the last fetch instead of fetching first")
+	fl.BoolVarP(&f.stopOnError, "stop-on-error", "x", false, "skip the remaining steps after the first failure")
+	fl.BoolVarP(&f.last, "last", "L", false, "show the last sync; change nothing")
+	fl.BoolVarP(&f.json, "json", "j", false, "print the plan (with --dry-run) or the sync as JSON")
+	fl.BoolVarP(&f.explain, "explain", "e", false, "ask the AI why the failed steps failed")
+	c.MarkFlagsMutuallyExclusive("explain", "json")
+	return c
+}
+
+func (a *app) syncRepos(ctx context.Context, refs []string, f syncFlags) error {
+	show := !f.json && !a.flags.quiet
+	s := a.reposScanner()
+	s.Fetch, s.Lookup = !f.offline, true
+	res, err := a.engine.Execute(ctx, s, a.progress(!f.json))
+	if err != nil {
+		return err
+	}
+	var d repos.Data
+	if err := json.Unmarshal(res.Run.Data, &d); err != nil {
+		return fmt.Errorf("read repos: %w", err)
+	}
+	items, err := a.repoItems(ctx, res.Run, repos.Query{})
+	if err != nil {
+		return err
+	}
+	plan, unmatched := repos.PlanSync(items, repos.SyncOptions{Refs: refs, Push: f.push, Move: f.move,
+		GhqRoot: s.GhqRoot, Links: d.Links, User: s.User})
+	if len(unmatched) > 0 {
+		return fmt.Errorf("no repo matches %s", strings.Join(unmatched, ", "))
+	}
+	ok, err := a.planGate(plan, runtimeFlags{dryRun: f.dryRun, yes: f.yes, json: f.json}, "Run %d sync step(s)?", "Nothing to sync.")
+	if !ok || err != nil {
+		return err
+	}
+	u := &packages.Update{Host: a.engine.Host, StartedAt: timeNow()}
+	u.Items = a.execPlan(ctx, s.FetchEnv(), plan, "syncing repos", f.stopOnError, !f.json, show)
+	if ctx.Err() == nil {
+		s2 := a.reposScanner()
+		if res2, err := a.engine.Execute(ctx, s2, a.progress(!f.json)); err != nil {
+			a.log.Warn("rescan after the sync", "err", err)
+		} else {
+			var after repos.Data
+			if err := json.Unmarshal(res2.Run.Data, &after); err == nil {
+				repos.VerifySync(u.Items, after.Repos)
+			}
+		}
+	}
+	if err := a.finishUpdate(ctx, u, f.json); err != nil {
+		return err
+	}
+	return a.failedErr(ctx, u, "sync step", f.explain)
 }

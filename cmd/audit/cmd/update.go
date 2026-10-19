@@ -336,11 +336,17 @@ func (a *app) printPlan(plan packages.Plan, dryRun bool) {
 			}
 			rows[i] = []string{it.Manager + ":" + it.Name, it.Version, it.Latest, action}
 		}
-		from, to := "INSTALLED", "LATEST"
-		if !slices.ContainsFunc(plan.Items, func(it packages.Planned) bool { return it.Kind != packages.KindMigration }) {
-			from, to = "RUNS ON", "MOVES TO"
+		first, from, to := "PACKAGE", "INSTALLED", "LATEST"
+		only := func(kind string) bool {
+			return !slices.ContainsFunc(plan.Items, func(it packages.Planned) bool { return it.Kind != kind })
 		}
-		p.Table([]string{"PACKAGE", from, to, head}, rows)
+		switch {
+		case only(packages.KindMigration):
+			from, to = "RUNS ON", "MOVES TO"
+		case only("sync"):
+			first, from, to = "STEP", "FROM", "TO"
+		}
+		p.Table([]string{first, from, to, head}, rows)
 	}
 	runnable := len(plan.Runnable())
 	msg := fmt.Sprintf("%d to update, %d skipped.", runnable, len(plan.Items)-runnable)

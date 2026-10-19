@@ -37,6 +37,10 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **repos** **refresh** [**-F**] [**-N**] [**-j**|**-l**]
 
+**audit** **repos** **sync** [**-N**] [**-y**] [**-p**] [**-m**] [**-o**] [**-x**] [**-j**|**-e**] [_repo_...]
+
+**audit** **repos** **sync** **-L** [**-j**|**-e**]
+
 **audit** **repos** **tag** [**-d**] _repo_ _tag_...
 
 **audit** **repos** **info** [**-j**] _repo_
@@ -117,6 +121,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **repos refresh**
 :   Runs **git fetch \-\-all \-\-prune** in every repo with a remote (**repos.concurrency** at a time, **repos.fetch_timeout** each, with **GIT_TERMINAL_PROMPT=0** and ssh in batch mode so nothing prompts), asks GitHub about the github.com repos through **gh api graphql** (50 per request; entries younger than **repos.meta_max_age** are reused unless **-F**), then saves a fresh scan. **-N** skips the fetch.
+
+**repos sync** [_repo_...]
+:   Fetches every repo (unless **-o**), refreshes stale GitHub data, and plans, per repo: **set-url** (origin's new URL after GitHub reports a rename or transfer, in the same form), **set-head** (**git remote set-head origin \-\-auto** after the default branch was renamed, and when you are on the old branch with no operation in progress, **git branch -m** _old_ _new_ and the new upstream), **fast-forward** (**git merge \-\-ff-only** for clean repos on a branch behind its upstream), **push** (with **-p**, **git push** for your own repos that are only ahead) and **move** (with **-m**, a clone under the ghq root moved to its host/owner/name path, never onto a taken one, and links in **repos.link_dirs** repointed). Nothing is merged, rebased, stashed or force-pushed: repos with local changes, an operation in progress or diverged history are listed with the reason and left alone. The plan is confirmed like **packages update** (**-y**, **-N**, **-x**); each step is checked against a rescan, results are saved (**-L** shows the last sync) and **-e** explains failures with AI.
 
 **repos tag** _repo_ _tag_...
 :   Adds tags to a repo, or removes them with **-d**. A _repo_ is its path, host/owner/name, owner/name or name when unambiguous.

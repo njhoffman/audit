@@ -87,9 +87,9 @@ func (*ReposScanner) Command() string { return repos.Command }
 // Scope implements Scanner.
 func (*ReposScanner) Scope() string { return "" }
 
-// fetchEnv keeps git from prompting for credentials or host keys in the
+// FetchEnv keeps git from prompting for credentials or host keys in the
 // background.
-func (s *ReposScanner) fetchEnv() *exec.Env {
+func (s *ReposScanner) FetchEnv() *exec.Env {
 	vars := map[string]string{"GIT_TERMINAL_PROMPT": "0"}
 	if s.Env.Get("GIT_SSH_COMMAND") == "" {
 		vars["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
@@ -149,7 +149,7 @@ func (s *ReposScanner) Scan(ctx context.Context, rep progress.Reporter) (*Outcom
 	var errs []string
 	if s.Fetch {
 		rep.Phase("fetching", len(paths))
-		errs = append(errs, FetchAll(ctx, s.fetchEnv(), paths, s.Concurrency, s.FetchTimeout, func(p string) { rep.Step(filepath.Base(p)) })...)
+		errs = append(errs, FetchAll(ctx, s.FetchEnv(), paths, s.Concurrency, s.FetchTimeout, func(p string) { rep.Step(filepath.Base(p)) })...)
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit repos sync [repo...]`: fetches (unless `-o/--offline`), then plans per repo `set-url` after a GitHub rename or transfer (same URL form), `set-head` plus a local branch rename and new upstream after a default-branch rename, `fast-forward` (`git merge --ff-only`) for clean repos behind their upstream, `push` for your own repos that are only ahead (`-p/--push`) and `move` to the ghq path with links repointed (`-m/--move`, never onto a taken path). Dirty, mid-operation and diverged repos are listed with the reason and left alone. Confirmed and verified like package updates (`-y`, `-N`, `-x`, `-j`, `-e`); results are saved and `-L/--last` shows them.
+
 ## [0.5.0] - 2026-10-19
 
 ### Added
