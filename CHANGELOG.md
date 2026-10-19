@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-19
+
 ### Added
 
 - `packages` phase 5a: apt, snap and flatpak managers (on by default). apt inventories manually installed packages plus anything upgradable (`dpkg-query`, `apt-mark`, `apt list --upgradable` over the cached lists), snap uses `snap refresh --list`, flatpak covers system and user installations with `flatpak remote-ls --updates`. Scans never use sudo. Pending updates show in LATEST and `--outdated` and count as `registry.outdated` (gap `update` when the versions do not say how far), never as major.
