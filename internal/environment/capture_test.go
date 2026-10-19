@@ -113,7 +113,9 @@ func TestCaptureDurationExcludesBackgroundJobs(t *testing.T) {
 		}
 	}
 	home := t.TempDir()
-	writeFile(t, filepath.Join(home, ".bash_profile"), "sleep 3 &\n")
+	// The job outlives any plausible start-up by a wide margin, so a loaded
+	// machine (tests run in parallel under -race) cannot blur the two.
+	writeFile(t, filepath.Join(home, ".bash_profile"), "sleep 5 &\n")
 	env := &exec.Env{Vars: map[string]string{"HOME": home, "PATH": filepath.Dir(bash) + ":/usr/bin:/bin"}, Home: home}
 	env.Runner = exec.NewOSRunner(env)
 	c := &OSCapturer{Env: env, Timeout: 10 * time.Second}
@@ -123,7 +125,7 @@ func TestCaptureDurationExcludesBackgroundJobs(t *testing.T) {
 		if got.Code != 0 || got.TimedOut || got.Err != "" {
 			t.Fatalf("%s: capture failed: %+v", mode, got)
 		}
-		if got.Duration <= 0 || got.Duration > 900*time.Millisecond {
+		if got.Duration <= 0 || got.Duration > 2500*time.Millisecond {
 			t.Errorf("%s: duration %s should exclude the background job", mode, got.Duration)
 		}
 	}
