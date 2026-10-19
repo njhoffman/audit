@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-19
+
 ### Added
 
 - `packages` phase 5b: loose binaries (`bins` manager, on by default) are the regular executables in `packages.scan_dirs`, with kind `elf` or `script`. `audit packages bins` lists them; `bins track NAME OWNER/REPO[:ASSET-GLOB] [-s VERSION]` records a GitHub origin (version from `NAME --version` unless given) and looks the latest release up; `bins untrack NAME`; `bins install NAME [-r TAG] [-k] [-F]` downloads the asset with `gh release download`, verifies its sha256 (GitHub digest or the release's checksum file; refused without one unless `-k`), unpacks tar/zip/gzip in process (tar.xz and tar.zst through `tar`, members kept inside the work dir), replaces the binary atomically and keeps the old one under `<data_dir>/bins/`. Tracked binaries get registry lookups and are planned by `packages update`.
