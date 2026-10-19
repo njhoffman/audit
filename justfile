@@ -31,6 +31,8 @@ check: fmt-check lint test build
 # Flags: -n dry run, --no-push, --allow-major (leave 0.x).
 release *args: check
     go run ./tools/release {{ args }}
+    @# Rebuild the installed binary from the new tag (a dry run changes nothing).
+    @if ! printf '%s\n' {{ args }} | grep -qx -- -n; then just install && echo "installed $(command -v audit || echo "$(go env GOPATH)/bin/audit")"; fi
 
 # Build bin/audit.
 build:

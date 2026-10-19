@@ -18,7 +18,7 @@ Planned commands not yet built: `repos`, `files`, `configs`, `scripts`, `ai`.
 - `just manpage` — render `man/audit.1` from `man/audit.1.md`.
 - The justfile exports `GOTOOLCHAIN=local` so the system Go is used.
 - Pre-commit gate: `just check` (gofmt check, lint, test, build).
-- `just release [patch|minor|major]` — run the gate, then `tools/release`: bump from the CHANGELOG's Unreleased headings (Removed or BREAKING major, Added/Changed/Deprecated minor, else patch; before 1.0 a major bump moves the minor unless `--allow-major`), date the section, commit `Release vX.Y.Z`, annotated tag, `git push --atomic origin main vX.Y.Z`. `-n` is a dry run.
+- `just release [patch|minor|major]` — run the gate, then `tools/release`: bump from the CHANGELOG's Unreleased headings (Removed or BREAKING major, Added/Changed/Deprecated minor, else patch; before 1.0 a major bump moves the minor unless `--allow-major`), date the section, commit `Release vX.Y.Z`, annotated tag, `git push --atomic origin main vX.Y.Z`, then `just install` so the binary on PATH (`$(go env GOPATH)/bin/audit`) is the new version. `-n` is a dry run.
 
 ## Architecture
 

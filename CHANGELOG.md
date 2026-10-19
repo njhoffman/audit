@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `just release` reinstalls the binary (`just install`) after pushing the tag, so `audit` on PATH is always the latest release.
+
 ## [0.9.0] - 2026-10-19
 
 ### Added
