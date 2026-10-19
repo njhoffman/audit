@@ -23,6 +23,7 @@ import (
 	"github.com/njhoffman/audit/internal/progress"
 	"github.com/njhoffman/audit/internal/registry"
 	"github.com/njhoffman/audit/internal/render"
+	"github.com/njhoffman/audit/internal/repos"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/store"
 	"github.com/njhoffman/audit/internal/todo"
@@ -176,6 +177,11 @@ func (a *app) export(ctx context.Context, dir string) error {
 			var d packages.Data
 			if err := json.Unmarshal(r.Data, &d); err == nil {
 				in.Runtimes = d.Runtimes
+			}
+		}
+		if c == repos.Command {
+			if in.Repos, err = a.repoItems(ctx, r, repos.Query{}); err != nil {
+				return err
 			}
 		}
 	}

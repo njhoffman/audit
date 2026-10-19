@@ -33,6 +33,14 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **packages** **tag** [**-d**] [**-j**] [_package_ [_tag_...]]
 
+**audit** **repos** [_scan options_] [**-t** _tag_]... [**-f** _text_] [**-O** _owner_] [**-d**] [**-u**]
+
+**audit** **repos** **refresh** [**-F**] [**-N**] [**-j**|**-l**]
+
+**audit** **repos** **tag** [**-d**] _repo_ _tag_...
+
+**audit** **repos** **info** [**-j**] _repo_
+
 **audit** **todo** [**show**|**set**|**note**|**add**|**rm**|**explain**] ...
 
 **audit** **analyze** [**-t**] [**-A**] [**-L** _level_] [**-j**]
@@ -101,6 +109,20 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 :   Without arguments, lists every tag with how many packages carry it and where the tags came from. With a package, shows its tags; with tags, adds them as user tags, or removes them with **-d**. Automatic tags (the manager, the runtime, **git**, **local** and **mine** for repositories owned by **github_user**) are derived and cannot be removed. Tags are lowercased with words joined by dashes.
 
     A _package_ is a name or Go module path, or _manager_**:**_name_ when the name is ambiguous.
+
+**repos**
+:   Finds the git repositories under **repos.roots** (by default the ghq root and home, up to **repos.max_depth** directories deep, skipping **repos.exclude**: plugin managers' checkouts, caches, node_modules, vendor) and inspects each with local git commands only; ahead and behind are as of the repo's last fetch, which the list shows. Remote URLs are saved without credentials. Checks: **repo.operation** (a merge, rebase, cherry-pick, revert or bisect in progress, or conflicts; warning), **repo.dirty** (uncommitted changes; notice), **repo.unpushed** (commits not on the upstream; notice), **repo.no_remote** (not backed up; notice), **repo.duplicate** (the same remote cloned twice; warning), **repo.behind**, **repo.untracked**, **repo.stash**, **repo.no_upstream**, **repo.detached**, **repo.stale_fetch** (older than **repos.stale_fetch**) and **repo.layout** (a clone under the ghq root away from its host/owner/name path), each info and grouped into one task, **repo.error**, and **links.broken** for symlinks in **repos.link_dirs** that point nowhere. From the GitHub cache: **repo.missing** (deleted or private; warning), **repo.moved** (renamed or transferred), **repo.default_branch** (renamed, e.g. master to main) and **repo.archived**.
+
+    The list (**\-\-list**) shows each repo's slug (or path), branch, state, last commit, last fetch and tags. Your repos (owner **github_user**, detected through **gh** and remembered) are highlighted and tagged **mine**, others' **others**; automatic tags also cover the host, the main language (by file extension), **local** for repos without a remote, and from GitHub **fork**, **archived** and the repo's topics. **-t**, **-f**, **-O** (**mine**, **others** or an owner), **-d** (local work: changes, untracked files, stashes or unpushed commits) and **-u** (behind upstream) filter the list and imply **\-\-list**.
+
+**repos refresh**
+:   Runs **git fetch \-\-all \-\-prune** in every repo with a remote (**repos.concurrency** at a time, **repos.fetch_timeout** each, with **GIT_TERMINAL_PROMPT=0** and ssh in batch mode so nothing prompts), asks GitHub about the github.com repos through **gh api graphql** (50 per request; entries younger than **repos.meta_max_age** are reused unless **-F**), then saves a fresh scan. **-N** skips the fetch.
+
+**repos tag** _repo_ _tag_...
+:   Adds tags to a repo, or removes them with **-d**. A _repo_ is its path, host/owner/name, owner/name or name when unambiguous.
+
+**repos info** _repo_
+:   Shows the saved state, GitHub data and tags of one repo.
 
 **todo**
 :   Lists open and in-progress tasks. Subcommands: **show** _ID_, **set** _ID_ _STATUS_ [**-N** _note_], **note** _ID_ _TEXT_, **add** _TITLE_ [**-p** _priority_] [**-C** _command_] [**-H** _hint_] [**-N** _note_], **rm** _ID_ (manual tasks only), and **explain** _ID_ [**-A**] [**-L** _level_] [**-j**], which sends the task with every detail of the saved findings behind it to the AI CLI and prints the likely cause, whether it matters, the fix and how to confirm it. **e** in the task editor does the same for the selected task.
@@ -323,7 +345,7 @@ The export directory (**export.dir**, by default **~/.local/share/audit/export/*
 :   One row per scanning command under **commands**: **command**, **file** (its own export file, absent when it never ran), **freshness** (**fresh**, **stale**, **old** or **none**, graded at **generated_at**), **stale_after_seconds** and **old_after_seconds** to regrade it later, **last_run** (**id**, **scope**, **started_at**, **finished_at**, **findings** counted by severity, **ignored**, **errors**) and **open_tasks** by priority. Then **open_tasks** totals and **last_update** (**id**, **finished_at**, **updated**, **failed**, **skipped**) once a package update has run.
 
 _command_**.json**
-:   The command's latest full run under **run**, with its findings and errors but without the scanner's raw data, which can hold environment values. **packages.json** adds the annotated inventory as **packages**, as **audit packages \-\-json** prints it, and the runtimes as **runtimes**, as **audit packages runtimes \-\-json** prints them.
+:   The command's latest full run under **run**, with its findings and errors but without the scanner's raw data, which can hold environment values. **repos.json** adds the annotated repo list as **repos**. **packages.json** adds the annotated inventory as **packages**, as **audit packages \-\-json** prints it, and the runtimes as **runtimes**, as **audit packages runtimes \-\-json** prints them.
 
 **tasks.json**
 :   Every task under **tasks**, closed ones included.
@@ -387,6 +409,17 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     export:
       enabled: true            # rewrite the export files after commands that save
       dir: ""                  # empty: <data_dir>/export; ~ is expanded
+    repos:
+      roots: [~/ghq, "~"]
+      max_depth: 4
+      exclude: [~/.zinit, ~/.cache, ~/.local/share, ~/.local/state, ~/.cargo, ~/.rustup,
+                ~/go/pkg, ~/.npm, ~/snap, ~/.vscode, '**/node_modules', '**/vendor']
+      link_dirs: [~/git]
+      ghq_root: ""             # empty: git config ghq.root, else ~/ghq
+      concurrency: 8
+      fetch_timeout: 2m
+      stale_fetch: 720h
+      meta_max_age: 168h
 
 Keys can also be set as **AUDIT_**_KEY_ environment variables, with dots as underscores (**AUDIT_STALE_WARN=12h**).
 

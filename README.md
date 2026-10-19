@@ -19,6 +19,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit packages runtimes update` / `migrate` | update uv pythons, pnpm's node and rustup toolchains (same line by default, `-m` for a new python minor or node LTS); reinstall packages onto the current runtime, then offer to trash stale runtime dirs |
 | `audit packages bins` | loose binaries in `packages.scan_dirs`; `bins track NAME OWNER/REPO[:GLOB]` records a GitHub origin, then `packages update` (or `bins install`) keeps it at the latest release: `gh release download`, sha256 check, atomic replace, backup |
 | `audit packages info` / `tag` | one package's cached details; list, add or remove tags |
+| `audit repos` | git repositories under the ghq root and home: uncommitted changes, unpushed commits, stashes, behind/no upstream, operations in progress, no remote, duplicates, ghq layout, broken `~/git` links; yours vs others, language and GitHub topics as tags; `refresh` fetches all and reads GitHub data (renamed, default branch, archived, deleted) through `gh api graphql` |
 | `audit todo` | the tasks scans create, plus tasks added by hand; `todo explain ID` asks the AI about one |
 | `audit analyze` | AI review across every command's saved results, open tasks and failed updates; `-t` files AI suggestions as tasks |
 | `audit history` | saved runs |

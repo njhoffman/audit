@@ -10,6 +10,7 @@ import (
 
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/packages"
+	"github.com/njhoffman/audit/internal/repos"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/todo"
 )
@@ -294,5 +295,27 @@ func TestTrackedBins(t *testing.T) {
 	}
 	if ok, _ := s.DeleteTrackedBin(ctx, "bat"); ok {
 		t.Error("deleting twice")
+	}
+}
+
+func TestRepoMetaAndTags(t *testing.T) {
+	s := open(t)
+	at := time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)
+	if err := s.SaveRepoMeta(ctx, []repos.Meta{{Key: "github.com/o/r", Topics: []string{"cli"}, Moved: "o/r2", CheckedAt: at}}); err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.RepoMeta(ctx)
+	if err != nil || m["github.com/o/r"].Moved != "o/r2" || m["github.com/o/r"].Topics[0] != "cli" || !m["github.com/o/r"].CheckedAt.Equal(at) {
+		t.Errorf("meta: %+v %v", m, err)
+	}
+	if err := s.SetRepoTags(ctx, "github.com/o/r", []string{"work", "go"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetRepoTags(ctx, "github.com/o/r", []string{"go"}, true); err != nil {
+		t.Fatal(err)
+	}
+	tags, err := s.RepoTags(ctx)
+	if err != nil || len(tags["github.com/o/r"]) != 1 || tags["github.com/o/r"][0] != "work" {
+		t.Errorf("tags: %v %v", tags, err)
 	}
 }

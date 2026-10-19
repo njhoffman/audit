@@ -31,6 +31,28 @@ type Config struct {
 	Packages    PackagesConfig    `mapstructure:"packages" yaml:"packages"`
 	Environment EnvironmentConfig `mapstructure:"environment" yaml:"environment"`
 	Export      ExportConfig      `mapstructure:"export" yaml:"export"`
+	Repos       ReposConfig       `mapstructure:"repos" yaml:"repos"`
+}
+
+// ReposConfig configures the repos scanner.
+type ReposConfig struct {
+	// Roots are walked for repositories up to MaxDepth levels deep.
+	Roots    []string `mapstructure:"roots" yaml:"roots"`
+	MaxDepth int      `mapstructure:"max_depth" yaml:"max_depth"`
+	// Exclude are directories never descended into: paths, or **/NAME for
+	// any directory called NAME.
+	Exclude []string `mapstructure:"exclude" yaml:"exclude"`
+	// LinkDirs hold symlinks to repos (like ~/git); broken ones are reported.
+	LinkDirs []string `mapstructure:"link_dirs" yaml:"link_dirs"`
+	// GhqRoot is where ghq keeps host/owner/name clones; empty asks git
+	// config ghq.root and falls back to ~/ghq.
+	GhqRoot      string        `mapstructure:"ghq_root" yaml:"ghq_root"`
+	Concurrency  int           `mapstructure:"concurrency" yaml:"concurrency"`
+	FetchTimeout time.Duration `mapstructure:"fetch_timeout" yaml:"fetch_timeout"`
+	// StaleFetch is how old a last fetch may be before it is reported.
+	StaleFetch time.Duration `mapstructure:"stale_fetch" yaml:"stale_fetch"`
+	// MetaMaxAge is how long cached GitHub data is reused.
+	MetaMaxAge time.Duration `mapstructure:"meta_max_age" yaml:"meta_max_age"`
 }
 
 // ExportConfig configures the JSON snapshots written for other programs.
@@ -208,7 +230,11 @@ var (
 	DefaultPrograms = []string{"sshd", "nginx", "postgres", "apache", "docker", "cron"}
 	DefaultManagers = []string{"uv", "pnpm", "cargo", "go", "gem", "gh", "apt", "snap", "flatpak", "bins"}
 	DefaultScanDirs = []string{"~/.local/bin"}
-	DefaultTags     = []string{
+	// DefaultReposExclude skips checkouts other tools manage and dependency
+	// trees.
+	DefaultReposExclude = []string{"~/.zinit", "~/.cache", "~/.local/share", "~/.local/state", "~/.cargo", "~/.rustup",
+		"~/go/pkg", "~/.npm", "~/snap", "~/.vscode", "**/node_modules", "**/vendor"}
+	DefaultTags = []string{
 		"cli", "tui", "gui", "library", "lsp", "formatter", "linter", "compiler", "build", "testing", "debugging",
 		"profiling", "docs", "git", "github", "http", "network", "database", "cloud", "container", "kubernetes",
 		"security", "crypto", "shell", "terminal", "editor", "files", "search", "text", "json", "yaml", "markdown",
@@ -279,6 +305,15 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("environment.shellcheck.exclude", []string{"SC2034"})
 	v.SetDefault("export.enabled", true)
 	v.SetDefault("export.dir", "")
+	v.SetDefault("repos.roots", []string{"~/ghq", "~"})
+	v.SetDefault("repos.max_depth", 4)
+	v.SetDefault("repos.exclude", DefaultReposExclude)
+	v.SetDefault("repos.link_dirs", []string{"~/git"})
+	v.SetDefault("repos.ghq_root", "")
+	v.SetDefault("repos.concurrency", 8)
+	v.SetDefault("repos.fetch_timeout", 2*time.Minute)
+	v.SetDefault("repos.stale_fetch", 30*24*time.Hour)
+	v.SetDefault("repos.meta_max_age", 7*24*time.Hour)
 }
 
 // Load reads the config. explicit, when non-empty, must exist; otherwise the
@@ -351,6 +386,10 @@ func (c *Config) validate() error {
 		{"packages.registry.concurrency", float64(c.Packages.Registry.Concurrency)},
 		{"packages.registry.timeout", float64(c.Packages.Registry.Timeout)},
 		{"packages.update.timeout", float64(c.Packages.Update.Timeout)},
+		{"repos.max_depth", float64(c.Repos.MaxDepth)},
+		{"repos.concurrency", float64(c.Repos.Concurrency)},
+		{"repos.fetch_timeout", float64(c.Repos.FetchTimeout)},
+		{"repos.meta_max_age", float64(c.Repos.MetaMaxAge)},
 	}
 	for _, p := range positive {
 		if p.n <= 0 {
@@ -584,4 +623,20 @@ environment:
 export:
   enabled: true
   dir: ""   # empty means <data_dir>/export
+
+repos:
+  # Walked for git repositories, up to max_depth directories deep; a repo
+  # reached from two roots counts once.
+  roots: [~/ghq, "~"]
+  max_depth: 4
+  # Never descended into: paths, or **/NAME for any directory called NAME.
+  exclude: [~/.zinit, ~/.cache, ~/.local/share, ~/.local/state, ~/.cargo, ~/.rustup,
+            ~/go/pkg, ~/.npm, ~/snap, ~/.vscode, '**/node_modules', '**/vendor']
+  # Directories of symlinks to repos; broken links are reported.
+  link_dirs: [~/git]
+  ghq_root: ""          # empty: git config ghq.root, else ~/ghq
+  concurrency: 8        # repos inspected or fetched at once
+  fetch_timeout: 2m     # per git fetch
+  stale_fetch: 720h     # report repos not fetched for this long
+  meta_max_age: 168h    # reuse cached GitHub data this long
 `

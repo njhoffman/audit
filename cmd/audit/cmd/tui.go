@@ -100,6 +100,8 @@ func (a *app) defaultScanner(command string) (core.Scanner, error) {
 		return core.NewEnvironment(a.cfg, a.env)
 	case "packages":
 		return a.packagesScanner(nil)
+	case "repos":
+		return a.reposScanner(), nil
 	}
 	return nil, fmt.Errorf("unknown command %q", command)
 }

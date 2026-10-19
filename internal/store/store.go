@@ -126,6 +126,16 @@ CREATE TABLE IF NOT EXISTS runtime_meta (
 	data TEXT NOT NULL,
 	checked_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS repo_meta (
+	key TEXT PRIMARY KEY,
+	data TEXT NOT NULL,
+	checked_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS repo_tags (
+	key TEXT NOT NULL,
+	tag TEXT NOT NULL,
+	PRIMARY KEY (key, tag)
+);
 CREATE TABLE IF NOT EXISTS bins (
 	name TEXT PRIMARY KEY,
 	repo TEXT NOT NULL,

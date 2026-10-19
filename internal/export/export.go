@@ -88,6 +88,8 @@ type RunFile struct {
 	Run      *run.Run                 `json:"run"`
 	Packages any                      `json:"packages,omitempty"`
 	Runtimes []packages.RuntimeStatus `json:"runtimes,omitempty"`
+	// Repos is the annotated repo list, in repos.json.
+	Repos any `json:"repos,omitempty"`
 }
 
 // Tasks is tasks.json: every task, closed ones included.
@@ -118,6 +120,8 @@ type Input struct {
 	Packages any
 	// Runtimes are the runtime statuses added to packages.json.
 	Runtimes []packages.RuntimeStatus
+	// Repos is the annotated repo list added to repos.json.
+	Repos any
 }
 
 // Build turns in into the export files, by file name.
@@ -141,6 +145,9 @@ func Build(in Input) map[string]any {
 			rf := RunFile{Header: h, Run: withoutData(r)}
 			if c == packages.Command {
 				rf.Packages, rf.Runtimes = in.Packages, in.Runtimes
+			}
+			if c == "repos" {
+				rf.Repos = in.Repos
 			}
 			files[row.File] = rf
 		}
