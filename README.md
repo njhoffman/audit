@@ -90,12 +90,16 @@ AI features go through a local CLI picked by `ai.provider` (or `-I/--ai-provider
 
 ### Dashboard keys
 
+The defaults:
+
 | Screen | Keys |
 |---|---|
 | dashboard | `j`/`k` move, `enter` report, `r` rescan, `t` tasks, `q` quit |
-| report | `j`/`k`/`pgup`/`pgdn` scroll, `r` rescan, `esc` back |
-| tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `e` explain with AI, `/` find, `c` cycle command, `a` show closed, `esc` back |
+| report | `j`/`k`/`pgup`/`pgdn` scroll, `g`/`G` top and bottom, `r` rescan, `esc` back |
+| tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `e` explain with AI, `v` editor, `/` find, `c` cycle command, `a` show closed, `esc` back |
 | explanation | `j`/`k`/`pgup`/`pgdn` scroll, `r` ask again, `esc` back to tasks |
+
+Every action can be rebound, to as many keys as you like, under `tui.keys` in the config (`status_done: [d, x]`, `editor: []` to unbind); the help line follows the bindings. `man audit` (KEYS) lists the actions and the screens they work on.
 
 ## Configuration
 

@@ -48,6 +48,7 @@ internal/htmlreport/    self-contained HTML reports, index and tasks page
 internal/taskserver/    tasks page served on 127.0.0.1 with a status/note API (per-run token, loopback Host check)
 internal/export/        JSON snapshots in the export dir (documented contract: man audit, EXPORT FILES)
 internal/tui/           Bubble Tea dashboard, report viewer, task editor (Backend interface)
+internal/keys/          dashboard actions, their screens and default keys; validation of tui.keys
 internal/progress/      stderr progress bar / spinner
 internal/exec/          command runner with a Fake for tests
 internal/config/        viper loader, defaults and Template (kept in sync by a test); AUDIT_* env; XDG paths

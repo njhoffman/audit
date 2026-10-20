@@ -127,11 +127,32 @@ func TestLoadErrors(t *testing.T) {
 		"packages: {registry: {concurrency: 0}}", "packages: {registry: {timeout: 0s}}",
 		"packages: {registry: {unmaintained_after: -1h}}", "packages: {tags: [Has Space]}", "packages: {tags: [UPPER]}",
 		"packages: {update: {timeout: 0s}}", `packages: {update: {exclude: [""]}}`,
+		"tui: {keys: {qiut: [x]}}", "tui: {keys: {rescan: [ctrl+c]}}", "tui: {keys: {quit: [d]}}",
 	} {
 		write(t, bad, body)
 		if _, _, err := Load(bad); err == nil {
 			t.Errorf("invalid config %q must error", body)
 		}
+	}
+}
+
+func TestLoadKeys(t *testing.T) {
+	dir := isolate(t)
+	path := filepath.Join(dir, "k.yaml")
+	write(t, path, "tui: {keys: {quit: [Q, x], status_done: [D], editor: []}}")
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := cfg.TUI.Keys
+	if !reflect.DeepEqual(k["quit"], []string{"Q", "x"}) || !reflect.DeepEqual(k["status_done"], []string{"D"}) {
+		t.Errorf("overrides keep their case and replace the default list: %v %v", k["quit"], k["status_done"])
+	}
+	if len(k["editor"]) != 0 {
+		t.Errorf("[] unbinds: %v", k["editor"])
+	}
+	if !reflect.DeepEqual(k["bottom"], []string{"end", "G"}) || !reflect.DeepEqual(k["page_down"], []string{"pgdown", "f", " "}) {
+		t.Errorf("other actions keep their defaults: %v %v", k["bottom"], k["page_down"])
 	}
 }
 

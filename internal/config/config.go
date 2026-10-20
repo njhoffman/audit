@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+
+	"github.com/njhoffman/audit/internal/keys"
 )
 
 // Config is the merged view of defaults, the YAML file and AUDIT_* variables.
@@ -26,6 +28,7 @@ type Config struct {
 	Stale       StaleConfig       `mapstructure:"stale" yaml:"stale"`
 	Ignore      []string          `mapstructure:"ignore" yaml:"ignore"`
 	Display     DisplayConfig     `mapstructure:"display" yaml:"display"`
+	TUI         TUIConfig         `mapstructure:"tui" yaml:"tui"`
 	AI          AIConfig          `mapstructure:"ai" yaml:"ai"`
 	System      SystemConfig      `mapstructure:"system" yaml:"system"`
 	Packages    PackagesConfig    `mapstructure:"packages" yaml:"packages"`
@@ -182,6 +185,12 @@ type DisplayConfig struct {
 	Details int `mapstructure:"details" yaml:"details"`
 }
 
+// TUIConfig configures the interactive dashboard.
+type TUIConfig struct {
+	// Keys binds each action (see keys.Actions) to a list of keys.
+	Keys keys.Map `mapstructure:"keys" yaml:"keys"`
+}
+
 // SystemConfig configures `audit system`.
 type SystemConfig struct {
 	Journal     string         `mapstructure:"journal" yaml:"journal"`
@@ -325,6 +334,9 @@ func defaults(v *viper.Viper) {
 	})
 	v.SetDefault("ignore", []string{})
 	v.SetDefault("display.details", 5)
+	for _, a := range keys.Actions {
+		v.SetDefault("tui.keys."+a.Name, a.Default)
+	}
 	v.SetDefault("ai.provider", ProviderClaude)
 	v.SetDefault("ai.claude.command", "claude")
 	v.SetDefault("ai.claude.model", DefaultModel)
@@ -518,6 +530,9 @@ func (c *Config) validate() error {
 	default:
 		return fmt.Errorf("environment.shellcheck.severity: %q is not error, warning, info or style", c.Environment.Shellcheck.Severity)
 	}
+	if err := keys.Validate(c.TUI.Keys); err != nil {
+		return fmt.Errorf("tui.keys: %w", err)
+	}
 	for _, s := range c.Environment.Shells {
 		if s != "zsh" && s != "bash" {
 			return fmt.Errorf("environment.shells: unsupported shell %q (want zsh or bash)", s)
@@ -634,6 +649,39 @@ ignore: []
 display:
   # Detail lines shown per finding; --verbose shows all of them.
   details: 5
+
+# The dashboard (bare audit) and task editor (audit todo -i).
+tui:
+  # Keys per action; an action takes any number of keys, and [] unbinds it.
+  # Setting one action keeps the defaults of the rest. A key may serve two
+  # actions only when they never share a screen (rescan and reask). ctrl+c
+  # always quits. Key names: letters, enter, esc, backspace, tab, space " ",
+  # up, down, left, right, pgup, pgdown, home, end, ctrl+x, alt+x.
+  keys:
+    quit: [q]
+    back: [esc, backspace, h, left]
+    tasks: [t]                     # dashboard, report, task, explain
+    up: [k, up]
+    down: [j, down]
+    page_up: [pgup, b]             # report, tasks, task, explain
+    page_down: [pgdown, f, " "]
+    half_page_up: [ctrl+u, u]
+    half_page_down: [ctrl+d]
+    top: [home, g]
+    bottom: [end, G]
+    open: [enter, l, right]        # dashboard: report; tasks: details
+    rescan: [r]                    # dashboard, report
+    reask: [r]                     # explain: ask the AI again
+    explain: [e]                   # tasks, task
+    editor: [v]                    # tasks, task: open locations in $EDITOR
+    status_open: [o]               # tasks
+    status_in_progress: [i]
+    status_done: [d]
+    status_wont_do: [w]
+    note: [n]
+    search: [/]
+    toggle_closed: [a]
+    cycle_command: [c]
 
 # Opt-in review of findings with --ai, through the claude CLI in print mode.
 ai:

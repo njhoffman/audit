@@ -11,11 +11,13 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
+	bkey "github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -23,6 +25,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/njhoffman/audit/internal/keys"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/todo"
@@ -69,9 +72,10 @@ const (
 
 // Model is the Bubble Tea model.
 type Model struct {
-	ctx context.Context
-	b   Backend
-	now func() time.Time
+	ctx  context.Context
+	b    Backend
+	now  func() time.Time
+	keys keys.Map
 
 	screen        screen
 	standalone    bool // started on the task list; leaving it quits
@@ -107,6 +111,16 @@ type Option func(*Model)
 // WithClock sets the clock used for ages.
 func WithClock(now func() time.Time) Option { return func(m *Model) { m.now = now } }
 
+// WithKeys binds actions to keys; actions missing from km keep their default
+// keys. km is expected to have passed keys.Validate.
+func WithKeys(km keys.Map) Option {
+	return func(m *Model) {
+		for name, ks := range km {
+			m.keys[name] = ks
+		}
+	}
+}
+
 // StartInTodos opens the task list first, filtered by f.
 func StartInTodos(f todo.Filter) Option {
 	return func(m *Model) { m.screen, m.filter, m.standalone = screenTodos, f, true }
@@ -114,7 +128,7 @@ func StartInTodos(f todo.Filter) Option {
 
 // New returns a Model over b.
 func New(ctx context.Context, b Backend, opts ...Option) *Model {
-	m := &Model{ctx: ctx, b: b, now: time.Now, width: 80, height: 24,
+	m := &Model{ctx: ctx, b: b, now: time.Now, keys: keys.Defaults(), width: 80, height: 24,
 		spinner: spinner.New(spinner.WithSpinner(spinner.Dot))}
 	m.field = textinput.New()
 	m.field.CharLimit = 500
@@ -127,8 +141,35 @@ func New(ctx context.Context, b Backend, opts ...Option) *Model {
 	for _, o := range opts {
 		o(m)
 	}
+	m.report.KeyMap = viewport.KeyMap{
+		Up: m.binding(keys.Up), Down: m.binding(keys.Down),
+		PageUp: m.binding(keys.PageUp), PageDown: m.binding(keys.PageDown),
+		HalfPageUp: m.binding(keys.HalfPageUp), HalfPageDown: m.binding(keys.HalfPageDown),
+		// Reports are wrapped to the window, and h/left go back.
+		Left: bkey.NewBinding(bkey.WithDisabled()), Right: bkey.NewBinding(bkey.WithDisabled()),
+	}
+	m.table.KeyMap = table.KeyMap{
+		LineUp: m.binding(keys.Up), LineDown: m.binding(keys.Down),
+		PageUp: m.binding(keys.PageUp), PageDown: m.binding(keys.PageDown),
+		HalfPageUp: m.binding(keys.HalfPageUp), HalfPageDown: m.binding(keys.HalfPageDown),
+		GotoTop: m.binding(keys.Top), GotoBottom: m.binding(keys.Bottom),
+	}
 	m.layout()
 	return m
+}
+
+// binding is action as a bubbles key binding; an unbound action never matches.
+func (m *Model) binding(action string) bkey.Binding {
+	ks := m.keys[action]
+	if len(ks) == 0 {
+		return bkey.NewBinding(bkey.WithDisabled())
+	}
+	return bkey.NewBinding(bkey.WithKeys(ks...))
+}
+
+// is reports whether k is bound to action.
+func (m *Model) is(k tea.KeyMsg, action string) bool {
+	return slices.Contains(m.keys[action], k.String())
 }
 
 // Run starts the program on the terminal.
@@ -264,7 +305,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.err != nil:
 			m.setStatus(msg.err.Error(), true)
 		case !msg.ok:
-			m.report.SetContent(fmt.Sprintf("\n  %s has never run. Press r to scan now.", msg.command))
+			m.report.SetContent(fmt.Sprintf("\n  %s has never run.%s", msg.command, m.press(keys.Rescan, "scan now")))
 		default:
 			m.report.SetContent(msg.text)
 		}
@@ -294,7 +335,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			m.setStatus(msg.err.Error(), true)
-			m.report.SetContent("\n  The AI could not answer. Press r to try again, esc to go back.")
+			m.report.SetContent("\n  The AI could not answer." + m.press(keys.Reask, "try again") + m.press(keys.Back, "go back"))
 		} else {
 			m.setStatus("", false)
 			m.report.SetContent(msg.text)
@@ -338,16 +379,14 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.input != inputNone {
 		return m.inputKey(k)
 	}
-	switch k.String() {
-	case "q":
+	switch {
+	case m.is(k, keys.Quit):
 		return m, tea.Quit
-	case "t":
-		if m.screen != screenTodos {
-			m.screen, m.standalone = screenTodos, false
-			m.layout()
-			return m, m.loadTodos()
-		}
-	case "esc", "backspace", "h", "left":
+	case m.is(k, keys.ShowTasks) && m.screen != screenTodos:
+		m.screen, m.standalone = screenTodos, false
+		m.layout()
+		return m, m.loadTodos()
+	case m.is(k, keys.Back):
 		if m.screen == screenTodos && m.standalone {
 			return m, tea.Quit
 		}
@@ -367,44 +406,56 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case screenReport:
 		return m.reportKey(k)
 	case screenTask:
-		switch k.String() {
-		case "v":
+		switch {
+		case m.is(k, keys.Editor):
 			return m, m.edit(m.shown)
-		case "e":
+		case m.is(k, keys.ExplainTask):
 			if m.busy == "" {
 				return m, m.explain(m.shown.ID, false)
 			}
 			return m, nil
 		}
-		var cmd tea.Cmd
-		m.report, cmd = m.report.Update(k)
-		return m, cmd
+		return m, m.scroll(k)
 	case screenExplain:
-		if k.String() == "r" {
+		if m.is(k, keys.Reask) {
 			if m.busy == "" {
 				return m, m.explain(m.explainID, true)
 			}
 			return m, nil
 		}
-		var cmd tea.Cmd
-		m.report, cmd = m.report.Update(k)
-		return m, cmd
+		return m, m.scroll(k)
 	default:
 		return m.todosKey(k)
 	}
 }
 
+// scroll passes k to the viewport, which has no keys of its own for the top
+// and bottom.
+func (m *Model) scroll(k tea.KeyMsg) tea.Cmd {
+	switch {
+	case m.is(k, keys.Top):
+		m.report.GotoTop()
+		return nil
+	case m.is(k, keys.Bottom):
+		m.report.GotoBottom()
+		return nil
+	}
+	var cmd tea.Cmd
+	m.report, cmd = m.report.Update(k)
+	return cmd
+}
+
 func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch k.String() {
-	case "up", "k":
+	switch {
+	case m.is(k, keys.Up):
 		if m.cursor > 0 {
 			m.cursor--
 		}
-	case "down", "j":
+	case m.is(k, keys.Down):
 		if m.cursor < len(m.rows)-1 {
 			m.cursor++
 		}
-	case "enter", "l", "right":
+	case m.is(k, keys.Open):
 		if len(m.rows) == 0 {
 			return m, nil
 		}
@@ -415,7 +466,7 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.report.GotoTop()
 		m.layout()
 		return m, m.loadReport(m.reportCmd)
-	case "r":
+	case m.is(k, keys.Rescan):
 		if len(m.rows) > 0 && m.busy == "" {
 			return m, m.rescan(m.rows[m.cursor].Command)
 		}
@@ -424,34 +475,38 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) reportKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if k.String() == "r" {
+	if m.is(k, keys.Rescan) {
 		if m.busy == "" {
 			return m, m.rescan(m.reportCmd)
 		}
 		return m, nil
 	}
-	var cmd tea.Cmd
-	m.report, cmd = m.report.Update(k)
-	return m, cmd
+	return m, m.scroll(k)
 }
 
-// statusKeys maps keys to the status they set in the task list.
-var statusKeys = map[string]todo.Status{"o": todo.Open, "i": todo.InProgress, "d": todo.Done, "w": todo.WontDo}
+// statusActions maps actions to the status they set in the task list.
+var statusActions = []struct {
+	action string
+	status todo.Status
+}{{keys.StatusOpen, todo.Open}, {keys.StatusDoing, todo.InProgress}, {keys.StatusDone, todo.Done}, {keys.StatusWontDo, todo.WontDo}}
 
 func (m *Model) todosKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	sel := m.selected()
-	if st, ok := statusKeys[k.String()]; ok {
+	for _, sa := range statusActions {
+		if !m.is(k, sa.action) {
+			continue
+		}
 		if sel == nil {
 			return m, nil
 		}
-		id := sel.ID
+		id, st := sel.ID, sa.status
 		return m, func() tea.Msg {
 			t, err := m.b.SetStatus(m.ctx, id, st)
 			return taskMsg{t, err}
 		}
 	}
-	switch k.String() {
-	case "n":
+	switch {
+	case m.is(k, keys.Note):
 		if sel != nil {
 			m.input, m.editing = inputNote, sel.ID
 			m.field.Prompt = fmt.Sprintf("note #%d: ", sel.ID)
@@ -460,32 +515,32 @@ func (m *Model) todosKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.field.Focus()
 		}
 		return m, nil
-	case "e":
+	case m.is(k, keys.ExplainTask):
 		if sel != nil && m.busy == "" {
 			return m, m.explain(sel.ID, false)
 		}
 		return m, nil
-	case "enter", "l", "right":
+	case m.is(k, keys.Open):
 		if sel != nil {
 			m.showTask(*sel)
 		}
 		return m, nil
-	case "v":
+	case m.is(k, keys.Editor):
 		if sel != nil {
 			return m, m.edit(*sel)
 		}
 		return m, nil
-	case "/":
+	case m.is(k, keys.Search):
 		m.input = inputSearch
 		m.field.Prompt = "find: "
 		m.field.SetValue(m.filter.Search)
 		m.field.CursorEnd()
 		return m, m.field.Focus()
-	case "a":
+	case m.is(k, keys.ToggleClosed):
 		m.filter.ShowClosed = !m.filter.ShowClosed
 		m.applyFilter()
 		return m, nil
-	case "c":
+	case m.is(k, keys.CycleCommand):
 		m.filter.Command = m.nextCommand(m.filter.Command)
 		m.applyFilter()
 		return m, nil
@@ -731,21 +786,52 @@ func (m *Model) statusLine() string {
 }
 
 func (m *Model) help() string {
+	var hints [][]string
 	switch {
 	case m.input == inputNote:
 		return "enter save  esc cancel"
 	case m.input == inputSearch:
 		return "enter keep  esc clear"
 	case m.screen == screenDashboard:
-		return "j/k move  enter report  r rescan  t tasks  q quit"
+		hints = [][]string{{"move", keys.Down, keys.Up}, {"report", keys.Open}, {"rescan", keys.Rescan},
+			{"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
 	case m.screen == screenReport:
-		return "j/k scroll  pgup/pgdn page  r rescan  esc back  t tasks  q quit"
+		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
+			{"rescan", keys.Rescan}, {"back", keys.Back}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
 	case m.screen == screenExplain:
-		return "j/k scroll  pgup/pgdn page  r ask again  esc back to tasks  q quit"
+		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
+			{"ask again", keys.Reask}, {"back to tasks", keys.Back}, {"quit", keys.Quit}}
 	case m.screen == screenTask:
-		return "j/k scroll  pgup/pgdn page  v open in editor  e explain  esc back to tasks  q quit"
+		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
+			{"open in editor", keys.Editor}, {"explain", keys.ExplainTask}, {"back to tasks", keys.Back}, {"quit", keys.Quit}}
+	default:
+		hints = [][]string{{"move", keys.Down, keys.Up}, {"details", keys.Open}, {"editor", keys.Editor},
+			{"open", keys.StatusOpen}, {"in progress", keys.StatusDoing}, {"done", keys.StatusDone},
+			{"won't do", keys.StatusWontDo}, {"note", keys.Note}, {"explain", keys.ExplainTask}, {"find", keys.Search},
+			{"command", keys.CycleCommand}, {"closed", keys.ToggleClosed}, {"back", keys.Back}, {"quit", keys.Quit}}
 	}
-	return "j/k move  enter details  v editor  o open  i in progress  d done  w won't do  n note  e explain  / find  c command  a closed  esc back  q quit"
+	parts := make([]string, 0, len(hints))
+	for _, h := range hints {
+		var ks []string
+		for _, a := range h[1:] {
+			if k := m.keys.First(a); k != "" {
+				ks = append(ks, k)
+			}
+		}
+		if len(ks) > 0 {
+			parts = append(parts, strings.Join(ks, "/")+" "+h[0])
+		}
+	}
+	return strings.Join(parts, "  ")
+}
+
+// press is " Press <key> to <what>." for the first key of action, or ""
+// when the action is unbound.
+func (m *Model) press(action, what string) string {
+	if k := m.keys.First(action); k != "" {
+		return fmt.Sprintf(" Press %s to %s.", k, what)
+	}
+	return ""
 }
 
 // showTask switches to the detail screen of t.
@@ -755,7 +841,7 @@ func (m *Model) showTask(t todo.Todo) {
 	p.Now = m.now
 	p.Todo(t)
 	if locs := todo.Locations(t); len(locs) > 0 {
-		fmt.Fprintf(&b, "\n%s\n", faintStyle.Render(fmt.Sprintf("%d file location(s); press v to open them in $EDITOR", len(locs))))
+		fmt.Fprintf(&b, "\n%s\n", faintStyle.Render(fmt.Sprintf("%d file location(s).%s", len(locs), m.press(keys.Editor, "open them in $EDITOR"))))
 	}
 	m.screen, m.shown, m.reportLoaded = screenTask, t, true
 	m.report.SetContent(b.String())

@@ -19,14 +19,14 @@ import (
 type tuiBackend struct{ a *app }
 
 func runDashboard(ctx context.Context, a *app) error {
-	return tui.Run(ctx, tuiBackend{a}, tui.WithClock(timeNow))
+	return tui.Run(ctx, tuiBackend{a}, tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys))
 }
 
 func runTodoEditor(ctx context.Context, a *app, f todo.Filter) error {
 	if !a.interactive() {
 		return fmt.Errorf("--interactive needs a terminal")
 	}
-	return tui.Run(ctx, tuiBackend{a}, tui.WithClock(timeNow), tui.StartInTodos(f))
+	return tui.Run(ctx, tuiBackend{a}, tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys), tui.StartInTodos(f))
 }
 
 func (b tuiBackend) Statuses(ctx context.Context) ([]render.CommandStatus, error) {

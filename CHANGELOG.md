@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Configurable dashboard and task editor keys: `tui.keys` binds each action to any number of keys, `[]` unbinds one, and setting one action keeps the defaults of the rest. Conflicts on a screen, unknown actions and `ctrl+c` are config errors, and the help line is built from the bindings. `man audit` (KEYS) lists the actions.
+- `g`/`G` (`home`/`end`) jump to the top and bottom of reports, task details and explanations.
+
+### Changed
+
+- `d` no longer scrolls half a page in reports and explanations (it marks a task done in the task list, and one action now has the same keys on every screen); `ctrl+d` still does. `l`/`right` no longer scroll reports sideways.
+
 ## [0.14.2] - 2026-10-20
 
 ### Fixed

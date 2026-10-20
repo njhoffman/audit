@@ -390,6 +390,34 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 
 Errors and criticals become **high** tasks, warnings **medium**, notices **low**, and suggestions **suggestion**. Info findings of one check share a single **low** task. Lint and parse errors (**shell.shellcheck**, **shell.syntax**, **script.shellcheck**, **script.syntax**, **config.syntax**) are rolled up into one task per check and priority, such as "Fix shellcheck errors in 20 shell files", whose details list every **FILE:LINE: message**. A rescan adds tasks for new findings and marks tasks **resolved** when their finding is gone; **won't do** tasks stay closed. A scan narrowed with **\-\-only** or **\-\-manager** only resolves tasks of the parts it scanned. Tasks from **analyze -t** (source **ai**) and manual tasks are never resolved by a scan.
 
+# KEYS
+
+The dashboard and the task editor bind each action to a list of keys under **tui.keys**; any action takes several keys, **[]** unbinds it, and setting one action keeps the defaults of the others. A key may be bound to two actions only when they never share a screen. **ctrl+c** always quits. The help line at the bottom shows the first key of each action. The actions, their default keys and screens:
+
+    quit                q                     all screens
+    back                esc backspace h left  all screens
+    tasks               t                     dashboard, report, task, explain
+    up, down            k up, j down          all screens
+    page_up, page_down  pgup b, pgdown f space   report, tasks, task, explain
+    half_page_up        ctrl+u u              same
+    half_page_down      ctrl+d                same
+    top, bottom         home g, end G         same
+    open                enter l right         dashboard (report), tasks (details)
+    rescan              r                     dashboard, report
+    reask               r                     explain (ask the AI again)
+    explain             e                     tasks, task
+    editor              v                     tasks, task (locations in $EDITOR)
+    status_open         o                     tasks
+    status_in_progress  i                     tasks
+    status_done         d                     tasks
+    status_wont_do      w                     tasks
+    note                n                     tasks
+    search              /                     tasks
+    toggle_closed       a                     tasks
+    cycle_command       c                     tasks
+
+The note and find fields always use **enter** and **esc**. An unknown action, a blank key, **ctrl+c** or two actions sharing a key on one screen is a config error.
+
 # AI
 
 AI features run a local CLI: **claude -p** with tools disabled and no session persistence, or **codex exec** in its read-only sandbox, ephemeral, from an empty temporary directory and told to answer from the prompt only (codex is an agent with a shell; the sandbox keeps it from writing, not from reading). Prompts carry findings, statistics, task titles and, with **-e**, failed command output; never raw logs, shell traces, timestamps or the export files. Answers are cached in the database by a hash of the provider, model and prompt, so asking again about unchanged results is free. Claude reports a cost per answer; codex does not. The features: **-a** on scans (one review per run), **packages registry -a** (tags), **analyze** (cross-command review or suggested tasks), **todo explain** and the task editor's **e** key, and **-e** on updates and migrations.
@@ -426,6 +454,8 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     ignore: []                 # command:check:subject, command:check or check
     display:
       details: 5               # detail lines per finding; -v shows all
+    tui:
+      keys: {quit: [q], status_done: [d], ...}   # every action; see KEYS
     ai:
       provider: claude         # claude or codex; -I overrides it per run
       claude: {command: claude, model: claude-sonnet-5-5}

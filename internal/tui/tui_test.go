@@ -12,6 +12,7 @@ import (
 
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/finding"
+	"github.com/njhoffman/audit/internal/keys"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/store"
 	"github.com/njhoffman/audit/internal/todo"
@@ -29,6 +30,7 @@ type fake struct {
 	failSet  bool
 	explains []string
 	failAI   bool
+	report   string // report text; empty means "report of <command>"
 }
 
 func (f *fake) Explain(_ context.Context, id int64, _ int, refresh bool) (string, error) {
@@ -45,6 +47,9 @@ func (f *fake) Report(_ context.Context, c string, _ int) (string, bool, error) 
 	f.reports = append(f.reports, c)
 	if c == "packages" {
 		return "", false, nil
+	}
+	if f.report != "" {
+		return f.report, true, nil
 	}
 	return "report of " + c, true, nil
 }
@@ -367,5 +372,70 @@ func TestTaskDetailScreen(t *testing.T) {
 	key(t, m, "v")
 	if !m.statusErr || !strings.Contains(m.status, "names no file:line locations") {
 		t.Errorf("v without locations: %q", m.status)
+	}
+}
+
+func TestCustomKeys(t *testing.T) {
+	f := newFake()
+	m := start(t, f, WithKeys(keys.Map{keys.StatusDone: {"x", "ctrl+x"}, keys.Down: {"n"}, keys.ShowTasks: {"T"},
+		keys.Note: {"N"}, keys.CycleCommand: {}}))
+	key(t, m, "t")
+	if m.screen != screenDashboard {
+		t.Fatal("t is no longer bound to tasks")
+	}
+	key(t, m, "n")
+	if m.cursor != 1 {
+		t.Errorf("n moves down, cursor=%d", m.cursor)
+	}
+	key(t, m, "T")
+	if m.screen != screenTodos {
+		t.Fatalf("T opens tasks, screen=%v", m.screen)
+	}
+	key(t, m, "d")
+	if len(f.setCalls) != 0 {
+		t.Errorf("d is unbound: %v", f.setCalls)
+	}
+	key(t, m, "x")
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
+	drive(t, m, cmd)
+	if len(f.setCalls) != 2 || f.setCalls[0] != todo.Done || f.setCalls[1] != todo.Done {
+		t.Errorf("x and ctrl+x both mark done: %v", f.setCalls)
+	}
+	key(t, m, "c")
+	if m.filter.Command != "" {
+		t.Errorf("cycle_command is unbound: %q", m.filter.Command)
+	}
+	h := m.help()
+	for _, want := range []string{"x done", "n/k move", "N note"} {
+		if !strings.Contains(h, want) {
+			t.Errorf("help %q missing %q", h, want)
+		}
+	}
+	if strings.Contains(h, "command") || strings.Contains(h, "d done") {
+		t.Errorf("help shows unbound or replaced keys: %q", h)
+	}
+}
+
+func TestScrollKeys(t *testing.T) {
+	f := newFake()
+	f.report = strings.Repeat("line\n", 200)
+	m := start(t, f)
+	key(t, m, "enter")
+	key(t, m, "G")
+	if !m.report.AtBottom() {
+		t.Error("G goes to the bottom")
+	}
+	key(t, m, "g")
+	if !m.report.AtTop() {
+		t.Error("g goes to the top")
+	}
+	key(t, m, " ")
+	if m.report.YOffset == 0 {
+		t.Error("space pages down")
+	}
+	before := m.report.View()
+	key(t, m, "l")
+	if m.screen != screenReport || m.report.View() != before {
+		t.Error("l neither leaves the report nor scrolls sideways")
 	}
 }
