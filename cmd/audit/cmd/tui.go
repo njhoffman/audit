@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -15,18 +16,22 @@ import (
 	"github.com/njhoffman/audit/internal/tui"
 )
 
-// tuiBackend adapts the app to the dashboard.
-type tuiBackend struct{ a *app }
+// tuiBackend adapts the app to the dashboard. forceColor renders in color
+// although stdout is not a terminal (fzf previews and pagers).
+type tuiBackend struct {
+	a          *app
+	forceColor bool
+}
 
 func runDashboard(ctx context.Context, a *app) error {
-	return tui.Run(ctx, tuiBackend{a}, tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys))
+	return tui.Run(ctx, tuiBackend{a: a}, tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys))
 }
 
 func runTodoEditor(ctx context.Context, a *app, f todo.Filter) error {
 	if !a.interactive() {
 		return fmt.Errorf("--interactive needs a terminal")
 	}
-	return tui.Run(ctx, tuiBackend{a}, tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys), tui.StartInTodos(f))
+	return tui.Run(ctx, tuiBackend{a: a}, tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys), tui.StartInTodos(f))
 }
 
 func (b tuiBackend) Statuses(ctx context.Context) ([]render.CommandStatus, error) {
@@ -38,10 +43,7 @@ func (b tuiBackend) Report(ctx context.Context, command string, width int) (stri
 	if err != nil || r == nil {
 		return "", false, err
 	}
-	profile := lipgloss.ColorProfile()
-	if b.a.noColorTUI() {
-		profile = termenv.Ascii
-	}
+	profile := b.profile()
 	var buf bytes.Buffer
 	p := render.NewProfile(&buf, profile, width)
 	p.Now = timeNow
@@ -80,10 +82,7 @@ func (b tuiBackend) Explain(ctx context.Context, id int64, width int, refresh bo
 	if err != nil {
 		return "", err
 	}
-	profile := lipgloss.ColorProfile()
-	if b.a.noColorTUI() {
-		profile = termenv.Ascii
-	}
+	profile := b.profile()
 	var buf bytes.Buffer
 	p := render.NewProfile(&buf, profile, width)
 	p.Now = timeNow
@@ -112,6 +111,18 @@ func (a *app) defaultScanner(command string) (core.Scanner, error) {
 		return a.aiScanner(false), nil
 	}
 	return nil, fmt.Errorf("unknown command %q", command)
+}
+
+func (b tuiBackend) profile() termenv.Profile {
+	switch {
+	case b.a.flags.noColor || b.a.cfg.NoColor || os.Getenv("NO_COLOR") != "":
+		return termenv.Ascii
+	case b.forceColor:
+		return termenv.ANSI256
+	case b.a.noColorTUI():
+		return termenv.Ascii
+	}
+	return lipgloss.ColorProfile()
 }
 
 // noColorTUI is noColor without the redirected-stdout rule, which never

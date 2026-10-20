@@ -62,6 +62,7 @@ audit -o                       # write every report plus the index page and open
 
 audit todo                     # open and in-progress tasks
 audit todo -i                  # browse and change tasks in a terminal UI
+audit todo -F                  # the same in fzf (or tui.interface: fzf for -i and bare audit)
 audit todo -C packages -p high,medium
 audit todo set 12 done -N "removed in dotfiles"
 audit todo set 7 wont-do       # a won't-do task stays closed across rescans
@@ -100,6 +101,10 @@ The defaults:
 | explanation | `j`/`k`/`pgup`/`pgdn` scroll, `r` ask again, `esc` back to tasks |
 
 Every action can be rebound, to as many keys as you like, under `tui.keys` in the config (`status_done: [d, x]`, `editor: []` to unbind); the help line follows the bindings. `man audit` (KEYS) lists the actions and the screens they work on.
+
+### fzf interface
+
+`tui.interface: fzf` (or `-F`/`--fzf` on bare `audit` and `audit todo`) uses fzf lists instead of the terminal UI: the command list previews saved reports, the task list previews tasks, and typing filters as usual. Since letters go to the query, actions are on alt- keys under `tui.fzf_keys`: `enter` report or details in `$PAGER`, `alt-r` rescan, `alt-t` tasks, `alt-o`/`alt-i`/`alt-d`/`alt-w` status, `alt-n` note, `alt-e` explain, `alt-v` editor, `alt-c` cycle command, `alt-a` show closed. Needs fzf 0.51 or later; `man audit` (FZF) has the details.
 
 ## Configuration
 

@@ -28,6 +28,7 @@ func newTodoCmd(a *app) *cobra.Command {
 		search      string
 		asJSON      bool
 		interactive bool
+		useFzf      bool
 		html, open  bool
 		serve       bool
 		port        int
@@ -68,7 +69,13 @@ token that every request needs.`,
 				}
 				flt.Statuses = append(flt.Statuses, st)
 			}
-			if interactive {
+			if interactive || c.Flags().Changed("fzf") && useFzf {
+				if a.useFzf(c) {
+					if !a.interactive() {
+						return fmt.Errorf("--fzf needs a terminal")
+					}
+					return runFzfTasks(c.Context(), a, flt)
+				}
 				return runTodoEditor(c.Context(), a, flt)
 			}
 			if serve {
@@ -114,11 +121,15 @@ token that every request needs.`,
 	fl.StringVarP(&search, "find", "f", "", "only tasks whose title, key or note contains this text")
 	fl.BoolVarP(&asJSON, "json", "j", false, "print tasks as JSON")
 	fl.BoolVarP(&interactive, "interactive", "i", false, "browse and change tasks in a terminal UI")
+	fl.BoolVarP(&useFzf, "fzf", "F", false, "browse and change tasks in fzf (implies -i; default tui.interface)")
 	fl.BoolVarP(&html, "html", "H", false, "write the searchable tasks page (tasks.html in the report directory)")
 	fl.BoolVarP(&open, "open", "o", false, "like --html, then open it; with --serve, open the live page")
 	fl.BoolVarP(&serve, "serve", "s", false, "serve the tasks page on 127.0.0.1, saving status and note changes")
 	fl.IntVarP(&port, "port", "P", 0, "port for --serve (default: any free port)")
 	c.MarkFlagsMutuallyExclusive("interactive", "serve")
+	c.MarkFlagsMutuallyExclusive("fzf", "serve")
+	c.MarkFlagsMutuallyExclusive("fzf", "html")
+	c.MarkFlagsMutuallyExclusive("fzf", "json")
 	c.MarkFlagsMutuallyExclusive("interactive", "html")
 	c.MarkFlagsMutuallyExclusive("json", "serve")
 	c.MarkFlagsMutuallyExclusive("json", "html")

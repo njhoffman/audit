@@ -141,9 +141,16 @@ func Validate(m Map) error {
 			}
 		}
 	}
-	for _, s := range allScreens {
+	errs = append(errs, conflicts(m, allScreens, Actions)...)
+	return errors.Join(errs...)
+}
+
+// conflicts reports keys bound to two actions on one of screens.
+func conflicts(m Map, screens []Screen, actions []Action) []error {
+	var errs []error
+	for _, s := range screens {
 		owner := map[string]string{}
-		for _, a := range Actions {
+		for _, a := range actions {
 			if !slices.Contains(a.Screens, s) {
 				continue
 			}
@@ -156,7 +163,7 @@ func Validate(m Map) error {
 			}
 		}
 	}
-	return errors.Join(errs...)
+	return errs
 }
 
 // Label is how a key is shown in help.
@@ -176,4 +183,85 @@ func (m Map) First(action string) string {
 		return Label(ks[0])
 	}
 	return ""
+}
+
+// FzfScreens are the screens of the fzf interface: the command list and the
+// task list. An action works there on the screens it shares with the
+// dashboard.
+var FzfScreens = []Screen{Dashboard, Tasks}
+
+// fzfDefaults are the keys of the actions the fzf interface has. Typing goes
+// to fzf's query, so they use alt- rather than plain letters; scrolling,
+// searching and leaving are fzf's own keys.
+var fzfDefaults = Map{
+	Open:         {"enter"},
+	Rescan:       {"alt-r"},
+	ShowTasks:    {"alt-t"},
+	ExplainTask:  {"alt-e"},
+	Editor:       {"alt-v"},
+	StatusOpen:   {"alt-o"},
+	StatusDoing:  {"alt-i"},
+	StatusDone:   {"alt-d"},
+	StatusWontDo: {"alt-w"},
+	Note:         {"alt-n"},
+	ToggleClosed: {"alt-a"},
+	CycleCommand: {"alt-c"},
+}
+
+// fzfReserved leave fzf.
+var fzfReserved = []string{"esc", "ctrl-c", "ctrl-g", "ctrl-q"}
+
+// FzfDefaults returns a fresh copy of the default fzf bindings.
+func FzfDefaults() Map {
+	m := make(Map, len(fzfDefaults))
+	for k, v := range fzfDefaults {
+		m[k] = slices.Clone(v)
+	}
+	return m
+}
+
+// FzfActions are the actions of the fzf interface, in Actions order.
+func FzfActions() []Action {
+	var out []Action
+	for _, a := range Actions {
+		if _, ok := fzfDefaults[a.Name]; ok {
+			a.Screens = slices.DeleteFunc(slices.Clone(a.Screens), func(s Screen) bool { return !slices.Contains(FzfScreens, s) })
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// ValidateFzf is Validate for fzf bindings (fzf key names such as alt-d or
+// ctrl-x): it also rejects actions fzf lacks, the keys that leave fzf, and
+// single printable characters, which would no longer reach the query.
+func ValidateFzf(m Map) error {
+	var errs []error
+	names := make([]string, 0, len(m))
+	for n := range m {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		if _, ok := Lookup(n); !ok {
+			errs = append(errs, fmt.Errorf("unknown action %q", n))
+			continue
+		}
+		if _, ok := fzfDefaults[n]; !ok {
+			errs = append(errs, fmt.Errorf("%s is not available in fzf", n))
+			continue
+		}
+		for _, k := range m[n] {
+			switch {
+			case k == "":
+				errs = append(errs, fmt.Errorf("%s: empty key", n))
+			case slices.Contains(fzfReserved, k):
+				errs = append(errs, fmt.Errorf("%s: %s leaves fzf and cannot be bound", n, k))
+			case len([]rune(k)) == 1:
+				errs = append(errs, fmt.Errorf("%s: %q would stop typing it into the query; use alt-%s or ctrl-%s", n, k, k, k))
+			}
+		}
+	}
+	errs = append(errs, conflicts(m, FzfScreens, FzfActions())...)
+	return errors.Join(errs...)
 }

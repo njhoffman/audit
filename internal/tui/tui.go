@@ -849,14 +849,26 @@ func (m *Model) showTask(t todo.Todo) {
 	m.layout()
 }
 
-// edit opens the file locations of t in $VISUAL or $EDITOR: vim and neovim
-// get every location as a quickfix list, other editors the first file at
-// its line.
+// edit opens the file locations of t in the editor (see EditorCommand).
 func (m *Model) edit(t todo.Todo) tea.Cmd {
+	c, cleanup, err := EditorCommand(t)
+	if err != nil {
+		m.setStatus(err.Error(), true)
+		return nil
+	}
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		cleanup()
+		return editorMsg{err}
+	})
+}
+
+// EditorCommand opens the file locations of t in $VISUAL or $EDITOR: vim
+// and neovim get every location as a quickfix list, other editors the first
+// file at its line. cleanup removes the quickfix file once the editor exits.
+func EditorCommand(t todo.Todo) (c *osexec.Cmd, cleanup func(), err error) {
 	locs := todo.Locations(t)
 	if len(locs) == 0 {
-		m.setStatus(fmt.Sprintf("#%d names no file:line locations", t.ID), true)
-		return nil
+		return nil, nil, fmt.Errorf("#%d names no file:line locations", t.ID)
 	}
 	editor := os.Getenv("VISUAL")
 	if editor == "" {
@@ -866,30 +878,22 @@ func (m *Model) edit(t todo.Todo) tea.Cmd {
 		editor = "vi"
 	}
 	args := strings.Fields(editor)
-	var cleanup func()
+	cleanup = func() {}
 	switch filepath.Base(args[0]) {
 	case "vim", "nvim", "vi", "gvim", "nvi":
 		f, err := os.CreateTemp("", "audit-quickfix-*.txt")
 		if err != nil {
-			m.setStatus(err.Error(), true)
-			return nil
+			return nil, nil, err
 		}
 		_, werr := f.WriteString(strings.Join(t.Details, "\n") + "\n")
 		if err := f.Close(); werr != nil || err != nil {
 			_ = os.Remove(f.Name())
-			m.setStatus(fmt.Sprintf("write quickfix file: %v", errors.Join(werr, err)), true)
-			return nil
+			return nil, nil, fmt.Errorf("write quickfix file: %w", errors.Join(werr, err))
 		}
 		cleanup = func() { _ = os.Remove(f.Name()) }
 		args = append(args, "-q", f.Name())
 	default:
 		args = append(args, "+"+strconv.Itoa(locs[0].Line), locs[0].Path)
 	}
-	c := osexec.Command(args[0], args[1:]...) // #nosec G204 G702 -- the user's own $EDITOR on paths from their tasks
-	return tea.ExecProcess(c, func(err error) tea.Msg {
-		if cleanup != nil {
-			cleanup()
-		}
-		return editorMsg{err}
-	})
+	return osexec.Command(args[0], args[1:]...), cleanup, nil // #nosec G204 G702 -- the user's own $EDITOR on paths from their tasks
 }

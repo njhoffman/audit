@@ -37,7 +37,7 @@ func Execute() int {
 }
 
 func newRootCmd(a *app) *cobra.Command {
-	var summary, html, open bool
+	var summary, html, open, useFzf bool
 	root := &cobra.Command{
 		Use:   "audit",
 		Short: "Audit system health, shell environment and installed packages",
@@ -79,6 +79,9 @@ Run without a command in a terminal for the interactive dashboard, or with
 				}
 			}
 			if !summary && a.interactive() {
+				if a.useFzf(c) {
+					return runFzfDashboard(ctx, a)
+				}
 				return runDashboard(ctx, a)
 			}
 			st, err := a.statuses(ctx)
@@ -109,9 +112,11 @@ Run without a command in a terminal for the interactive dashboard, or with
 	fl.BoolVarP(&summary, "summary", "s", false, "print the overview of saved results and open tasks")
 	fl.BoolVarP(&html, "html", "H", false, "write the HTML index and every command's latest report")
 	fl.BoolVarP(&open, "open", "o", false, "like --html, then open the index")
+	fl.BoolVarP(&useFzf, "fzf", "F", false, "open the dashboard in fzf (default tui.interface; --fzf=false for the TUI)")
 
 	root.AddCommand(newSystemCmd(a), newEnvironmentCmd(a), newPackagesCmd(a), newReposCmd(a), newFilesCmd(a), newConfigsCmd(a), newScriptsCmd(a), newAICmd(a),
-		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a))
+		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a),
+		newFzfHelperCmd(a))
 	return root
 }
 

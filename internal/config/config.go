@@ -187,9 +187,20 @@ type DisplayConfig struct {
 
 // TUIConfig configures the interactive dashboard.
 type TUIConfig struct {
+	// Interface is what bare audit and audit todo -i open: InterfaceTUI or
+	// InterfaceFzf.
+	Interface string `mapstructure:"interface" yaml:"interface"`
 	// Keys binds each action (see keys.Actions) to a list of keys.
 	Keys keys.Map `mapstructure:"keys" yaml:"keys"`
+	// FzfKeys binds the actions of the fzf interface, in fzf key names.
+	FzfKeys keys.Map `mapstructure:"fzf_keys" yaml:"fzf_keys"`
 }
+
+// Interfaces of the dashboard and task editor.
+const (
+	InterfaceTUI = "tui"
+	InterfaceFzf = "fzf"
+)
 
 // SystemConfig configures `audit system`.
 type SystemConfig struct {
@@ -334,8 +345,12 @@ func defaults(v *viper.Viper) {
 	})
 	v.SetDefault("ignore", []string{})
 	v.SetDefault("display.details", 5)
+	v.SetDefault("tui.interface", InterfaceTUI)
 	for _, a := range keys.Actions {
 		v.SetDefault("tui.keys."+a.Name, a.Default)
+	}
+	for name, ks := range keys.FzfDefaults() {
+		v.SetDefault("tui.fzf_keys."+name, ks)
 	}
 	v.SetDefault("ai.provider", ProviderClaude)
 	v.SetDefault("ai.claude.command", "claude")
@@ -530,8 +545,14 @@ func (c *Config) validate() error {
 	default:
 		return fmt.Errorf("environment.shellcheck.severity: %q is not error, warning, info or style", c.Environment.Shellcheck.Severity)
 	}
+	if c.TUI.Interface != InterfaceTUI && c.TUI.Interface != InterfaceFzf {
+		return fmt.Errorf("tui.interface: %q is not %s or %s", c.TUI.Interface, InterfaceTUI, InterfaceFzf)
+	}
 	if err := keys.Validate(c.TUI.Keys); err != nil {
 		return fmt.Errorf("tui.keys: %w", err)
+	}
+	if err := keys.ValidateFzf(c.TUI.FzfKeys); err != nil {
+		return fmt.Errorf("tui.fzf_keys: %w", err)
 	}
 	for _, s := range c.Environment.Shells {
 		if s != "zsh" && s != "bash" {
@@ -652,6 +673,9 @@ display:
 
 # The dashboard (bare audit) and task editor (audit todo -i).
 tui:
+  # tui (Bubble Tea) or fzf (fzf lists with previews; needs fzf on PATH).
+  # -F/--fzf picks fzf for one run, --fzf=false the TUI.
+  interface: tui
   # Keys per action; an action takes any number of keys, and [] unbinds it.
   # Setting one action keeps the defaults of the rest. A key may serve two
   # actions only when they never share a screen (rescan and reask). ctrl+c
@@ -682,6 +706,22 @@ tui:
     search: [/]
     toggle_closed: [a]
     cycle_command: [c]
+  # Keys of the fzf interface, in fzf's key names. Plain letters go to the
+  # query, so actions use alt-; scrolling, searching (just type) and leaving
+  # (esc) are fzf's own. Only these actions exist in fzf.
+  fzf_keys:
+    open: [enter]                  # command list: report in $PAGER; tasks: details
+    rescan: [alt-r]                # command list
+    tasks: [alt-t]                 # command list: open the task list
+    explain: [alt-e]               # this one and the rest: task list
+    editor: [alt-v]
+    status_open: [alt-o]
+    status_in_progress: [alt-i]
+    status_done: [alt-d]
+    status_wont_do: [alt-w]
+    note: [alt-n]
+    toggle_closed: [alt-a]
+    cycle_command: [alt-c]
 
 # Opt-in review of findings with --ai, through the claude CLI in print mode.
 ai:

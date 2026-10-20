@@ -128,6 +128,7 @@ func TestLoadErrors(t *testing.T) {
 		"packages: {registry: {unmaintained_after: -1h}}", "packages: {tags: [Has Space]}", "packages: {tags: [UPPER]}",
 		"packages: {update: {timeout: 0s}}", `packages: {update: {exclude: [""]}}`,
 		"tui: {keys: {qiut: [x]}}", "tui: {keys: {rescan: [ctrl+c]}}", "tui: {keys: {quit: [d]}}",
+		"tui: {interface: dmenu}", "tui: {fzf_keys: {status_done: [d]}}", "tui: {fzf_keys: {up: [alt-k]}}",
 	} {
 		write(t, bad, body)
 		if _, _, err := Load(bad); err == nil {

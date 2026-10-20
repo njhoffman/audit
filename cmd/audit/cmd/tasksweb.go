@@ -56,7 +56,7 @@ func (a *app) serveTasks(ctx context.Context, port int, open bool, ready func(st
 		return fmt.Errorf("listen on 127.0.0.1:%d: %w", port, err)
 	}
 	srv := &http.Server{
-		Handler:           (&taskserver.Server{B: tuiBackend{a}, Token: token, Host: a.engine.Host, Now: timeNow}).Handler(),
+		Handler:           (&taskserver.Server{B: tuiBackend{a: a}, Token: token, Host: a.engine.Host, Now: timeNow}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	url := fmt.Sprintf("http://%s/?token=%s", ln.Addr(), token)

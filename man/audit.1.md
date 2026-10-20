@@ -236,6 +236,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 **-o**, **\-\-open**
 :   Like **\-\-html**, then open the index with **xdg-open**.
 
+**-F**, **\-\-fzf**
+:   Open the dashboard in fzf instead of the terminal UI (see FZF). **\-\-fzf=false** opens the terminal UI when **tui.interface** is **fzf**.
+
 # SCAN OPTIONS
 
 These apply to **system**, **environment** and **packages**. Without an output option, saved results younger than the warn threshold are shown and older ones trigger a scan.
@@ -384,7 +387,10 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 :   Print tasks as JSON.
 
 **-i**, **\-\-interactive**
-:   Browse and change tasks in a terminal UI.
+:   Browse and change tasks in a terminal UI, or in fzf when **tui.interface** is **fzf**.
+
+**-F**, **\-\-fzf**
+:   Browse and change tasks in fzf (implies **-i**; see FZF). **\-\-fzf=false** with **-i** opens the terminal UI.
 
 # TASKS
 
@@ -417,6 +423,27 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     cycle_command       c                     tasks
 
 The note and find fields always use **enter** and **esc**. An unknown action, a blank key, **ctrl+c** or two actions sharing a key on one screen is a config error.
+
+# FZF
+
+With **tui.interface: fzf**, or **-F**, the dashboard and the task editor are fzf lists (fzf 0.51 or later on PATH). The command list previews each command's saved report; the task list previews the task, and typing filters it as in any fzf list. Keys call back into **audit**, then reload the list, so changes show at once. Your **FZF_DEFAULT_OPTS** still apply; audit's own options come after them, so its keys and preview window win.
+
+Typing goes to fzf's query, so actions are bound to alt- keys under **tui.fzf_keys**, in fzf's key names (**alt-d**, **ctrl-x**, **enter**). Only these actions exist in fzf, with the same multi-key and conflict rules as **tui.keys**; a plain printable character, **esc**, **ctrl-c**, **ctrl-g** and **ctrl-q** cannot be bound. Scrolling, searching and leaving are fzf's own keys; **esc** in the task list returns to the command list.
+
+    open                enter    command list: report in $PAGER; tasks: details in $PAGER
+    rescan              alt-r    command list
+    tasks               alt-t    command list: open the task list
+    explain             alt-e    tasks: AI explanation in $PAGER
+    editor              alt-v    tasks: file locations in $EDITOR
+    status_open         alt-o    tasks
+    status_in_progress  alt-i    tasks
+    status_done         alt-d    tasks
+    status_wont_do      alt-w    tasks
+    note                alt-n    tasks: prompts for the note (empty keeps it, - clears it)
+    toggle_closed       alt-a    tasks
+    cycle_command       alt-c    tasks
+
+The prompt shows the task list's command filter and **+closed**. Without **$PAGER**, pages open in **less -R -+F -+X**, so a short page does not flash past when **$LESS** has **-F**. The terminal UI's report screen, explanation retries and search field have no fzf counterpart.
 
 # AI
 
@@ -455,7 +482,9 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     display:
       details: 5               # detail lines per finding; -v shows all
     tui:
+      interface: tui           # tui or fzf; -F/--fzf per run
       keys: {quit: [q], status_done: [d], ...}   # every action; see KEYS
+      fzf_keys: {open: [enter], status_done: [alt-d], ...}   # see FZF
     ai:
       provider: claude         # claude or codex; -I overrides it per run
       claude: {command: claude, model: claude-sonnet-5-5}
