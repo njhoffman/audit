@@ -335,13 +335,14 @@ func BroadRules(allow []string) []string {
 }
 
 // HookProblem says what is wrong with a hook command: a script path that
-// does not exist, or a program not on PATH; "" when both are fine.
+// does not exist, or a program not on PATH; "" when both are fine. Quotes
+// around the program or the script path are the shell's, not the path's.
 func HookProblem(env *exec.Env, command string) string {
 	fields := strings.Fields(command)
 	if len(fields) == 0 {
 		return ""
 	}
-	prog := fields[0]
+	prog := strings.Trim(fields[0], `"'`)
 	if strings.Contains(prog, "=") {
 		return ""
 	}
@@ -352,11 +353,12 @@ func HookProblem(env *exec.Env, command string) string {
 		return prog + " is not installed"
 	}
 	for _, f := range fields[1:] {
+		f = strings.Trim(f, `"'`)
 		if strings.HasPrefix(f, "-") {
 			continue
 		}
 		if strings.HasPrefix(f, "~/") || strings.HasPrefix(f, "/") || strings.HasPrefix(f, "$HOME/") {
-			p := env.Expand(strings.Trim(f, `"'`))
+			p := env.Expand(f)
 			if _, err := os.Stat(p); err != nil {
 				return p + " does not exist"
 			}

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `ai.hook_broken` no longer reports a Claude Code hook whose script path is quoted (`"\"$HOME/bin/hook\""` in settings.json) as missing, and now checks a quoted script argument too.
+
 ## [0.17.0] - 2026-10-20
 
 ### Added

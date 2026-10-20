@@ -47,14 +47,17 @@ func TestBroadRulesAndHooks(t *testing.T) {
 	bin := t.TempDir()
 	exe(t, bin, "bash", "python")
 	write(t, filepath.Join(home, ".config/claude/hooks/ok.sh"), "")
+	exe(t, filepath.Join(home, ".config/claude/hooks"), "run")
 	env := &exec.Env{Vars: map[string]string{"PATH": bin + ":/bin", "HOME": home}, Home: home}
 	for cmd, want := range map[string]string{
-		"/bin/bash ~/.config/claude/hooks/ok.sh": "",
-		"bash ~/.config/claude/hooks/gone.sh":    filepath.Join(home, ".config/claude/hooks/gone.sh") + " does not exist",
-		"~/.config/claude/hooks/auto.sh":         filepath.Join(home, ".config/claude/hooks/auto.sh") + " does not exist or is not executable",
-		"black --quiet $file":                    "black is not installed",
-		"python -m black $file":                  "",
-		"FOO=1 anything":                         "",
+		"/bin/bash ~/.config/claude/hooks/ok.sh":           "",
+		"bash ~/.config/claude/hooks/gone.sh":              filepath.Join(home, ".config/claude/hooks/gone.sh") + " does not exist",
+		"~/.config/claude/hooks/auto.sh":                   filepath.Join(home, ".config/claude/hooks/auto.sh") + " does not exist or is not executable",
+		"black --quiet $file":                              "black is not installed",
+		"python -m black $file":                            "",
+		"FOO=1 anything":                                   "",
+		`"$HOME/.config/claude/hooks/run"`:                 "",
+		`'/bin/bash' "$HOME/.config/claude/hooks/gone.sh"`: filepath.Join(home, ".config/claude/hooks/gone.sh") + " does not exist",
 	} {
 		if got := HookProblem(env, cmd); got != want {
 			t.Errorf("%q: %q, want %q", cmd, got, want)
