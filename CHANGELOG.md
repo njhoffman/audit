@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-20
+
 ### Added
 
 - An fzf interface for the dashboard and the task editor: `tui.interface: fzf`, or `-F`/`--fzf` on bare `audit` and `audit todo` (`--fzf=false` for the TUI). The command list previews saved reports; the task list previews tasks and changes them through alt- keys (`tui.fzf_keys`, validated like `tui.keys`), reloading after each change. Needs fzf 0.51 or later.
