@@ -3,15 +3,16 @@
 Roadmap features first, then issues found in the code. Everything here is a
 proposal to discuss, not a decision; items under "Decisions to make" need an
 answer before work starts.
-Tag an item `(due YYYY-MM-DD)` to get a date and an OVERDUE flag from
-`~/.shell/scripts/todo-status` and `/todo`.
+Tag an item `(p1)` (high) or `(p3)` (low); untagged items are `p2` (normal).
+`(due YYYY-MM-DD)` adds a date and an OVERDUE flag. `~/.shell/scripts/todo-status`,
+`/todo` and `/todo-pop` (sorted by urgency) read both.
 
 ## 1. Rescan everything and run unattended
 
 Today every scan is started by hand, one command at a time; bare `audit` has
 no `--rescan`, and nothing tells you when a scan would turn up something new.
 
-- [ ] **`audit -r` rescans every stale command.** Root-level `--rescan`
+- [ ] **`audit -r` rescans every stale command.** (p1) Root-level `--rescan`
   (with `-O`/`--only` taking command names) runs the stale scanners, saves,
   reconciles tasks and prints the summary. Scanners that only read local state
   (system, environment, configs, scripts, ai) could run concurrently; repos
@@ -40,7 +41,7 @@ show the current state, not what moved.
 - [ ] **Deltas on the dashboard and summary.** `+3 / -5` next to each
   command's finding count, and a "new since last run" filter in the task
   editor and tasks page.
-- [ ] **Trend in the HTML index.** Finding counts per severity over the kept
+- [ ] **Trend in the HTML index.** (p3) Finding counts per severity over the kept
   runs, as a small inline chart per command.
 
 ## 3. New scanners (candidates)
@@ -48,14 +49,14 @@ show the current state, not what moved.
 Each one implements `core.Scanner`, joins `core.Commands`, gets a subcommand
 and a `defaultScanner` case (see section 5 for collapsing those).
 
-- [ ] **`audit containers`**: docker and podman dangling images, unused
+- [ ] **`audit containers`** (p3): docker and podman dangling images, unused
   volumes, stopped containers older than N days, images far behind their tag,
   rootless vs rootful. `files` already reports docker's cache size; this
   would own the per-object view and `containers clean`.
 - [ ] **`audit backups`**: last snapshot age and last check result for
   restic, borg, timeshift or a configured command; paths in a configured list
   that no backup covers. High value, small surface.
-- [ ] **Firmware in `system updates`**: `fwupdmgr get-updates` (no sudo
+- [ ] **Firmware in `system updates`** (p3): `fwupdmgr get-updates` (no sudo
   needed to list) as `updates.firmware`.
 
 Decisions to make: which of these is worth building at all; whether
@@ -72,10 +73,10 @@ Decisions to make: which of these is worth building at all; whether
 - [ ] **Prune `updates` / `update_items`.** Package updates, runtime
   migrations, repo syncs and cleanups are all saved and never removed; keep
   the newest N per kind (`history` would do).
-- [ ] **Prune closed tasks.** Resolved and done tasks accumulate forever and
+- [ ] **Prune closed tasks.** (p3) Resolved and done tasks accumulate forever and
   feed `tasks.html` and `tasks.json`. Delete ones closed longer than a
   configured age; keep `wont-do`, since it suppresses re-creation.
-- [ ] **Migration ladder instead of `if v == "1"`.** `checkVersion` handles
+- [ ] **Migration ladder instead of `if v == "1"`.** (p3) `checkVersion` handles
   one hard-coded upgrade. A slice of `func(*sql.Tx) error` indexed by
   version, each step in its own transaction, scales to the next schema change
   and makes each step testable on its own.
@@ -94,7 +95,7 @@ Decisions to make: which of these is worth building at all; whether
   security-relevant edge cases (archive member paths, symlinks); it belongs
   in `internal/packages` (or `internal/bins`) behind the exec runner, where
   it can be tested without cobra.
-- [ ] **Thin the cmd layer generally.** `cmd/audit/cmd` is about 7.6k lines
+- [ ] **Thin the cmd layer generally.** (p3) `cmd/audit/cmd` is about 7.6k lines
   of non-test code; `update.go`, `runtimes.go` and `packages.go` carry
   planning and cleanup logic (`cleanupPlan`, `installedPythons`,
   `rememberNodeMajor`) that would sit better in core or packages.
@@ -104,7 +105,7 @@ Decisions to make: which of these is worth building at all; whether
 All packages pass and lint is clean (checked 2026-10-20); these are the thin
 spots from `go test -cover`.
 
-- [ ] **`internal/core` at 41.7%.** This is the engine (Resolve, Execute,
+- [ ] **`internal/core` at 41.7%.** (p1) This is the engine (Resolve, Execute,
   task reconcile across commands). Narrowed-scope resolution and the
   rescan/saved-only paths are the riskiest parts to leave untested.
 - [ ] **Legacy system scanners at 34-43%**: `scan/procs`, `scan/services`,
@@ -122,7 +123,7 @@ spots from `go test -cover`.
   was written by an early version of the bins install test and committed in
   dd52728; the current code downloads into `os.MkdirTemp`, so nothing needs
   it.
-- [ ] **CLAUDE.md architecture tree is stale.** The overview line about
+- [ ] **CLAUDE.md architecture tree is stale.** (p1) The overview line about
   `repos`/`files`/`configs`/`scripts`/`ai` being planned is fixed; the tree
   still omits `internal/{ai,configs,export,files,registry,
   repos,scripts,taskserver}` and `internal/scan/{resources,security,storage,
