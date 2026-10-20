@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The source tree no longer ships `cmd/audit/cmd/tool-v2.0-linux-amd64.tar.gz`, an archive left behind by an early version of the bins install test.
+- `CLAUDE.md` lists every scanning command and package; `TODO.md` holds the roadmap and known issues with priorities.
+
 ## [0.14.1] - 2026-10-20
 
 ### Fixed
