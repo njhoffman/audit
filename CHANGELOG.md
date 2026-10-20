@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-10-20
+
 ### Fixed
 
 - The source tree no longer ships `cmd/audit/cmd/tool-v2.0-linux-amd64.tar.gz`, an archive left behind by an early version of the bins install test.
