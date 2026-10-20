@@ -31,8 +31,8 @@ type Scanner struct {
 	Workers            int
 	Progress           progress.Reporter
 	// LintedElsewhere reports whether another command (audit scripts)
-	// already lints a file, by its resolved path. Such files are only
-	// parsed and shellchecked here when a shell sources them at startup.
+	// already lints a file, by its resolved path. Such files are never
+	// parsed or shellchecked here, even when a shell sources them.
 	LintedElsewhere func(path string) bool
 	// RunnerFor builds the runner for the analyzed environment; it defaults
 	// to an OS runner resolving commands on that environment's PATH.
@@ -136,7 +136,7 @@ func (s *Scanner) Scan(ctx context.Context) *Result {
 			if r, err := filepath.EvalSymlinks(real); err == nil {
 				real = r
 			}
-			if len(sc.LoadedBy) == 0 && s.LintedElsewhere(real) {
+			if s.LintedElsewhere(real) {
 				continue
 			}
 			lint = append(lint, sc)
