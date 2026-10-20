@@ -9,3 +9,5 @@ coverage.html
 /audit
 # Build artifact: the rendered manpage. Source of truth is man/audit.1.md.
 man/audit.1
+# per-machine Claude Code settings (SessionStart TODO.md hook)
+.claude/settings.local.json
