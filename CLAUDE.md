@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Bare `audit` is a Bubble Tea dashboard.
+`audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`, `repos`, `files`, `configs`, `scripts`, `ai`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Some have action subcommands that change the machine (`packages update`, `repos sync`, `files clean`, `configs clean`): planned, confirmed, verified and saved. Bare `audit` is a Bubble Tea dashboard.
 
-Further commands (`repos`, `files`, `configs`, `scripts`, `ai`) follow the same pattern. Roadmap, open issues and proposals live in `TODO.md`, tagged `(p1)`/`(p3)` (untagged is p2); the global `/todo` and `/todo-pop` commands and SessionStart hook from `~/.shell` read it.
+Roadmap, open issues and proposals live in `TODO.md`, tagged `(p1)`/`(p3)` (untagged is p2); the global `/todo` and `/todo-pop` commands and SessionStart hook from `~/.shell` read it.
 
 ## Commands
 
@@ -23,25 +23,40 @@ Further commands (`repos`, `files`, `configs`, `scripts`, `ai`) follow the same 
 ## Architecture
 
 ```
-cmd/audit/cmd/        cobra wiring: root (dashboard/summary/html), scan commands, todo, history, config, TUI backend
-internal/core/        Engine: Resolve (auto/rescan/saved-only), Execute (scan, ignore, save, prune, reconcile tasks), Analyze; scanner adapters
-internal/system/      system scanner over internal/scan/{procs,services,users,logs,programs}
-internal/environment/ login-shell capture, startup tracing, PATH/env/script checks
-internal/packages/    package-manager collectors and checks
-internal/finding/     Finding, Severity, filters, ignore rules
-internal/todo/        Priority, Status, Derive and Reconcile
-internal/run/         Run, Stat, freshness
-internal/store/       SQLite (modernc): runs, findings, tasks, LLM cache
-internal/llm/         claude -p / codex exec client with prompt-hash cache; prompts for reviews, suggestions, explanations
-internal/render/      terminal output (lipgloss, glamour)
-internal/htmlreport/  self-contained HTML reports and index
-internal/tui/         Bubble Tea dashboard, report viewer, task editor (Backend interface)
-internal/progress/    stderr progress bar / spinner
-internal/exec/        command runner with a Fake for tests
-internal/config/      viper loader, defaults and Template (kept in sync by a test); AUDIT_* env; XDG paths
+cmd/audit/cmd/          cobra wiring: root (dashboard/summary/html), one file per command, todo, history, config, export,
+                        analyze, tasks web page, sudo session, TUI backend (tui.go: defaultScanner); bins install lives here too
+internal/core/          Engine: Resolve (auto/rescan/saved-only), Execute (scan, ignore, save, prune, reconcile tasks), Analyze;
+                        one scanner adapter per command, core.Commands, core.ScopeFlags
+internal/system/        system scanner over internal/scan/{procs,services,users,logs,programs,storage,resources,updates,security}
+internal/environment/   login-shell capture, startup tracing, PATH/env/script checks
+internal/packages/      package-manager collectors (uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak, bins), checks,
+                        update plans, runtimes
+internal/registry/      PyPI, npm, crates.io, Go proxy, rubygems, GitHub lookups feeding the cached packages.Meta
+internal/repos/         git repo discovery, local-only inspection and checks; GitHub data via gh api graphql; sync plans
+internal/files/         disk usage walk, reclaimable space (caches, build dirs, orphaned data, duplicates); clean plans
+internal/configs/       config syntax, program validators, readable credentials, orphaned configs
+internal/scripts/       script inventory, header descriptions, static checks (shellcheck, syntax, interpreters, PATH)
+internal/ai/            AI CLIs, provider keys by name, ollama, MCP servers, Claude Code hooks/permissions, AI projects
+internal/finding/       Finding, Severity, filters, ignore rules
+internal/todo/          Priority, Status, Derive and Reconcile
+internal/run/           Run, Stat, freshness
+internal/store/         SQLite (modernc): runs, findings, tasks, package/repo/runtime meta and tags, updates, script
+                        descriptions, tracked bins, LLM cache; schema_version in meta
+internal/llm/           claude -p / codex exec client with prompt-hash cache; prompts for reviews, suggestions, explanations
+internal/render/        terminal output (lipgloss, glamour)
+internal/htmlreport/    self-contained HTML reports, index and tasks page
+internal/taskserver/    tasks page served on 127.0.0.1 with a status/note API (per-run token, loopback Host check)
+internal/export/        JSON snapshots in the export dir (documented contract: man audit, EXPORT FILES)
+internal/tui/           Bubble Tea dashboard, report viewer, task editor (Backend interface)
+internal/progress/      stderr progress bar / spinner
+internal/exec/          command runner with a Fake for tests
+internal/config/        viper loader, defaults and Template (kept in sync by a test); AUDIT_* env; XDG paths
+internal/log/           charmbracelet/log setup from the verbosity flags
+internal/version/       version, commit, date set by -ldflags
+tools/release/          `just release`: changelog-driven semver bump, commit, tag, push
 ```
 
-A new scanning command implements `core.Scanner` (and `core.Owner` if it supports a narrowed scope), gets added to `core.Commands` and `core.ScopeFlags`, a subcommand in `cmd/audit/cmd/scan.go`, and a case in `app.defaultScanner`.
+A new scanning command implements `core.Scanner` (and `core.Owner` if it supports a narrowed scope) with an adapter in `internal/core/`, gets added to `core.Commands` (and `core.ScopeFlags` if it has a scope flag), a `newXCmd` in its own file under `cmd/audit/cmd/` added to `root.AddCommand`, a case in `defaultScanner` (`cmd/audit/cmd/tui.go`), and a config section.
 
 ## Conventions
 

@@ -123,7 +123,7 @@ spots from `go test -cover`.
   was written by an early version of the bins install test and committed in
   dd52728; the current code downloads into `os.MkdirTemp`, so nothing needs
   it.
-- [ ] **CLAUDE.md architecture tree is stale.** (p1) The overview line about
+- [x] **CLAUDE.md architecture tree is stale.** (p1) The overview line about
   `repos`/`files`/`configs`/`scripts`/`ai` being planned is fixed; the tree
   still omits `internal/{ai,configs,export,files,registry,
   repos,scripts,taskserver}` and `internal/scan/{resources,security,storage,
