@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-20
+
 ### Fixed
 
 - `audit environment` also leaves files under `scripts.roots` that a shell sources at startup to `audit scripts`, so no file is linted by both commands.
