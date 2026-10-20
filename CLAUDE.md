@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Bare `audit` is a Bubble Tea dashboard.
 
-Further commands (`repos`, `files`, `configs`, `scripts`, `ai`) follow the same pattern. Roadmap, open issues and proposals live in `TODO.md` (`/todo` summarizes it; a SessionStart hook lists open items).
+Further commands (`repos`, `files`, `configs`, `scripts`, `ai`) follow the same pattern. Roadmap, open issues and proposals live in `TODO.md` (`/todo` summarizes it, `/todo-pop` picks an item in a tmux fzf popup via `~/.shell/scripts/todo-fzf`; a SessionStart hook lists open items).
 
 ## Commands
 
