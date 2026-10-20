@@ -144,6 +144,9 @@ type AIConfig struct {
 	AnalysisLevel string         `mapstructure:"analysis_level" yaml:"analysis_level"`
 	Timeout       time.Duration  `mapstructure:"timeout" yaml:"timeout"`
 	MaxDetails    int            `mapstructure:"max_details" yaml:"max_details"`
+	// InstructionLimitKB is the CLAUDE.md/AGENTS.md size `audit ai` reports
+	// as large.
+	InstructionLimitKB int64 `mapstructure:"instruction_limit_kb" yaml:"instruction_limit_kb"`
 }
 
 // ProviderConfig is one AI CLI.
@@ -330,6 +333,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("ai.analysis_level", DefaultAnalysisLevel)
 	v.SetDefault("ai.timeout", 5*time.Minute)
 	v.SetDefault("ai.max_details", 10)
+	v.SetDefault("ai.instruction_limit_kb", 40)
 	v.SetDefault("system.journal", DefaultJournalFlags)
 	v.SetDefault("system.logs", DefaultLogs)
 	v.SetDefault("system.log_max_lines", 5000)
@@ -647,6 +651,9 @@ ai:
   timeout: 5m
   # Detail lines per finding sent in the prompt.
   max_details: 10
+  # audit ai reports CLAUDE.md/AGENTS.md files larger than this (they are
+  # loaded into every session).
+  instruction_limit_kb: 40
 
 system:
   # Extra journalctl flags for the journal source.

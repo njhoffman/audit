@@ -55,6 +55,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **scripts** **info** [**-j**] _script_
 
+**audit** **ai** [_scan options_] [**-p**]
+
 **audit** **files** [_scan options_]
 
 **audit** **files** **clean** [**-C** _categories_] [**-N**] [**-y**] [**-x**] [**-j**|**-e**] [_path_...]
@@ -169,6 +171,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **scripts info** _script_
 :   Shows one script's path, language, interpreter, description and its source, usage, and findings.
+
+**ai**
+:   Reports the AI tooling: the **claude**, **codex**, **gh copilot**, **aichat** and **ollama** CLIs (installed, version, logged in from **claude auth status** and **codex login status**, ollama's local server and models; **ai.not_logged_in**, **ai.ollama_down**), provider keys in the environment by name only, and the MCP servers configured in **~/.claude.json** (user and per project), **~/.codex/config.toml** and mcphub, with **ai.mcp_missing** when a server's command is not on PATH. Claude Code's settings are checked for hooks whose program or script is missing (**ai.hook_broken**) and allow rules that let it run any command (**ai.permissions_broad**); unreadable configs are **ai.config_syntax**. AI projects are the repos under **repos.roots** with CLAUDE.md, .claude, AGENTS.md, GEMINI.md, .mcp.json, .cursor or copilot instructions, plus every directory Claude Code has sessions for, each with git branch and changes, instruction size, commands, skills, agents, MCP servers, session count and last session; **ai.instructions_large** flags instruction files over **ai.instruction_limit_kb**, **ai.stale_sessions** sessions of projects that are gone. Nothing is sent to a provider unless **-p**/**\-\-ping** is given, which sends one tiny request to each logged-in CLI (and asks ollama for its version) and implies **\-\-rescan**.
 
 **files**
 :   Measures **files.roots** (home by default) in one parallel walk that stays on each root's filesystem and counts allocated blocks, like **du**, and finds space to reclaim: **files.cache** (tool caches with their own cleaners: uv, pip, go build and modules, pnpm store, npm, yarn, cargo registry, thumbnails; apt archives, the systemd journal, disabled snap revisions, docker's reclaimable space; other large children of **~/.cache**), **files.build** (node_modules, target, .venv, venv, .tox, .gradle and .next of projects unchanged for **files.stale_after**; a tool's own install, such as an LSP under ~/.local/share or a gh extension, never counts), **files.orphaned** (children of ~/.local/share and ~/.local/state whose name matches no installed program: PATH executables, apt packages, flatpaks, snaps, desktop entries), **files.large**, **files.downloads** (files in **files.downloads** older than **files.old_downloads**), **files.trash**, **files.duplicates** (same size, then the same hash of both ends, then of the whole file, reading at most **files.hash_limit_gb**), **files.core_dumps**, **files.empty_dirs** and **files.broken_links**. Version-control internals, caches, dependency trees and files inside git working trees are never listed as large files or duplicates. **\-\-list** shows the largest directories and every candidate; nothing is deleted.
@@ -428,6 +433,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       analysis_level: standard
       timeout: 5m
       max_details: 10          # detail lines per finding in the prompt
+      instruction_limit_kb: 40 # audit ai: CLAUDE.md/AGENTS.md size reported as large
     system:
       journal: "-p 4 -b -n 500 --no-pager"
       logs: [boot, dmesg, journal]
