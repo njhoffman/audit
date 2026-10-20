@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-20
+
 ### Added
 
 - Configurable dashboard and task editor keys: `tui.keys` binds each action to any number of keys, `[]` unbinds one, and setting one action keeps the defaults of the rest. Conflicts on a screen, unknown actions and `ctrl+c` are config errors, and the help line is built from the bindings. `man audit` (KEYS) lists the actions.
