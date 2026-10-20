@@ -371,5 +371,5 @@ func stats(d Data, env *exec.Env, sc *ShellcheckResult) []run.Stat {
 		}
 		out = append(out, run.Stat{Group: "startup", Name: c.Shell + " " + c.Mode, Value: v})
 	}
-	return out
+	return append(out, shellStats(d.Captures)...)
 }

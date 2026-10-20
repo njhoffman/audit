@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit environment` counts what each login shell defines once startup is done, with and without a terminal: aliases, functions, parameters, exported and integer variables, arrays, PATH entries, programs on PATH, commands, completions and key bindings, plus fpath entries, widgets and zinit plugins and snippets in zsh. Each count is a summary row, with the no-terminal count when it differs. Only names are collected.
+- New environment checks: `shell.alias_broken` (an alias runs a command that does not exist; one rolled-up task with a file:line per definition), `shell.alias_shadows` (info: aliases that hide a program of the same name), `shell.fpath_missing`, `shell.fpath_duplicate`, and `shell.notty_definitions` (info: fewer aliases or functions without a terminal).
+
 ## [0.15.0] - 2026-10-20
 
 ### Added

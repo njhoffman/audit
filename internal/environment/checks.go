@@ -31,6 +31,8 @@ type State struct {
 	Shellcheck  *ShellcheckResult // nil when shellcheck was not run
 	Traced      map[string]bool   // shells whose sourced files are known
 	SlowStartup time.Duration
+
+	defs map[string][]definition // see definitions
 }
 
 // SyntaxResult is one `<shell> -n` parse of a script.
@@ -68,6 +70,11 @@ var Checks = []finding.Check[*State]{
 	{ID: "shell.missing_source", Fn: missingSource},
 	{ID: "shell.redefined", Fn: redefined},
 	{ID: "shell.unloaded", Fn: unloaded},
+	{ID: "shell.alias_broken", Fn: aliasBroken},
+	{ID: "shell.alias_shadows", Fn: aliasShadows},
+	{ID: "shell.fpath_missing", Fn: fpathMissing},
+	{ID: "shell.fpath_duplicate", Fn: fpathDuplicate},
+	{ID: "shell.notty_definitions", Fn: nottyDefinitions},
 }
 
 // Analyze runs every environment check.
@@ -604,9 +611,13 @@ type definition struct {
 	shells []string
 }
 
-// redefined reports aliases and functions defined in more than one file
-// loaded by the same shell; only the last one loaded takes effect.
-func redefined(s *State) []finding.Finding {
+// definitions finds the alias and function definitions in the startup
+// scripts, keyed by alias:NAME and function:NAME. Checks run one at a time,
+// so it is computed once on first use.
+func (s *State) definitions() map[string][]definition {
+	if s.defs != nil {
+		return s.defs
+	}
 	defs := map[string][]definition{}
 	add := func(key string, d definition) { defs[key] = append(defs[key], d) }
 	for _, sc := range s.Scripts {
@@ -628,6 +639,14 @@ func redefined(s *State) []finding.Finding {
 			}
 		}
 	}
+	s.defs = defs
+	return defs
+}
+
+// redefined reports aliases and functions defined in more than one file
+// loaded by the same shell; only the last one loaded takes effect.
+func redefined(s *State) []finding.Finding {
+	defs := s.definitions()
 	keys := make([]string, 0, len(defs))
 	for k := range defs {
 		keys = append(keys, k)

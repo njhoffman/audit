@@ -39,6 +39,8 @@ type Capture struct {
 	TimedOut bool              `json:"timed_out,omitempty"`
 	Err      string            `json:"error,omitempty"`
 	Env      map[string]string `json:"-"`
+	// Stats is nil when the shell exited before collecting them.
+	Stats *ShellStats `json:"stats,omitempty"`
 }
 
 // Capturer starts a shell the way a terminal or a tool would.
@@ -65,7 +67,7 @@ var builtinKnown = []*regexp.Regexp{
 
 // captureScript runs once startup is done. It stamps the time first, so the
 // measured start-up excludes the dump, exit, and background jobs that keep
-// the output open afterwards.
+// the output open afterwards. captureScriptFor adds the shell's stats.
 const captureScript = `date +%s%N >"$AUDIT_ENV_OUT.t"; env -0 >"$AUDIT_ENV_OUT"; exit`
 
 // Capture implements Capturer.
@@ -82,8 +84,8 @@ func (c *OSCapturer) Capture(ctx context.Context, shell, mode string) Capture {
 	}
 	envPath := envFile.Name()
 	_ = envFile.Close()
-	stampPath := envPath + ".t"
-	defer func() { _ = os.Remove(envPath); _ = os.Remove(stampPath) }()
+	stampPath, statsPath := envPath+".t", envPath+".s"
+	defer func() { _ = os.Remove(envPath); _ = os.Remove(stampPath); _ = os.Remove(statsPath) }()
 
 	timeout := c.Timeout
 	if timeout <= 0 {
@@ -92,7 +94,7 @@ func (c *OSCapturer) Capture(ctx context.Context, shell, mode string) Capture {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := osexec.CommandContext(ctx, res.Path, "-lic", captureScript) // #nosec G204 -- configured shell
+	cmd := osexec.CommandContext(ctx, res.Path, "-lic", captureScriptFor(shell)) // #nosec G204 -- configured shell
 	cmd.Dir = c.Env.Home
 	cmd.Env = c.cleanEnv(res.Path, mode, envPath)
 	cmd.WaitDelay = time.Second
@@ -128,6 +130,12 @@ func (c *OSCapturer) Capture(ctx context.Context, shell, mode string) Capture {
 	res.Output, res.Filtered = filterOutput(out.String(), append(builtinKnown, c.Known...))
 	if data, err := os.ReadFile(envPath); err == nil && len(data) > 0 { // #nosec G304 -- our temp file
 		res.Env = parseEnv0(data)
+	}
+	if data, err := os.ReadFile(statsPath); err == nil { // #nosec G304 -- our temp file
+		res.Stats = parseStats(data)
+	}
+	if res.Stats != nil && res.Env != nil {
+		res.Stats.Counts["bins"] = countBins(res.Env["PATH"])
 	}
 	return res
 }
