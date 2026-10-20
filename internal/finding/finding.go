@@ -85,6 +85,12 @@ type Group struct {
 	ID    string
 	Title string
 	Hint  string
+	// Rollup also collects the group's issues (notices and worse) into one
+	// task per priority, instead of one task per finding. Its title may use
+	// {n} (the number of findings), {s} ("s" unless n is 1) and {level}
+	// (errors, warnings, notices or suggestions), and its details become
+	// one file:line: message line per detail.
+	Rollup bool
 }
 
 // Key identifies a finding across scans: command:check:subject.

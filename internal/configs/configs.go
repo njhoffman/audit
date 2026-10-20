@@ -302,7 +302,10 @@ func Scan(ctx context.Context, o Options, rep progress.Reporter) (*Data, []findi
 				if perr := Parse(format, data); perr != nil {
 					f.Error = oneLine(perr.Error())
 					add("syntax", finding.Error, p, fmt.Sprintf("%s does not parse as %s: %s", short(p, home), format, f.Error),
-						"Fix the file; the program reading it may ignore it or fail to start.", nil)
+						"Fix the file; the program reading it may ignore it or fail to start.",
+						&finding.Group{ID: "syntax", Rollup: true, Title: "Fix parse errors in {n} config file{s}",
+							Hint: "Fix each file; the program reading it may ignore it or fail to start."})
+					out[len(out)-1].Details = []string{format + ": " + f.Error}
 				}
 				d.Files = append(d.Files, f)
 			}

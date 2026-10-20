@@ -37,6 +37,9 @@ var reportTmpl string
 //go:embed index.html.tmpl
 var indexTmpl string
 
+//go:embed tasks.html.tmpl
+var tasksTmpl string
+
 var funcs = template.FuncMap{
 	"lower": strings.ToLower,
 	"stamp": func(t time.Time) string { return t.Local().Format("2006-01-02 15:04") },
@@ -46,6 +49,7 @@ var funcs = template.FuncMap{
 var (
 	reportT = template.Must(template.New("report").Funcs(funcs).Parse(reportTmpl))
 	indexT  = template.Must(template.New("index").Funcs(funcs).Parse(indexTmpl))
+	tasksT  = template.Must(template.New("tasks").Funcs(funcs).Parse(tasksTmpl))
 )
 
 // Options carries what a report shows besides the run itself.
@@ -334,8 +338,9 @@ type indexRow struct {
 	Tasks     string
 }
 
-// WriteIndex renders the cross-command index.
-func WriteIndex(w io.Writer, rows []IndexRow, now time.Time) error {
+// WriteIndex renders the cross-command index; tasksLink, when set, links
+// the tasks page.
+func WriteIndex(w io.Writer, rows []IndexRow, tasksLink string, now time.Time) error {
 	out := make([]indexRow, len(rows))
 	for i, r := range rows {
 		out[i] = indexRow{IndexRow: r, Findings: "-", Tasks: tasks(r.Open)}
@@ -351,7 +356,44 @@ func WriteIndex(w io.Writer, rows []IndexRow, now time.Time) error {
 		Version   string
 		Generated time.Time
 		Rows      []indexRow
-	}{template.CSS(css), version.Version, now, out}) // #nosec G203 -- embedded stylesheet
+		TasksLink string
+	}{template.CSS(css), version.Version, now, out, tasksLink}) // #nosec G203 -- embedded stylesheet
+}
+
+// TasksFile is the tasks page inside the report directory.
+const TasksFile = "tasks.html"
+
+// TasksPage is what the tasks page shows.
+type TasksPage struct {
+	Tasks []todo.Todo
+	Host  string
+	Now   time.Time
+	// Token, when set, makes the page live: it shows status buttons and a
+	// note editor that post to the task server with this token.
+	Token string
+}
+
+// WriteTasks renders the searchable tasks page. Every task is embedded,
+// closed ones too, so the page filters without a server.
+func WriteTasks(w io.Writer, p TasksPage) error {
+	ts := p.Tasks
+	if ts == nil {
+		ts = []todo.Todo{}
+	}
+	// json.Marshal escapes <, > and &, so the data cannot end the script.
+	b, err := json.Marshal(ts)
+	if err != nil {
+		return err
+	}
+	return tasksT.Execute(w, struct {
+		CSS       template.CSS
+		Version   string
+		Generated time.Time
+		Host      string
+		Tasks     template.JS
+		Live      bool
+		Token     string
+	}{template.CSS(css), version.Version, p.Now, p.Host, template.JS(b), p.Token != "", p.Token}) // #nosec G203 -- embedded stylesheet; JSON escaped by Marshal
 }
 
 func counts(c finding.Counts) string {

@@ -115,8 +115,8 @@ Run without a command in a terminal for the interactive dashboard, or with
 	return root
 }
 
-// writeAllReports rewrites the HTML report of every command's latest run and
-// the index, returning the index path.
+// writeAllReports rewrites the HTML report of every command's latest run,
+// the tasks page and the index, returning the index path.
 func (a *app) writeAllReports(ctx context.Context) (string, error) {
 	for _, c := range core.Commands {
 		r, err := a.engine.Saved(ctx, c, "")
@@ -129,6 +129,9 @@ func (a *app) writeAllReports(ctx context.Context) (string, error) {
 		if _, err := a.writeReport(ctx, r); err != nil {
 			return "", err
 		}
+	}
+	if _, err := a.writeTasksPage(ctx); err != nil {
+		return "", err
 	}
 	return a.writeIndex(ctx)
 }

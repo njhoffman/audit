@@ -174,6 +174,9 @@ func (p *Printer) Todo(t todo.Todo) {
 	for _, d := range t.Details {
 		p.println(perLine(p.faint(), p.wrap("- "+d, 4)))
 	}
+	if len(todo.Locations(t)) > 0 && t.ID > 0 {
+		p.printf("  %s %s\n", p.faint().Render(padRight("editor", 9)), fmt.Sprintf("vim -q <(audit todo show %d -l)", t.ID))
+	}
 }
 
 func stamp(t time.Time) string {

@@ -23,7 +23,8 @@
 {{end}}
 </tbody>
 </table></div>
-<footer>audit {{.Version}}</footer>
+{{if .TasksLink}}<p><a href="{{.TasksLink}}">All tasks</a>: search, filter and group every task.</p>
+{{end}}<footer>audit {{.Version}}</footer>
 </main>
 </body>
 </html>

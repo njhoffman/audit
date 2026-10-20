@@ -66,6 +66,9 @@ audit todo -C packages -p high,medium
 audit todo set 12 done -N "removed in dotfiles"
 audit todo set 7 wont-do       # a won't-do task stays closed across rescans
 audit todo add "split aliases/system.sh" -p low -C environment
+audit todo -o                  # searchable tasks page (tasks.html), opened in the browser
+audit todo -s -o               # the same page served on 127.0.0.1, with status and note editing
+vim -q <(audit todo show 12 -l) # every file:line of a lint task as a quickfix list
 ```
 
 ### Freshness
@@ -74,7 +77,7 @@ A bare `audit <command>` reuses saved results younger than the warn threshold (d
 
 ### Tasks
 
-Errors and criticals become high-priority tasks, warnings medium, notices low, and suggestions suggestion. Informational findings of one check are rolled into a single low-priority task. Rescans keep tasks in sync: new findings add tasks, findings that disappear resolve theirs, and statuses you set (in progress, done, won't do) are kept. A scan limited with `--only`/`--manager` only resolves tasks for the parts it scanned.
+Errors and criticals become high-priority tasks, warnings medium, notices low, and suggestions suggestion. Informational findings of one check are rolled into a single low-priority task, and shellcheck and parse errors become one task per check and priority (for example "Fix shellcheck errors in 20 shell files") listing every file and line. Rescans keep tasks in sync: new findings add tasks, findings that disappear resolve theirs, and statuses you set (in progress, done, won't do) are kept. A scan limited with `--only`/`--manager` only resolves tasks for the parts it scanned.
 
 ### AI review
 

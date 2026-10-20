@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -180,7 +182,7 @@ func TestWriteIndex(t *testing.T) {
 		{Command: "system", Thresholds: th, Link: "system.html", Open: map[todo.Priority]int{todo.High: 2},
 			Latest: &store.RunInfo{FinishedAt: now.Add(-10 * 24 * time.Hour), Counts: finding.Counts{finding.Error: 3}}},
 		{Command: "repos", Thresholds: th},
-	}, now)
+	}, "", now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +190,79 @@ func TestWriteIndex(t *testing.T) {
 	for _, w := range []string{`<a href="system.html">system</a>`, `class="age-old"`, "10d", "3 error", "2 high", "never"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("index missing %q:\n%s", w, out)
+		}
+	}
+	if strings.Contains(out, "tasks.html") {
+		t.Error("no tasks link until the page exists")
+	}
+	b.Reset()
+	if err := WriteIndex(&b, nil, TasksFile, now); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), `<a href="tasks.html">All tasks</a>`) {
+		t.Errorf("index should link the tasks page:\n%s", b.String())
+	}
+}
+
+// tasksData extracts the embedded task JSON of a tasks page.
+func tasksData(t *testing.T, page string) []todo.Todo {
+	t.Helper()
+	const open = `<script id="data" type="application/json">`
+	i := strings.Index(page, open)
+	j := strings.Index(page[i:], "</script>")
+	if i < 0 || j < 0 {
+		t.Fatalf("no data script in page")
+	}
+	var ts []todo.Todo
+	if err := json.Unmarshal([]byte(page[i+len(open):i+j]), &ts); err != nil {
+		t.Fatalf("embedded data: %v\n%s", err, page[i:i+j])
+	}
+	return ts
+}
+
+func TestWriteTasks(t *testing.T) {
+	ts := []todo.Todo{
+		{ID: 1, Command: "system", Title: "OOM </script><script>alert(1)</script>", Priority: todo.High, Status: todo.Open,
+			Details: []string{"/etc/x:3: bad & worse"}},
+		{ID: 2, Command: "repos", Title: "done one", Priority: todo.Low, Status: todo.Done},
+	}
+	var b bytes.Buffer
+	if err := WriteTasks(&b, TasksPage{Tasks: ts, Host: "box", Now: now}); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	if strings.Count(out, "</script>") != 2 {
+		t.Errorf("task text must not close the data script:\n%s", out)
+	}
+	got := tasksData(t, out)
+	if len(got) != 2 || got[0].Title != ts[0].Title || got[1].Status != todo.Done || got[0].Details[0] != ts[0].Details[0] {
+		t.Errorf("embedded tasks %+v", got)
+	}
+	if !regexp.MustCompile(`LIVE =\s*false\s*, TOKEN = ""`).MatchString(out) {
+		t.Error("static page must not be live")
+	}
+	for _, w := range []string{"audit tasks", "on box", "static snapshot"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("page missing %q", w)
+		}
+	}
+}
+
+func TestWriteTasksLiveAndEmpty(t *testing.T) {
+	var b bytes.Buffer
+	if err := WriteTasks(&b, TasksPage{Now: now, Token: "abc123"}); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	if got := tasksData(t, out); got == nil || len(got) != 0 {
+		t.Errorf("no tasks should embed [], got %v", got)
+	}
+	if !regexp.MustCompile(`LIVE =\s*true\s*, TOKEN = "abc123"`).MatchString(out) {
+		t.Error("page with a token must be live")
+	}
+	for _, w := range []string{"changes are saved"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("live page missing %q", w)
 		}
 	}
 }
@@ -210,5 +285,30 @@ func TestSave(t *testing.T) {
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 1 {
 		t.Errorf("temp files left behind: %v", entries)
+	}
+}
+
+// TestTasksScriptParses checks the page's inline script with node --check,
+// so a template edit cannot ship a page whose UI never starts.
+func TestTasksScriptParses(t *testing.T) {
+	node, err := osexec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	for _, token := range []string{"", "abc"} {
+		var b bytes.Buffer
+		if err := WriteTasks(&b, TasksPage{Now: now, Token: token, Tasks: []todo.Todo{{ID: 1, Title: "x"}}}); err != nil {
+			t.Fatal(err)
+		}
+		page := b.String()
+		i := strings.LastIndex(page, "<script>")
+		j := strings.LastIndex(page, "</script>")
+		js := filepath.Join(t.TempDir(), "page.js")
+		if err := os.WriteFile(js, []byte(page[i+len("<script>"):j]), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := osexec.Command(node, "--check", js).CombinedOutput(); err != nil { // #nosec G204 -- test
+			t.Errorf("tasks page script (token %q) does not parse: %v\n%s", token, err, out)
+		}
 	}
 }

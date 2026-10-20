@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>audit tasks</title>
+<style>{{.CSS}}
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 4px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; user-select: none; }
+.card .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.card .l { color: var(--muted); font-size: 13px; }
+.card.on { outline: 2px solid var(--accent); }
+.bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 10px 0 2px; background: var(--line); }
+.bar span { display: block; height: 100%; }
+.bg-high { background: var(--high); } .bg-medium { background: var(--medium); } .bg-low { background: var(--low); } .bg-suggestion { background: var(--suggestion); }
+.controls select, .controls button { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; font-size: 13px; }
+.controls button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.group h2 { display: flex; gap: 8px; align-items: baseline; }
+.group h2 .count { color: var(--muted); font-weight: 400; font-size: 14px; }
+.task { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid currentColor; border-radius: 6px; padding: 10px 14px; margin: 8px 0; }
+.task.closed { opacity: .62; }
+.task .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.task .id { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.task .badge { font-weight: 700; text-transform: uppercase; font-size: 12px; }
+.task .status { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.task .status.in_progress { color: var(--accent); border-color: var(--accent); }
+.task .cmd { color: var(--accent); font-size: 13px; }
+.task .title { color: var(--fg); font-weight: 600; flex-basis: 100%; }
+.task .hint { color: var(--fresh); margin-top: 4px; font-size: 14px; }
+.task .note { margin-top: 4px; font-size: 14px; }
+.task .note::before { content: "note: "; color: var(--muted); }
+.task details { margin-top: 4px; color: var(--muted); font-size: 14px; }
+.task ul { margin: 4px 0; padding-left: 20px; }
+.task details.file { margin: 4px 0 4px 12px; }
+.task details.file summary code { color: var(--fg); }
+.task details.file .count { color: var(--muted); }
+.task button.copy { margin: 0 0 2px 14px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); font-size: 11px; cursor: pointer; }
+.task table.lines { border-collapse: collapse; margin: 2px 0 6px 14px; font-size: 13px; width: auto; background: transparent; }
+.task table.lines td { border: none; padding: 1px 8px 1px 0; vertical-align: top; }
+.task table.lines td.ln { color: var(--muted); text-align: right; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+.task .times { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.task .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.task .actions button { padding: 3px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; font-size: 12px; cursor: pointer; }
+.task .actions button:hover { border-color: var(--accent); }
+.task .actions input { flex: 1 1 200px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
+mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 2px; }
+.live { color: var(--fresh); font-weight: 600; }
+.err { color: var(--error); font-weight: 600; }
+kbd { font-family: ui-monospace, Menlo, monospace; font-size: 12px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<main>
+<h1>audit tasks</h1>
+<div class="meta">Generated {{stamp .Generated}} on {{.Host}}{{if .Live}} &middot; <span class="live">live: changes are saved</span>{{else}} &middot; static snapshot; <code>audit todo --serve</code> makes it editable{{end}} &middot; press <kbd>/</kbd> to search</div>
+<div id="msg" class="meta"></div>
+<div class="cards" id="cards"></div>
+<div class="bar" id="bar" title="open tasks by priority"></div>
+<div class="controls">
+  <input type="search" id="q" placeholder="Search title, details, hint, note, check, key...">
+  <select id="status" title="status">
+    <option value="active">open + in progress</option>
+    <option value="open">open</option>
+    <option value="in_progress">in progress</option>
+    <option value="done">done</option>
+    <option value="wont_do">won't do</option>
+    <option value="resolved">resolved</option>
+    <option value="closed">all closed</option>
+    <option value="all">all</option>
+  </select>
+  <select id="command" title="command"><option value="">all commands</option></select>
+  <select id="source" title="source"><option value="">all sources</option></select>
+  <select id="group" title="group by">
+    <option value="command">group: command</option>
+    <option value="priority">group: priority</option>
+    <option value="status">group: status</option>
+    <option value="check">group: check</option>
+    <option value="">no grouping</option>
+  </select>
+  <select id="sort" title="sort">
+    <option value="priority">sort: priority</option>
+    <option value="updated">sort: recently updated</option>
+    <option value="created">sort: newest</option>
+    <option value="title">sort: title</option>
+  </select>
+  <button id="expand" type="button">expand all</button>
+</div>
+<div id="count" class="meta"></div>
+<div id="list"></div>
+<footer>audit {{.Version}}</footer>
+</main>
+<script id="data" type="application/json">{{.Tasks}}</script>
+<script>
+(function () {
+  "use strict";
+  var LIVE = {{.Live}}, TOKEN = {{.Token}};
+  var tasks = JSON.parse(document.getElementById("data").textContent) || [];
+  var PRIO = ["high", "medium", "low", "suggestion"];
+  var STATUSES = [["open", "open"], ["in_progress", "in progress"], ["done", "done"], ["wont_do", "won't do"]];
+  var LABEL = { "open": "open", "in_progress": "in progress", "done": "done", "wont_do": "won't do", "resolved": "resolved" };
+  var closed = function (t) { return t.status === "done" || t.status === "wont_do" || t.status === "resolved"; };
+  var $ = function (id) { return document.getElementById(id); };
+  var opened = {};
+  var state = { q: "", status: "active", command: "", source: "", group: "command", sort: "priority", prio: "", expand: false };
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) { e.className = cls; }
+    if (text !== undefined && text !== null) { e.textContent = text; }
+    return e;
+  }
+  function highlight(parent, text) {
+    var q = state.q.toLowerCase();
+    if (!q || !text) { parent.appendChild(document.createTextNode(text || "")); return parent; }
+    var low = text.toLowerCase(), i = 0, j;
+    while ((j = low.indexOf(q, i)) >= 0) {
+      parent.appendChild(document.createTextNode(text.slice(i, j)));
+      parent.appendChild(el("mark", "", text.slice(j, j + q.length)));
+      i = j + q.length;
+    }
+    parent.appendChild(document.createTextNode(text.slice(i)));
+    return parent;
+  }
+  function ago(s) {
+    if (!s) { return ""; }
+    var d = (Date.now() - new Date(s).getTime()) / 1000;
+    if (d < 90) { return "just now"; }
+    var units = [[86400 * 365, "y"], [86400 * 30, "mo"], [86400 * 7, "w"], [86400, "d"], [3600, "h"], [60, "m"]];
+    for (var k = 0; k < units.length; k++) { if (d >= units[k][0]) { return Math.floor(d / units[k][0]) + units[k][1] + " ago"; } }
+    return "just now";
+  }
+  // byFile groups detail lines of the form "/path:LINE: msg" or "/path: msg"
+  // by file; it returns null unless every line names a file and at least
+  // one names a line, so plain path lists stay flat.
+  var LOC = /^(\/[^:]+):(\d+): (.*)$/, PATHMSG = /^(\/[^:]+): (.*)$/;
+  function byFile(details) {
+    var out = [], idx = {};
+    for (var i = 0; i < details.length; i++) {
+      var m = LOC.exec(details[i]), line = 0, path, msg;
+      if (m) { path = m[1]; line = parseInt(m[2], 10); msg = m[3]; }
+      else if ((m = PATHMSG.exec(details[i]))) { path = m[1]; msg = m[2]; }
+      else { return null; }
+      if (!(path in idx)) { idx[path] = out.length; out.push({ path: path, lines: [] }); }
+      out[idx[path]].lines.push({ line: line, msg: msg });
+    }
+    return out.length && details.some(function (x) { return LOC.test(x); }) ? out : null;
+  }
+  // hasLines reports whether a task lists file:line locations.
+  function hasLines(t) { return !!(t.details && t.details.some(function (x) { return LOC.test(x); })); }
+  function copyText(text, btn) {
+    var done = function () { var o = btn.textContent; btn.textContent = "copied"; setTimeout(function () { btn.textContent = o; }, 1200); };
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done); return; }
+    var ta = el("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) { btn.textContent = "copy failed"; }
+    ta.remove();
+  }
+  function matches(t) {
+    if (state.status === "active" && closed(t)) { return false; }
+    if (state.status === "closed" && !closed(t)) { return false; }
+    if (["open", "in_progress", "done", "wont_do", "resolved"].indexOf(state.status) >= 0 && t.status !== state.status) { return false; }
+    if (state.command && t.command !== state.command) { return false; }
+    if (state.source && t.source !== state.source) { return false; }
+    if (state.prio && t.priority !== state.prio) { return false; }
+    if (state.q) {
+      var hay = [t.title, t.hint, t.note, t.check, t.key, t.command, "#" + t.id].concat(t.details || []).join("\n").toLowerCase();
+      if (hay.indexOf(state.q.toLowerCase()) < 0) { return false; }
+    }
+    return true;
+  }
+  function compare(a, b) {
+    switch (state.sort) {
+    case "updated": return (b.updated_at || "").localeCompare(a.updated_at || "");
+    case "created": return (b.created_at || "").localeCompare(a.created_at || "");
+    case "title": return (a.title || "").localeCompare(b.title || "");
+    }
+    var pa = PRIO.indexOf(a.priority), pb = PRIO.indexOf(b.priority);
+    if (closed(a) !== closed(b)) { return closed(a) ? 1 : -1; }
+    if (pa !== pb) { return pa - pb; }
+    return (a.command + a.title).localeCompare(b.command + b.title);
+  }
+  function save(t, body) {
+    $("msg").textContent = "saving #" + t.id + "...";
+    $("msg").className = "meta";
+    fetch("api/tasks/" + t.id, { method: "POST", headers: { "Content-Type": "application/json", "X-Audit-Token": TOKEN },
+      body: JSON.stringify(body) })
+      .then(function (r) { if (!r.ok) { return r.text().then(function (x) { throw new Error(x || r.status); }); } return r.json(); })
+      .then(function (nt) {
+        for (var i = 0; i < tasks.length; i++) { if (tasks[i].id === nt.id) { tasks[i] = nt; } }
+        $("msg").textContent = "#" + nt.id + " saved: " + LABEL[nt.status];
+        render();
+      })
+      .catch(function (e) { $("msg").textContent = "could not save #" + t.id + ": " + e.message; $("msg").className = "err"; });
+  }
+  function taskNode(t) {
+    var d = el("div", "task prio-" + t.priority + (closed(t) ? " closed" : ""));
+    var head = el("div", "head");
+    head.appendChild(el("span", "id", "#" + t.id));
+    head.appendChild(el("span", "badge", t.priority));
+    head.appendChild(el("span", "status " + t.status, LABEL[t.status] || t.status));
+    head.appendChild(el("span", "cmd", t.command + (t.check ? " / " + t.check : "")));
+    if (t.source === "ai" || t.source === "manual") { head.appendChild(el("span", "status", t.source)); }
+    head.appendChild(highlight(el("span", "title"), t.title));
+    d.appendChild(head);
+    if (t.hint) { d.appendChild(highlight(el("div", "hint"), t.hint)); }
+    if (t.note) { d.appendChild(highlight(el("div", "note"), t.note)); }
+    if (t.details && t.details.length) {
+      var det = el("details");
+      det.open = state.expand || opened[t.id] || (state.q && t.details.join("\n").toLowerCase().indexOf(state.q.toLowerCase()) >= 0);
+      det.ontoggle = function () { opened[t.id] = det.open; };
+      var files = byFile(t.details);
+      det.appendChild(el("summary", "", t.details.length + " detail(s)" + (files ? " in " + files.length + " file(s)" : "")));
+      if (files) {
+        files.forEach(function (f) {
+          var fd = el("details", "file");
+          fd.open = det.open && files.length <= 5;
+          var sm = el("summary");
+          highlight(sm.appendChild(el("code")), f.path);
+          sm.appendChild(el("span", "count", " " + f.lines.length));
+          fd.appendChild(sm);
+          var copy = el("button", "copy", "copy path");
+          copy.type = "button";
+          copy.onclick = function () { copyText(f.path, copy); };
+          fd.appendChild(copy);
+          var tb = el("table", "lines");
+          f.lines.forEach(function (l) {
+            var tr = el("tr");
+            tr.appendChild(el("td", "ln", l.line ? String(l.line) : ""));
+            tr.appendChild(highlight(el("td"), l.msg));
+            tb.appendChild(tr);
+          });
+          fd.appendChild(tb);
+          det.appendChild(fd);
+        });
+      } else {
+        var ul = el("ul");
+        t.details.forEach(function (x) { ul.appendChild(highlight(el("li"), x)); });
+        det.appendChild(ul);
+      }
+      d.appendChild(det);
+    }
+    var times = "created " + ago(t.created_at) + (t.updated_at ? ", updated " + ago(t.updated_at) : "");
+    if (t.resolved_at && !t.resolved_at.startsWith("0001")) { times += ", closed " + ago(t.resolved_at); }
+    d.appendChild(el("div", "times", times + " · " + t.key));
+    if (hasLines(t)) {
+      var q = el("div", "times");
+      q.appendChild(document.createTextNode("every location in vim: "));
+      q.appendChild(el("code", "", "vim -q <(audit todo show " + t.id + " -l)"));
+      d.appendChild(q);
+    }
+    if (LIVE) {
+      var act = el("div", "actions");
+      STATUSES.forEach(function (s) {
+        if (s[0] === t.status) { return; }
+        var b = el("button", "", s[1]);
+        b.type = "button";
+        b.onclick = function () { save(t, { status: s[0] }); };
+        act.appendChild(b);
+      });
+      var inp = el("input");
+      inp.placeholder = "note (enter to save)";
+      inp.value = t.note || "";
+      inp.onkeydown = function (e) { if (e.key === "Enter") { save(t, { note: inp.value }); } };
+      act.appendChild(inp);
+      d.appendChild(act);
+    }
+    return d;
+  }
+  function groupKey(t) {
+    switch (state.group) {
+    case "priority": return t.priority;
+    case "status": return LABEL[t.status] || t.status;
+    case "check": return t.check || t.source;
+    case "command": return t.command;
+    }
+    return "";
+  }
+  function cards() {
+    var box = $("cards"), bar = $("bar");
+    box.textContent = "";
+    bar.textContent = "";
+    var open = tasks.filter(function (t) { return !closed(t); });
+    var mk = function (n, label, prio) {
+      var c = el("div", "card" + (prio ? " prio-" + prio : "") + (state.prio === prio && prio ? " on" : ""));
+      c.appendChild(el("div", "n", String(n)));
+      c.appendChild(el("div", "l", label));
+      if (prio) { c.onclick = function () { state.prio = state.prio === prio ? "" : prio; render(); }; }
+      else { c.onclick = function () { state.prio = ""; render(); }; }
+      box.appendChild(c);
+    };
+    mk(open.length, "open tasks");
+    PRIO.forEach(function (p) {
+      var n = open.filter(function (t) { return t.priority === p; }).length;
+      mk(n, p, p);
+      if (n && open.length) {
+        var s = el("span", "bg-" + p);
+        s.style.width = (100 * n / open.length) + "%";
+        s.title = n + " " + p;
+        bar.appendChild(s);
+      }
+    });
+    mk(tasks.filter(function (t) { return t.status === "in_progress"; }).length, "in progress");
+    mk(tasks.filter(closed).length, "closed");
+  }
+  function render() {
+    cards();
+    var shown = tasks.filter(matches).sort(compare);
+    var list = $("list");
+    list.textContent = "";
+    $("count").textContent = shown.length + " of " + tasks.length + " task(s)";
+    var groups = {}, order = [];
+    shown.forEach(function (t) {
+      var k = groupKey(t);
+      if (!groups[k]) { groups[k] = []; order.push(k); }
+      groups[k].push(t);
+    });
+    if (state.group === "priority") { order.sort(function (a, b) { return PRIO.indexOf(a) - PRIO.indexOf(b); }); }
+    else { order.sort(); }
+    order.forEach(function (k) {
+      var g = el("section", "group");
+      if (state.group) {
+        var h = el("h2", "", k || "(none)");
+        h.appendChild(el("span", "count", groups[k].length + ""));
+        g.appendChild(h);
+      }
+      groups[k].forEach(function (t) { g.appendChild(taskNode(t)); });
+      list.appendChild(g);
+    });
+    if (!shown.length) { list.appendChild(el("p", "meta", "No tasks match.")); }
+    var h = new URLSearchParams();
+    ["q", "status", "command", "source", "group", "sort", "prio"].forEach(function (k) { if (state[k]) { h.set(k, state[k]); } });
+    history.replaceState(null, "", "#" + h.toString());
+  }
+  function fill(id, values) {
+    var s = $(id);
+    values.forEach(function (v) { var o = el("option", "", v); o.value = v; s.appendChild(o); });
+  }
+  var uniq = function (f) { return tasks.map(f).filter(function (v, i, a) { return v && a.indexOf(v) === i; }).sort(); };
+  fill("command", uniq(function (t) { return t.command; }));
+  fill("source", uniq(function (t) { return t.source; }));
+  var hp = new URLSearchParams(location.hash.slice(1));
+  ["q", "status", "command", "source", "group", "sort", "prio"].forEach(function (k) { if (hp.has(k)) { state[k] = hp.get(k); } });
+  ["q", "status", "command", "source", "group", "sort"].forEach(function (k) {
+    var e = $(k);
+    e.value = state[k];
+    e.addEventListener(k === "q" ? "input" : "change", function () { state[k] = e.value; render(); });
+  });
+  $("expand").onclick = function () { state.expand = !state.expand; $("expand").className = state.expand ? "on" : ""; render(); };
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("q").focus(); }
+    if (e.key === "Escape" && document.activeElement === $("q")) { $("q").value = ""; state.q = ""; render(); }
+  });
+  render();
+})();
+</script>
+</body>
+</html>

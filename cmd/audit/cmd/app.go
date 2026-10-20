@@ -137,22 +137,29 @@ func (a *app) ensureConfig() error {
 	return nil
 }
 
-// close rewrites the export snapshots when this invocation saved anything,
-// then releases the store. It runs after errors too, and a second call does
+// close rewrites the export snapshots and an existing tasks page when this
+// invocation saved anything, then releases the store. It runs after errors too, and a second call does
 // nothing.
 func (a *app) close() {
 	if a.store == nil {
 		return
 	}
-	if a.cfg.Export.Enabled {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		if n, err := a.store.Changes(ctx); err == nil && n != a.changes {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if n, err := a.store.Changes(ctx); err == nil && n != a.changes {
+		if a.cfg.Export.Enabled {
 			if err := a.export(ctx, a.cfg.ExportDir()); err != nil {
 				a.log.Warn("export snapshots", "dir", a.cfg.ExportDir(), "err", err)
 			}
 		}
-		cancel()
+		// A tasks page written earlier is kept current, so it never shows
+		// statuses older than the database.
+		if a.tasksLink() != "" {
+			if _, err := a.writeTasksPage(ctx); err != nil {
+				a.log.Warn("refresh tasks page", "err", err)
+			}
+		}
 	}
+	cancel()
 	_ = a.store.Close()
 	a.store, a.engine = nil, nil
 }
@@ -279,7 +286,7 @@ func (a *app) writeIndex(ctx context.Context) (string, error) {
 		}
 	}
 	path := filepath.Join(a.cfg.ReportDir(), "index.html")
-	err = htmlreport.Save(path, func(w io.Writer) error { return htmlreport.WriteIndex(w, rows, timeNow()) })
+	err = htmlreport.Save(path, func(w io.Writer) error { return htmlreport.WriteIndex(w, rows, a.tasksLink(), timeNow()) })
 	if err != nil {
 		return "", fmt.Errorf("write index: %w", err)
 	}

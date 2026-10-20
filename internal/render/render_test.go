@@ -219,6 +219,14 @@ func TestTodos(t *testing.T) {
 	if strings.Contains(out, "resolved") {
 		t.Error("zero times should be omitted")
 	}
+	if strings.Contains(out, "vim -q") {
+		t.Error("a task without file:line details has no editor line")
+	}
+	b.Reset()
+	p.Todo(todo.Todo{ID: 9, Title: "Fix shellcheck errors in 1 script", Details: []string{"/bin/x:3: SC2086 quote"}})
+	if !strings.Contains(b.String(), "editor    vim -q <(audit todo show 9 -l)") {
+		t.Errorf("lint task should name the quickfix command:\n%s", b.String())
+	}
 }
 
 func TestPackages(t *testing.T) {

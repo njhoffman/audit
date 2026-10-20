@@ -28,6 +28,9 @@ func newTodoCmd(a *app) *cobra.Command {
 		search      string
 		asJSON      bool
 		interactive bool
+		html, open  bool
+		serve       bool
+		port        int
 	)
 	c := &cobra.Command{
 		Use:     "todo",
@@ -39,7 +42,12 @@ suggestion. Info findings of one check are rolled into a single low-priority
 task. Rescans keep tasks in sync: new findings add tasks, findings that are
 gone resolve theirs, and a task you mark won't-do stays that way.
 
-Without a subcommand, open and in-progress tasks are listed.`,
+Without a subcommand, open and in-progress tasks are listed.
+
+--html writes tasks.html next to the reports: every task, searchable and
+filterable in the browser. --serve serves the same page on 127.0.0.1 with
+buttons that change status and notes; the URL it prints carries a per-run
+token that every request needs.`,
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			if err := a.load(); err != nil {
@@ -62,6 +70,25 @@ Without a subcommand, open and in-progress tasks are listed.`,
 			}
 			if interactive {
 				return runTodoEditor(c.Context(), a, flt)
+			}
+			if serve {
+				return a.serveTasks(c.Context(), port, open, nil)
+			}
+			if html || open {
+				path, err := a.writeTasksPage(c.Context())
+				if err != nil {
+					return err
+				}
+				if _, err := a.writeIndex(c.Context()); err != nil {
+					return err
+				}
+				if open {
+					if err := a.opener(path); err != nil {
+						return err
+					}
+				}
+				sayln(a.errOut, "tasks: "+path)
+				return nil
 			}
 			ts, err := a.store.Todos(c.Context(), "")
 			if err != nil {
@@ -87,17 +114,32 @@ Without a subcommand, open and in-progress tasks are listed.`,
 	fl.StringVarP(&search, "find", "f", "", "only tasks whose title, key or note contains this text")
 	fl.BoolVarP(&asJSON, "json", "j", false, "print tasks as JSON")
 	fl.BoolVarP(&interactive, "interactive", "i", false, "browse and change tasks in a terminal UI")
+	fl.BoolVarP(&html, "html", "H", false, "write the searchable tasks page (tasks.html in the report directory)")
+	fl.BoolVarP(&open, "open", "o", false, "like --html, then open it; with --serve, open the live page")
+	fl.BoolVarP(&serve, "serve", "s", false, "serve the tasks page on 127.0.0.1, saving status and note changes")
+	fl.IntVarP(&port, "port", "P", 0, "port for --serve (default: any free port)")
+	c.MarkFlagsMutuallyExclusive("interactive", "serve")
+	c.MarkFlagsMutuallyExclusive("interactive", "html")
+	c.MarkFlagsMutuallyExclusive("json", "serve")
+	c.MarkFlagsMutuallyExclusive("json", "html")
 
 	c.AddCommand(newTodoShowCmd(a), newTodoSetCmd(a), newTodoNoteCmd(a), newTodoAddCmd(a), newTodoRmCmd(a), newTodoExplainCmd(a))
 	return c
 }
 
 func newTodoShowCmd(a *app) *cobra.Command {
-	var asJSON bool
+	var asJSON, lines bool
 	c := &cobra.Command{
 		Use:   "show ID",
 		Short: "Show every field of a task",
-		Args:  cobra.ExactArgs(1),
+		Long: `Show every field of a task, including all of its detail lines.
+
+--lines prints only the detail lines, one per line. Tasks that collect lint
+or syntax errors (shellcheck, parse failures) list them as FILE:LINE: message,
+which editors read as a quickfix list:
+
+  vim -q <(audit todo show 12 -l)`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			id, err := parseID(args[0])
 			if err != nil {
@@ -110,14 +152,22 @@ func newTodoShowCmd(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if asJSON {
+			switch {
+			case asJSON:
 				return a.writeJSON(t)
+			case lines:
+				for _, d := range t.Details {
+					sayln(a.out, d)
+				}
+				return nil
 			}
 			a.printer().Todo(t)
 			return nil
 		},
 	}
 	c.Flags().BoolVarP(&asJSON, "json", "j", false, "print the task as JSON")
+	c.Flags().BoolVarP(&lines, "lines", "l", false, "print only the detail lines (FILE:LINE: message for lint tasks)")
+	c.MarkFlagsMutuallyExclusive("json", "lines")
 	return c
 }
 

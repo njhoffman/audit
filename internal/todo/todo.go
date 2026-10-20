@@ -6,8 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -173,7 +175,8 @@ func GroupKey(command, check, group string) string { return command + ":" + chec
 // Derive builds the task list a set of findings calls for. Each issue or
 // suggestion gets its own task; info issues get one low-priority task per check
 // asking whether the items can be deleted or ignored, or one per group when
-// the finding names one.
+// the finding names one. Issues of a Rollup group become one task per
+// priority listing every file:line.
 func Derive(fs []finding.Finding) []Todo {
 	var out []Todo
 	seen := map[string]int{}
@@ -185,8 +188,31 @@ func Derive(fs []finding.Finding) []Todo {
 	aggs := map[string]*agg{}
 	var aggOrder []string
 
+	type roll struct {
+		command, check string
+		group          *finding.Group
+		priority       Priority
+		n              int
+		lines          []string
+		hint           string
+	}
+	rolls := map[string]*roll{}
+	var rollOrder []string
+
 	for _, f := range fs {
 		p := PriorityFor(f)
+		if p != "" && f.Group != nil && f.Group.Rollup {
+			k := GroupKey(f.Command, f.Check, f.Group.ID+"."+string(p))
+			r, ok := rolls[k]
+			if !ok {
+				r = &roll{command: f.Command, check: f.Check, group: f.Group, priority: p, hint: f.Hint}
+				rolls[k] = r
+				rollOrder = append(rollOrder, k)
+			}
+			r.n++
+			r.lines = append(r.lines, locationLines(f)...)
+			continue
+		}
 		if p == "" {
 			k := AggregateKey(f.Command, f.Check)
 			if f.Group != nil {
@@ -239,6 +265,72 @@ func Derive(fs []finding.Finding) []Todo {
 			}
 		}
 		out = append(out, t)
+	}
+	for _, k := range rollOrder {
+		r := rolls[k]
+		plural := "s"
+		if r.n == 1 {
+			plural = ""
+		}
+		hint := r.group.Hint
+		if hint == "" {
+			hint = r.hint
+		}
+		title := strings.NewReplacer("{n}", fmt.Sprint(r.n), "{s}", plural, "{level}", levelWord[r.priority]).Replace(r.group.Title)
+		out = append(out, Todo{Key: k, Command: r.command, Check: r.check, Title: title, Hint: hint, Details: r.lines,
+			Priority: r.priority, Status: Open, Source: FromAggregate})
+	}
+	return out
+}
+
+var levelWord = map[Priority]string{High: "errors", Medium: "warnings", Low: "notices", Suggestion: "suggestions"}
+
+var (
+	lineDetail     = regexp.MustCompile(`^line (\d+): (.*)$`)
+	pathLineDetail = regexp.MustCompile(`^(/[^:]+): line (\d+): (.*)$`)
+	location       = regexp.MustCompile(`^(/[^:]+):(\d+): `)
+)
+
+// locationLines turns a finding into file:line: message lines, the format
+// editors read as a quickfix list. Details of the form "line N: ..." are
+// placed in the finding's subject; "PATH: line N: ..." keep their path. A
+// finding without details becomes one "subject: message" line.
+func locationLines(f finding.Finding) []string {
+	if len(f.Details) == 0 {
+		return []string{titleFor(f)}
+	}
+	out := make([]string, len(f.Details))
+	for i, d := range f.Details {
+		switch {
+		case pathLineDetail.MatchString(d):
+			out[i] = pathLineDetail.ReplaceAllString(d, "$1:$2: $3")
+		case lineDetail.MatchString(d):
+			out[i] = f.Subject + ":" + lineDetail.ReplaceAllString(d, "$1: $2")
+		default:
+			out[i] = f.Subject + ": " + d
+		}
+	}
+	return out
+}
+
+// Location is one file position named by a task detail line.
+type Location struct {
+	Path    string
+	Line    int
+	Message string
+}
+
+// Locations returns the details of t that name a file and line
+// ("PATH:LINE: message"), in order.
+func Locations(t Todo) []Location {
+	var out []Location
+	for _, d := range t.Details {
+		m := location.FindStringSubmatch(d)
+		if m == nil {
+			continue
+		}
+		n, _ := strconv.Atoi(m[2])
+		out = append(out, Location{Path: m[1], Line: n, Message: d[len(m[0]):]})
 	}
 	return out
 }

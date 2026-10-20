@@ -207,6 +207,8 @@ func Lint(ctx context.Context, env *exec.Env, ss []Script, o ScanOptions) ([]fin
 				fd := mk("shellcheck", worst[f], sc, fmt.Sprintf("shellcheck reports %d problem(s) in %s", len(grouped[f]), sc.Name),
 					"shellcheck "+f)
 				fd.Details = grouped[f]
+				fd.Group = &finding.Group{ID: "shellcheck", Rollup: true, Title: "Fix shellcheck {level} in {n} script{s}",
+					Hint: "Run shellcheck FILE for context and fixes."}
 				out = append(out, fd)
 			}
 		}
@@ -241,7 +243,9 @@ func Lint(ctx context.Context, env *exec.Env, ss []Script, o ScanOptions) ([]fin
 		}
 		if !r.OK() && r.Code != exec.ExitNotFound && r.Code != exec.ExitTimeout {
 			msg := oneLine(r.Stderr + "\n" + r.Stdout)
-			out = append(out, mk("syntax", finding.Error, s, fmt.Sprintf("%s: %s reports %s", s.Name, tool, msg), "Fix the reported line."))
+			f := mk("syntax", finding.Error, s, fmt.Sprintf("%s: %s reports %s", s.Name, tool, msg), "Fix the reported line.")
+			f.Group = &finding.Group{ID: "syntax", Rollup: true, Title: "Fix parse errors in {n} script{s}"}
+			out = append(out, f)
 		}
 	}
 	return out, errs

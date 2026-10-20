@@ -450,6 +450,11 @@ func syntax(s *State) []finding.Finding {
 			f.Message = fmt.Sprintf("%s (not sourced at startup) does not parse under %s: %s", r.Path, r.Shell, r.Errors[0])
 			f.Hint = "Nothing sources it during startup. If something loads it later (zinit turbo, a plugin) fix it; " +
 				"otherwise delete it or give it a non-shell extension."
+			f.Group = &finding.Group{ID: "syntax_unsourced", Rollup: true, Title: "Fix or delete {n} unsourced shell file{s} with parse errors",
+				Hint: f.Hint}
+		} else {
+			f.Group = &finding.Group{ID: "syntax", Rollup: true, Title: "Fix parse errors in {n} startup file{s} (bash or zsh)",
+				Hint: f.Hint}
 		}
 		out = append(out, f)
 	}
@@ -483,6 +488,8 @@ func shellcheck(s *State) []finding.Finding {
 			Severity: sev, Subject: f, Details: comments,
 			Message: fmt.Sprintf("shellcheck reports %d problem%s in %s", len(comments), plural(len(comments), "", "s"), f),
 			Hint:    "Run `shellcheck " + f + "` for context and fixes.",
+			Group: &finding.Group{ID: "shellcheck", Rollup: true, Title: "Fix shellcheck {level} in {n} shell file{s}",
+				Hint: "Run shellcheck FILE for context and fixes."},
 		})
 	}
 	return out

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/njhoffman/audit/internal/finding"
+	"github.com/njhoffman/audit/internal/todo"
 )
 
 func TestPathDuplicateRelativeMissing(t *testing.T) {
@@ -231,6 +232,19 @@ func TestSyntaxAndShellcheck(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, map[string]finding.Severity{"/b.sh": finding.Error, "/c.sh": finding.Warning}) {
 		t.Fatalf("shellcheck = %v", got)
+	}
+	// Lint and parse errors roll up into one task per priority, listing
+	// every file:line.
+	var titles []string
+	for _, x := range todo.Derive(append(byCheck(fs, "shell.shellcheck"), byCheck(fs, "shell.syntax")...)) {
+		titles = append(titles, string(x.Priority)+" "+x.Title)
+		if x.Title == "Fix shellcheck errors in 1 shell file" && strings.Join(x.Details, "|") != "/b.sh:1: SC1000|/b.sh:2: SC1001" {
+			t.Errorf("rollup details %v", x.Details)
+		}
+	}
+	if strings.Join(titles, "|") != "high Fix shellcheck errors in 1 shell file|medium Fix shellcheck warnings in 1 shell file|"+
+		"high Fix parse errors in 1 startup file (bash or zsh)|medium Fix or delete 1 unsourced shell file with parse errors" {
+		t.Errorf("rollup tasks %q", titles)
 	}
 
 	s.Shellcheck = &ShellcheckResult{}

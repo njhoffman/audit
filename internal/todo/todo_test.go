@@ -337,3 +337,62 @@ func TestReconcileAI(t *testing.T) {
 		}
 	}
 }
+
+func TestDeriveRollsUpIssues(t *testing.T) {
+	sc := &finding.Group{ID: "shellcheck", Rollup: true, Title: "Fix shellcheck {level} in {n} file{s}", Hint: "run shellcheck"}
+	lint := func(sev finding.Severity, path string, details ...string) finding.Finding {
+		x := f("shell.shellcheck", sev, path, "shellcheck reports problems")
+		x.Details, x.Group, x.Hint = details, sc, "own hint"
+		return x
+	}
+	syn := f("shell.syntax", finding.Error, "/b.sh (bash)", "does not parse")
+	syn.Details = []string{"/b.sh: line 25: syntax error near `('"}
+	syn.Group = &finding.Group{ID: "syntax", Rollup: true, Title: "Fix parse errors in {n} file{s}"}
+	bare := f("config.syntax", finding.Error, "/c.json", "/c.json does not parse")
+	bare.Group = &finding.Group{ID: "syntax", Rollup: true, Title: "Fix {n} config file{s}"}
+
+	ts := Derive([]finding.Finding{
+		lint(finding.Error, "/a.sh", "line 3: SC2276 (error) bad", "line 9: SC2086 (warning) quote"),
+		lint(finding.Warning, "/w.sh", "line 1: SC2034 unused"),
+		lint(finding.Error, "/z.sh", "odd detail"),
+		syn, bare,
+		f("shell.other", finding.Warning, "/own", "keeps its own task"),
+	})
+	if len(ts) != 5 {
+		t.Fatalf("want 5 tasks, got %d: %+v", len(ts), ts)
+	}
+	if ts[0].Key != "packages:shell.other:/own" {
+		t.Errorf("ungrouped issue keeps its task: %+v", ts[0])
+	}
+	high := ts[1]
+	if high.Key != "packages:shell.shellcheck:shellcheck.high:*" || high.Priority != High || high.Source != FromAggregate ||
+		high.Title != "Fix shellcheck errors in 2 files" || high.Hint != "run shellcheck" ||
+		strings.Join(high.Details, "|") != "/a.sh:3: SC2276 (error) bad|/a.sh:9: SC2086 (warning) quote|/z.sh: odd detail" {
+		t.Errorf("high rollup: %+v", high)
+	}
+	med := ts[2]
+	if med.Key != "packages:shell.shellcheck:shellcheck.medium:*" || med.Title != "Fix shellcheck warnings in 1 file" ||
+		strings.Join(med.Details, "|") != "/w.sh:1: SC2034 unused" {
+		t.Errorf("medium rollup: %+v", med)
+	}
+	if ts[3].Title != "Fix parse errors in 1 file" || ts[3].Hint != "" ||
+		strings.Join(ts[3].Details, "|") != "/b.sh:25: syntax error near `('" {
+		t.Errorf("path-prefixed details keep their path: %+v", ts[3])
+	}
+	if strings.Join(ts[4].Details, "|") != "/c.json does not parse" {
+		t.Errorf("finding without details becomes one line: %+v", ts[4])
+	}
+}
+
+func TestLocations(t *testing.T) {
+	got := Locations(Todo{Details: []string{"/a.sh:3: SC2276 bad", "/z.sh: odd", "related: #4", "/b c.sh:12: x: y"}})
+	want := []Location{{"/a.sh", 3, "SC2276 bad"}, {"/b c.sh", 12, "x: y"}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("location %d: got %+v want %+v", i, got[i], want[i])
+		}
+	}
+}

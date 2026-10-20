@@ -340,3 +340,32 @@ func TestTodosExplain(t *testing.T) {
 		t.Errorf("an AI failure shows:\n%s", m.View())
 	}
 }
+
+func TestTaskDetailScreen(t *testing.T) {
+	f := newFake()
+	f.tasks[0].Details = []string{"/etc/ssh/sshd_config:12: PermitRootLogin yes", "/etc/ssh/sshd_config:40: PasswordAuthentication yes"}
+	m := start(t, f, StartInTodos(todo.Filter{}))
+	key(t, m, "enter")
+	v := m.View()
+	if m.screen != screenTask || !strings.Contains(v, "audit todo show 1") || !strings.Contains(v, "edit sshd_config") ||
+		!strings.Contains(v, "/etc/ssh/sshd_config:40: PasswordAuthentication yes") || !strings.Contains(v, "2 file location(s)") {
+		t.Fatalf("detail screen:\n%s", v)
+	}
+	t.Setenv("VISUAL", "true")
+	if cmd := m.edit(m.shown); cmd == nil {
+		t.Error("a task with locations should open the editor")
+	}
+	key(t, m, "d")
+	if m.screen != screenTask {
+		t.Errorf("status keys on the detail screen must not leave it: %v", m.screen)
+	}
+	key(t, m, "esc")
+	if m.screen != screenTodos {
+		t.Fatalf("esc returns to the tasks: %v", m.screen)
+	}
+	key(t, m, "down")
+	key(t, m, "v")
+	if !m.statusErr || !strings.Contains(m.status, "names no file:line locations") {
+		t.Errorf("v without locations: %q", m.status)
+	}
+}

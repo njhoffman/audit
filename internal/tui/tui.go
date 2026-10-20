@@ -4,8 +4,14 @@
 package tui
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	osexec "os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +53,9 @@ const (
 	// screenExplain shows an AI explanation of a task; esc returns to the
 	// task list.
 	screenExplain
+	// screenTask shows every field and detail line of one task; esc returns
+	// to the task list.
+	screenTask
 )
 
 // input is what the text field at the bottom of the task list is editing.
@@ -80,7 +89,8 @@ type Model struct {
 	busy    string // command being rescanned, "" when idle
 	spinner spinner.Model
 
-	explainID int64 // task shown on screenExplain
+	explainID int64     // task shown on screenExplain
+	shown     todo.Todo // task shown on screenTask
 
 	tasks   []todo.Todo // after filtering
 	all     []todo.Todo
@@ -151,6 +161,8 @@ type explainMsg struct {
 	text string
 	err  error
 }
+
+type editorMsg struct{ err error }
 
 type todosMsg struct {
 	tasks []todo.Todo
@@ -270,6 +282,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.loadReport(msg.command))
 		}
 		return m, tea.Batch(cmds...)
+	case editorMsg:
+		if msg.err != nil {
+			m.setStatus("editor: "+msg.err.Error(), true)
+		}
+		return m, nil
 	case explainMsg:
 		m.busy = ""
 		if msg.id != m.explainID {
@@ -302,6 +319,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.all[i] = msg.task
 			}
 		}
+		if m.screen == screenTask && m.shown.ID == msg.task.ID {
+			m.showTask(msg.task)
+		}
 		m.setStatus(fmt.Sprintf("#%d %s", msg.task.ID, msg.task.Status.Label()), false)
 		m.applyFilter()
 		return m, m.loadStatuses()
@@ -331,7 +351,7 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.screen == screenTodos && m.standalone {
 			return m, tea.Quit
 		}
-		if m.screen == screenExplain {
+		if m.screen == screenExplain || m.screen == screenTask {
 			m.screen = screenTodos
 			m.layout()
 			return m, nil
@@ -346,6 +366,19 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.dashboardKey(k)
 	case screenReport:
 		return m.reportKey(k)
+	case screenTask:
+		switch k.String() {
+		case "v":
+			return m, m.edit(m.shown)
+		case "e":
+			if m.busy == "" {
+				return m, m.explain(m.shown.ID, false)
+			}
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.report, cmd = m.report.Update(k)
+		return m, cmd
 	case screenExplain:
 		if k.String() == "r" {
 			if m.busy == "" {
@@ -430,6 +463,16 @@ func (m *Model) todosKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		if sel != nil && m.busy == "" {
 			return m, m.explain(sel.ID, false)
+		}
+		return m, nil
+	case "enter", "l", "right":
+		if sel != nil {
+			m.showTask(*sel)
+		}
+		return m, nil
+	case "v":
+		if sel != nil {
+			return m, m.edit(*sel)
 		}
 		return m, nil
 	case "/":
@@ -567,10 +610,13 @@ func (m *Model) View() string {
 	case screenDashboard:
 		b.WriteString(titleStyle.Render("audit") + faintStyle.Render("  dashboard") + "\n\n")
 		b.WriteString(m.dashboardView())
-	case screenReport, screenExplain:
+	case screenReport, screenExplain, screenTask:
 		title := "audit " + m.reportCmd
-		if m.screen == screenExplain {
+		switch m.screen {
+		case screenExplain:
 			title = fmt.Sprintf("audit todo explain %d", m.explainID)
+		case screenTask:
+			title = fmt.Sprintf("audit todo show %d", m.shown.ID)
 		}
 		b.WriteString(titleStyle.Render(title) + faintStyle.Render(fmt.Sprintf("  %3.f%%", m.report.ScrollPercent()*100)) + "\n")
 		switch {
@@ -696,6 +742,68 @@ func (m *Model) help() string {
 		return "j/k scroll  pgup/pgdn page  r rescan  esc back  t tasks  q quit"
 	case m.screen == screenExplain:
 		return "j/k scroll  pgup/pgdn page  r ask again  esc back to tasks  q quit"
+	case m.screen == screenTask:
+		return "j/k scroll  pgup/pgdn page  v open in editor  e explain  esc back to tasks  q quit"
 	}
-	return "j/k move  o open  i in progress  d done  w won't do  n note  e explain  / find  c command  a closed  esc back  q quit"
+	return "j/k move  enter details  v editor  o open  i in progress  d done  w won't do  n note  e explain  / find  c command  a closed  esc back  q quit"
+}
+
+// showTask switches to the detail screen of t.
+func (m *Model) showTask(t todo.Todo) {
+	var b bytes.Buffer
+	p := render.New(&b, false, m.width)
+	p.Now = m.now
+	p.Todo(t)
+	if locs := todo.Locations(t); len(locs) > 0 {
+		fmt.Fprintf(&b, "\n%s\n", faintStyle.Render(fmt.Sprintf("%d file location(s); press v to open them in $EDITOR", len(locs))))
+	}
+	m.screen, m.shown, m.reportLoaded = screenTask, t, true
+	m.report.SetContent(b.String())
+	m.report.GotoTop()
+	m.layout()
+}
+
+// edit opens the file locations of t in $VISUAL or $EDITOR: vim and neovim
+// get every location as a quickfix list, other editors the first file at
+// its line.
+func (m *Model) edit(t todo.Todo) tea.Cmd {
+	locs := todo.Locations(t)
+	if len(locs) == 0 {
+		m.setStatus(fmt.Sprintf("#%d names no file:line locations", t.ID), true)
+		return nil
+	}
+	editor := os.Getenv("VISUAL")
+	if editor == "" {
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+	args := strings.Fields(editor)
+	var cleanup func()
+	switch filepath.Base(args[0]) {
+	case "vim", "nvim", "vi", "gvim", "nvi":
+		f, err := os.CreateTemp("", "audit-quickfix-*.txt")
+		if err != nil {
+			m.setStatus(err.Error(), true)
+			return nil
+		}
+		_, werr := f.WriteString(strings.Join(t.Details, "\n") + "\n")
+		if err := f.Close(); werr != nil || err != nil {
+			_ = os.Remove(f.Name())
+			m.setStatus(fmt.Sprintf("write quickfix file: %v", errors.Join(werr, err)), true)
+			return nil
+		}
+		cleanup = func() { _ = os.Remove(f.Name()) }
+		args = append(args, "-q", f.Name())
+	default:
+		args = append(args, "+"+strconv.Itoa(locs[0].Line), locs[0].Path)
+	}
+	c := osexec.Command(args[0], args[1:]...) // #nosec G204 G702 -- the user's own $EDITOR on paths from their tasks
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		if cleanup != nil {
+			cleanup()
+		}
+		return editorMsg{err}
+	})
 }

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Tasks page: `audit todo -H` writes `tasks.html` next to the reports with search, priority cards, status/command/source filters, grouping, sorting and expandable details, linked from the index and rewritten whenever the database changes; `-o` opens it. `audit todo -s` serves it on 127.0.0.1 (`-P` port) with status buttons and note editing, behind a per-run token and a loopback Host check. `audit -H` writes it too.
+- `audit todo show ID -l` prints only the detail lines, `FILE:LINE: message` for lint tasks, ready for `vim -q`.
+- Task editor: `enter` shows a task's every field and detail line; `v` opens its file locations in `$VISUAL`/`$EDITOR` (a quickfix list in vim and neovim).
+
+### Changed
+
+- shellcheck and parse errors (`shell.shellcheck`, `shell.syntax`, `script.shellcheck`, `script.syntax`, `config.syntax`) become one task per check and priority, such as "Fix shellcheck errors in 20 shell files", instead of one task per file; the details list every file and line. The per-file tasks resolve on the next scan.
+
 ## [0.12.0] - 2026-10-19
 
 ### Added

@@ -539,10 +539,18 @@ func (s *Store) Todos(ctx context.Context, command string) ([]todo.Todo, error) 
 func (s *Store) GetTodo(ctx context.Context, id int64) (todo.Todo, error) {
 	t, err := scanTodo(s.db.QueryRowContext(ctx, `SELECT `+todoCols+` FROM todos WHERE id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return t, fmt.Errorf("no task with id %d", id)
+		return t, noTaskError(id)
 	}
 	return t, err
 }
+
+// ErrNoTask matches (errors.Is) the error for a task id that does not exist.
+var ErrNoTask = errors.New("no such task")
+
+type noTaskError int64
+
+func (e noTaskError) Error() string        { return fmt.Sprintf("no task with id %d", int64(e)) }
+func (e noTaskError) Is(target error) bool { return target == ErrNoTask }
 
 // SaveTodos inserts tasks without an id and updates the rest, in one
 // transaction. Ids of inserted tasks are written back into todos.
