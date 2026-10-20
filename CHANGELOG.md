@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-19
+
 ### Added
 
 - `audit ai`: AI CLIs (claude, codex, gh copilot, aichat, ollama) with versions and login state, provider keys in the environment by name, ollama's server and models, MCP servers from Claude Code, Codex and mcphub (`ai.mcp_missing`), Claude Code hooks with missing programs or scripts (`ai.hook_broken`), allow rules that permit any command (`ai.permissions_broad`), large instruction files (`ai.instructions_large`, `ai.instruction_limit_kb`), and AI projects from repos.roots plus Claude Code's session directories (markers, git state, commands, skills, agents, MCP servers, sessions; `ai.stale_sessions`). `-p/--ping` sends one tiny request per logged-in provider.
