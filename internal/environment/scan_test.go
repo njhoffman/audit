@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -140,6 +141,38 @@ func TestScan(t *testing.T) {
 		if len(byCheck(fs, check)) == 0 {
 			t.Errorf("expected a %s finding", check)
 		}
+	}
+
+	// Files audit scripts lints are skipped here unless a shell sources
+	// them at startup: tool is skipped, .profile (sourced by zsh) is not.
+	real := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return p
+	}
+	var asked []string
+	s.LintedElsewhere = func(p string) bool {
+		asked = append(asked, p)
+		return p == real(shebang) || p == real(profile)
+	}
+	res = s.Scan(ctx)
+	if len(res.State.Scripts) != 3 {
+		t.Errorf("skipped files stay in the inventory: %d", len(res.State.Scripts))
+	}
+	for _, r := range res.State.Syntax {
+		if r.Path == shebang {
+			t.Errorf("tool should not be parsed here: %+v", r)
+		}
+	}
+	if _, ok := res.State.Shellcheck.Comments[shebang]; ok {
+		t.Error("tool should not be shellchecked here")
+	}
+	if len(res.State.Shellcheck.Comments[profile]) != 1 {
+		t.Errorf("a sourced startup file is always linted: %+v", res.State.Shellcheck.Comments)
+	}
+	if slices.Contains(asked, real(profile)) {
+		t.Error("sourced files need no ownership lookup")
 	}
 }
 

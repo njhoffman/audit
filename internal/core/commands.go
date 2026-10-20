@@ -9,6 +9,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/njhoffman/audit/internal/ai"
@@ -124,6 +125,16 @@ func NewEnvironment(cfg *config.Config, env *exec.Env) (*EnvironmentScanner, err
 		return nil, err
 	}
 	s.ShellcheckSeverity, s.ShellcheckExclude = ec.Shellcheck.Severity, ec.Shellcheck.Exclude
+	// audit scripts owns the files on its roots; environment keeps the ones
+	// sourced at startup, so no file is linted by both commands.
+	owned := sync.OnceValue(func() map[string]bool {
+		m := map[string]bool{}
+		for _, p := range scripts.Discover(NewScripts(cfg, env).Options.Options) {
+			m[p] = true
+		}
+		return m
+	})
+	s.LintedElsewhere = func(path string) bool { return owned()[path] }
 	return &EnvironmentScanner{s}, nil
 }
 

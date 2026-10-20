@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `audit environment` no longer parses or shellchecks files under `scripts.roots` that no shell sources at startup; `audit scripts` owns them, so the same file no longer shows up in both commands' lint tasks.
+
 ## [0.13.0] - 2026-10-20
 
 ### Added

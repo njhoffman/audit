@@ -30,6 +30,10 @@ type Scanner struct {
 	ShellcheckExclude  []string
 	Workers            int
 	Progress           progress.Reporter
+	// LintedElsewhere reports whether another command (audit scripts)
+	// already lints a file, by its resolved path. Such files are only
+	// parsed and shellchecked here when a shell sources them at startup.
+	LintedElsewhere func(path string) bool
 	// RunnerFor builds the runner for the analyzed environment; it defaults
 	// to an OS runner resolving commands on that environment's PATH.
 	RunnerFor func(*exec.Env) exec.Runner
@@ -124,10 +128,24 @@ func (s *Scanner) Scan(ctx context.Context) *Result {
 		scripts[i].LoadedBy = loadedBy[real]
 	}
 
-	syntax := s.parseAll(ctx, scripts, traced, rep)
+	lint := scripts
+	if s.LintedElsewhere != nil {
+		lint = make([]Script, 0, len(scripts))
+		for _, sc := range scripts {
+			real := sc.Path
+			if r, err := filepath.EvalSymlinks(real); err == nil {
+				real = r
+			}
+			if len(sc.LoadedBy) == 0 && s.LintedElsewhere(real) {
+				continue
+			}
+			lint = append(lint, sc)
+		}
+	}
+	syntax := s.parseAll(ctx, lint, traced, rep)
 
 	rep.Phase("running shellcheck", 0)
-	sc := s.shellcheck(ctx, scripts)
+	sc := s.shellcheck(ctx, lint)
 
 	state := &State{
 		Ctx: ctx, Env: env, Captures: captures, Scripts: scripts,

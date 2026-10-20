@@ -93,7 +93,7 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
     **security**: no active firewall service (ufw, firewalld, nftables), TCP ports listening beyond loopback (a warning for risky services such as rpcbind, smb, nfs, databases, redis, vnc; UDP only for those), **~/.ssh** permissions (directory, private keys, config, authorized_keys) and private keys without a passphrase (checked with **ssh-keygen -y -P ""**), world-writable PATH directories and files, and clock synchronization.
 
 **environment**
-:   Starts each configured login shell with and without a terminal, records unexpected output and which startup files are sourced, times start-up, and checks PATH, environment variables and the startup scripts (syntax and shellcheck).
+:   Starts each configured login shell with and without a terminal, records unexpected output and which startup files are sourced, times start-up, and checks PATH, environment variables and the startup scripts (syntax and shellcheck). Files under **scripts.roots** are left to **audit scripts** unless a shell sources them at startup, so no file is linted by both commands.
 
 **packages**
 :   Inventories uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak and loose binaries (**bins**), and checks for broken or shadowed executables, runtime drift, stale runtime directories and misplaced installs. By default it runs against the environment of a fresh login shell (the first of **environment.shells**), so a terminal opened before a PATH change does not report stale problems; if that shell cannot start, it falls back to its own environment and reports **packages.login_env**.
