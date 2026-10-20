@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-20
+
 ### Added
 
 - Tasks page: `audit todo -H` writes `tasks.html` next to the reports with search, priority cards, status/command/source filters, grouping, sorting and expandable details, linked from the index and rewritten whenever the database changes; `-o` opens it. `audit todo -s` serves it on 127.0.0.1 (`-P` port) with status buttons and note editing, behind a per-run token and a loopback Host check. `audit -H` writes it too.
