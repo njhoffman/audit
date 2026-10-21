@@ -9,6 +9,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** [_global options_] [**-s**|**-H**|**-o**]
 
+**audit** **-r** [**-a**] [**-O** _commands_] [**-H**|**-o**]
+
 **audit** **system** [_scan options_] [**-O** _parts_]
 
 **audit** **environment** [_scan options_]
@@ -241,6 +243,15 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **-F**, **\-\-fzf**
 :   Open the dashboard in fzf instead of the terminal UI (see FZF). **\-\-fzf=false** opens the terminal UI when **tui.interface** is **fzf**.
+
+**-r**, **\-\-rescan**
+:   Scan every command whose unscoped results are stale (older than its **stale.warn**) or missing, then print the summary (or, with **-H**/**-o**, write the HTML reports). **packages** scans first, since **configs** reads its inventory; the rest scan **scan.concurrency** at a time, each with its configured scope and no AI review. On a terminal one line per command shows its phase, then its time and changed tasks; otherwise a line marks each start and end, and **-q** shows neither. A failed scan does not stop the others; the exit status is non-zero and the error lists every failure.
+
+**-a**, **\-\-all**
+:   With **-r**: rescan every command, fresh or not. Implies **-r**.
+
+**-O**, **\-\-only** _commands_
+:   With **-r**: consider only these commands (comma-separated or repeated). Implies **-r**.
 
 # SCAN OPTIONS
 
@@ -483,6 +494,8 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       commands:
         files: {warn: 168h, old: 720h}
     ignore: []                 # command:check:subject, command:check or check
+    scan:
+      concurrency: 3           # audit -r: commands scanning at once after packages
     display:
       details: 5               # detail lines per finding; the dashboard's expanded report shows all
       nerd_fonts: false        # Nerd Font icons instead of Unicode markers; -G

@@ -62,6 +62,8 @@ type app struct {
 	opener func(path string) error
 	// interactive reports whether stdin and stdout are terminals.
 	interactive func() bool
+	// scanner builds a command's scanner with its configured scope.
+	scanner func(command string) (core.Scanner, error)
 	// in answers confirmation prompts.
 	in io.Reader
 	// runner and looker replace the command runner and the registry client
@@ -75,9 +77,11 @@ type app struct {
 }
 
 func newApp(out, errOut io.Writer) *app {
-	return &app{out: out, errOut: errOut, in: os.Stdin, opener: xdgOpen, interactive: func() bool {
+	a := &app{out: out, errOut: errOut, in: os.Stdin, opener: xdgOpen, interactive: func() bool {
 		return isTerminal(out) && term.IsTerminal(int(os.Stdin.Fd())) // #nosec G115 -- fd fits in int
 	}}
+	a.scanner = a.defaultScanner
+	return a
 }
 
 func isTerminal(w io.Writer) bool {

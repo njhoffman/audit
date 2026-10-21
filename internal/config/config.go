@@ -27,6 +27,7 @@ type Config struct {
 	GitHubUser  string            `mapstructure:"github_user" yaml:"github_user"`
 	Stale       StaleConfig       `mapstructure:"stale" yaml:"stale"`
 	Ignore      []string          `mapstructure:"ignore" yaml:"ignore"`
+	Scan        ScanConfig        `mapstructure:"scan" yaml:"scan"`
 	Display     DisplayConfig     `mapstructure:"display" yaml:"display"`
 	TUI         TUIConfig         `mapstructure:"tui" yaml:"tui"`
 	AI          AIConfig          `mapstructure:"ai" yaml:"ai"`
@@ -185,6 +186,12 @@ type DisplayConfig struct {
 	Details int `mapstructure:"details" yaml:"details"`
 	// NerdFonts uses Nerd Font icons instead of Unicode markers.
 	NerdFonts bool `mapstructure:"nerd_fonts" yaml:"nerd_fonts"`
+}
+
+// ScanConfig configures audit -r, which rescans several commands.
+type ScanConfig struct {
+	// Concurrency is how many commands scan at once after packages.
+	Concurrency int `mapstructure:"concurrency" yaml:"concurrency"`
 }
 
 // TUIConfig configures the interactive dashboard.
@@ -346,6 +353,7 @@ func defaults(v *viper.Viper) {
 		"files": map[string]any{"warn": "168h", "old": "720h"},
 	})
 	v.SetDefault("ignore", []string{})
+	v.SetDefault("scan.concurrency", 3)
 	v.SetDefault("display.details", 5)
 	v.SetDefault("display.nerd_fonts", false)
 	v.SetDefault("tui.interface", InterfaceTUI)
@@ -491,6 +499,7 @@ func (c *Config) validate() error {
 		key string
 		n   float64
 	}{
+		{"scan.concurrency", float64(c.Scan.Concurrency)},
 		{"display.details", float64(c.Display.Details)},
 		{"ai.max_details", float64(c.AI.MaxDetails)},
 		{"system.log_max_lines", float64(c.System.LogMaxLines)},
@@ -669,6 +678,11 @@ stale:
 # Findings to hide. Each entry is a full key (command:check:subject), a
 # command-qualified check (packages:pnpm.legacy_shim) or a bare check id.
 ignore: []
+
+# audit -r: rescans the stale commands (-a every command). packages scans
+# first, since configs reads its results; the rest scan this many at once.
+scan:
+  concurrency: 3
 
 display:
   # Detail lines shown per finding in a printed report; the dashboard's

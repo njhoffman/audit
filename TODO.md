@@ -9,14 +9,9 @@ Tag an item `(p1)` (high) or `(p3)` (low); untagged items are `p2` (normal).
 
 ## 1. Rescan everything and run unattended
 
-Today every scan is started by hand, one command at a time; bare `audit` has
-no `--rescan`, and nothing tells you when a scan would turn up something new.
+`audit -r` rescans every stale command, but only when started by hand, and
+nothing tells you when a scan would turn up something new.
 
-- [ ] **`audit -r` rescans every stale command.** (p1) Root-level `--rescan`
-  (with `-O`/`--only` taking command names) runs the stale scanners, saves,
-  reconciles tasks and prints the summary. Scanners that only read local state
-  (system, environment, configs, scripts, ai) could run concurrently; repos
-  and packages hit the network and should stay sequential or capped.
 - [ ] **Scheduled scans through a systemd user timer.** `audit schedule
   install|remove|status` writes `~/.config/systemd/user/audit.{service,timer}`
   running `audit -r -q`. Config key for the calendar spec (default daily) and
@@ -26,9 +21,11 @@ no `--rescan`, and nothing tells you when a scan would turn up something new.
   new since the previous run, and a pointer to `audit todo`. Opt-in
   `notify.enabled`, `notify.min_priority`.
 
+- [ ] **Rescan every stale command from the dashboard.** A key (say `R`) that
+  runs what `audit -r` runs, with the dashboard rows as its progress.
+
 Decisions to make: whether a scheduled run may use the AI review (it costs
-money per run unless the cache hits); whether `audit -r` belongs on the root
-or as `audit scan [command...]`.
+money per run unless the cache hits).
 
 ## 2. Change tracking between runs
 

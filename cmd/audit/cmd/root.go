@@ -38,6 +38,7 @@ func Execute() int {
 
 func newRootCmd(a *app) *cobra.Command {
 	var summary, html, open, useFzf bool
+	var rf rescanFlags
 	root := &cobra.Command{
 		Use:   "audit",
 		Short: "Audit system health, shell environment and installed packages",
@@ -50,7 +51,8 @@ Scans are saved. Viewing a command again shows the saved results while they
 are fresh and says how old they are; --rescan scans again.
 
 Run without a command in a terminal for the interactive dashboard, or with
---summary for the same overview as text.`,
+--summary for the same overview as text. --rescan scans every stale command
+(-a every command, -O some), several at once, then prints the summary.`,
 		Version:       version.String(),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
@@ -63,6 +65,17 @@ Run without a command in a terminal for the interactive dashboard, or with
 				return err
 			}
 			ctx := c.Context()
+			if rf.all || len(rf.only) > 0 {
+				rf.rescan = true
+			}
+			if rf.rescan {
+				if err := a.rescanAll(ctx, rf); err != nil {
+					return err
+				}
+				if !html && !open {
+					summary = true
+				}
+			}
 			if html || open {
 				path, err := a.writeAllReports(ctx)
 				if err != nil {
@@ -115,6 +128,12 @@ Run without a command in a terminal for the interactive dashboard, or with
 	fl.BoolVarP(&html, "html", "H", false, "write the HTML index and every command's latest report")
 	fl.BoolVarP(&open, "open", "o", false, "like --html, then open the index")
 	fl.BoolVarP(&useFzf, "fzf", "F", false, "open the dashboard in fzf (default tui.interface; --fzf=false for the TUI)")
+	fl.BoolVarP(&rf.rescan, "rescan", "r", false, "rescan every stale or never-run command, then print the summary")
+	fl.BoolVarP(&rf.all, "all", "a", false, "with --rescan: rescan every command, fresh or not (implies --rescan)")
+	fl.StringSliceVarP(&rf.only, "only", "O", nil, "with --rescan: only these commands, comma-separated (implies --rescan)")
+	root.MarkFlagsMutuallyExclusive("rescan", "fzf")
+	root.MarkFlagsMutuallyExclusive("all", "fzf")
+	root.MarkFlagsMutuallyExclusive("only", "fzf")
 
 	root.AddCommand(newSystemCmd(a), newEnvironmentCmd(a), newPackagesCmd(a), newReposCmd(a), newFilesCmd(a), newConfigsCmd(a), newScriptsCmd(a), newAICmd(a),
 		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a),

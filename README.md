@@ -41,6 +41,8 @@ just build                     # or: just install
 
 audit                          # dashboard: every command's last run, age, findings, open tasks
 audit -s                       # the same overview as text
+audit -r                       # rescan every stale command, several at once, then the overview
+audit -r -a -O repos,files     # rescan these two even if fresh
 audit system                   # saved results if fresh, otherwise scan
 audit system -r -O logs,services   # rescan only some parts
 audit packages -l              # one line per finding plus the package inventory (never scans)
@@ -74,7 +76,7 @@ vim -q <(audit todo show 12 -l) # every file:line of a lint task as a quickfix l
 
 ### Freshness
 
-A bare `audit <command>` reuses saved results younger than the warn threshold (default 24h) and scans otherwise. `--report`, `--list`, `--summary` and `--json` never scan; if nothing is saved they fail with the command to run. `--rescan` always scans.
+A bare `audit <command>` reuses saved results younger than the warn threshold (default 24h) and scans otherwise. `--report`, `--list`, `--summary` and `--json` never scan; if nothing is saved they fail with the command to run. `--rescan` always scans. On bare `audit`, `-r` rescans every stale or never-run command (`-a` all of them, `-O` some), `scan.concurrency` at a time after `packages`, then prints the overview.
 
 ### Tasks
 

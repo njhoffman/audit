@@ -45,10 +45,19 @@ type result struct {
 
 func runArgs(t *testing.T, args ...string) result {
 	t.Helper()
+	return runArgsWith(t, nil, args...)
+}
+
+// runArgsWith is runArgs with setup applied to the app before it runs.
+func runArgsWith(t *testing.T, setup func(*app), args ...string) result {
+	t.Helper()
 	var out, errOut bytes.Buffer
 	a := newApp(&out, &errOut)
 	a.interactive = func() bool { return false }
 	a.opener = func(string) error { return errors.New("opener called") }
+	if setup != nil {
+		setup(a)
+	}
 	root := newRootCmd(a)
 	root.SetArgs(args)
 	e := root.ExecuteContext(context.Background())
