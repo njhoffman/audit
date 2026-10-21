@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-20
+
 ### Changed
 
 - Report summaries are laid out as columns: dim labels, numbers in bold and right-aligned, and what qualifies them (`1936 (notty)`, `7 unexpected line(s)`, `105 mine`) dimmer after them. Environment startup rows drop `exit 0` and a zero output count.
