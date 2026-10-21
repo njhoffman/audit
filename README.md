@@ -95,7 +95,7 @@ The dashboard lines up each command's finding counts by severity (`◉` critical
 
 ### Dashboard keys
 
-Reports open collapsed: one line per finding, and only the stats of the shell in `$SHELL`. `x` expands every finding (hint, all details, key) and both shells' stats, and collapses them again; printed reports (`--report`) are always expanded.
+Reports open collapsed: one line per finding, and a compact summary with each group on as few lines as fit and only the stats of the shell in `$SHELL`. `x` expands every finding (hint, all details, key) and both shells' stats, and collapses them again; printed reports (`--report`) are always expanded.
 
 The defaults:
 

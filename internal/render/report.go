@@ -195,8 +195,12 @@ var numeric = regexp.MustCompile(`^-?[0-9][0-9.,]*( ?[KMGTP]?i?B|%|ms|s)?$`)
 
 // stats prints the summary: group headings, then each line's dim label,
 // its value (numbers bold and right-aligned) and a dimmer note. Collapsed
-// skips the Extra lines.
+// skips the Extra lines and packs each group onto as few lines as fit.
 func (p *Printer) stats(stats []run.Stat) {
+	if p.Collapsed {
+		p.compactStats(stats)
+		return
+	}
 	shown := make([]run.Stat, 0, len(stats))
 	nameW, numW := 0, 0
 	for _, s := range stats {
@@ -237,6 +241,58 @@ func (p *Printer) stats(stats []run.Stat) {
 		}
 		if p.Width > 0 {
 			line = truncate(line, p.Width)
+		}
+		p.println(line)
+	}
+}
+
+// compactStats prints each group's stats after its name, "540 aliases" for
+// a number and "firewall ufw" for text, wrapping under the first stat when
+// the line is full. Notes are left to the expanded view.
+func (p *Printer) compactStats(stats []run.Stat) {
+	type group struct {
+		name  string
+		items []string
+	}
+	var groups []group
+	for _, s := range stats {
+		if s.Extra {
+			continue
+		}
+		if len(groups) == 0 || groups[len(groups)-1].name != s.Group {
+			groups = append(groups, group{name: s.Group})
+		}
+		item := p.label().Render(p.tilde(s.Name)) + " " + p.tilde(s.Value)
+		if numeric.MatchString(s.Value) {
+			item = p.bold().Render(s.Value) + " " + p.label().Render(p.tilde(s.Name))
+		}
+		g := &groups[len(groups)-1]
+		g.items = append(g.items, item)
+	}
+	groupW := 0
+	for _, g := range groups {
+		groupW = max(groupW, ansi.StringWidth(p.glyphs().Icon(g.name)+g.name))
+	}
+	indent := 2 + groupW + 2
+	for _, g := range groups {
+		line := "  " + p.bold().Render(padRight(p.glyphs().Icon(g.name)+g.name, groupW)) + "  "
+		width, first := indent, true
+		for _, it := range g.items {
+			w := ansi.StringWidth(it)
+			if !first && p.Width > 0 && width+2+w > p.Width {
+				p.println(line)
+				line, width, first = strings.Repeat(" ", indent), indent, true
+			}
+			if !first {
+				line += "  "
+				width += 2
+			}
+			if p.Width > 0 && width+w > p.Width {
+				it = truncate(it, p.Width-width)
+			}
+			line += it
+			width += ansi.StringWidth(it)
+			first = false
 		}
 		p.println(line)
 	}

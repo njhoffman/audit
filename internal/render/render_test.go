@@ -373,10 +373,16 @@ func TestStatsLayout(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", b.String(), want)
 	}
 	b.Reset()
-	p.Collapsed = true
-	p.stats(stats)
-	if strings.Contains(b.String(), "bash tty") || !strings.Contains(b.String(), "zsh notty") {
-		t.Errorf("collapsed keeps Extra lines:\n%s", b.String())
+	p.Collapsed, p.Width = true, 44
+	p.stats(append([]run.Stat{{Name: "ungrouped", Value: "7"}}, stats...))
+	want = `           7 ungrouped
+  scripts  791 startup scripts
+           1 syntax failures
+  startup  0.45s zsh notty
+  zsh      config ~/.zshrc
+`
+	if b.String() != want {
+		t.Errorf("collapsed got\n%s\nwant\n%s", b.String(), want)
 	}
 }
 

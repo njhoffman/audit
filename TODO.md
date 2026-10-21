@@ -135,19 +135,7 @@ spots from `go test -cover`.
   repos,scripts,taskserver}` and `internal/scan/{resources,security,storage,
   updates}`.
 
-## 8. Display
-
-- [ ] **Compact summaries in the collapsed view.** The collapsed report still
-  prints one summary line per stat, so a command like environment shows 40+
-  lines before its findings. Collapsed, each group should fit one or two
-  lines (`zsh  540 aliases  1890 functions  227 arrays  16153 commands`),
-  for every command's summary, with the full columns in the expanded view.
-
-Decisions to make: which stats each group keeps when compact (a fixed
-headline per group, or the first N); whether `--summary` on the CLI uses the
-compact form too.
-
-## 9. Tips
+## 8. Tips
 
 - [ ] **Proactive tips, not tied to a problem.** Advice on performance,
   organization and good practice found while scanning (a slow startup file
