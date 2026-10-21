@@ -100,7 +100,7 @@ Run without a command in a terminal for the interactive dashboard, or with
 	pf.StringVarP(&a.flags.config, "config", "c", "", "config file (default $XDG_CONFIG_HOME/audit.yaml)")
 	pf.BoolVarP(&a.flags.noColor, "no-color", "n", false, "disable colors (also NO_COLOR or a redirected stdout)")
 	pf.IntVarP(&a.flags.width, "width", "W", 0, "wrap output at this many columns (default terminal width)")
-	pf.BoolVarP(&a.flags.verbose, "verbose", "v", false, "show more detail and info logs")
+	pf.BoolVarP(&a.flags.verbose, "verbose", "v", false, "show info logs (and package sources and executables in audit packages)")
 	pf.BoolVarP(&a.flags.debug, "debug", "D", false, "show debug logs")
 	pf.BoolVarP(&a.flags.quiet, "quiet", "q", false, "only errors; no progress bars or notices")
 	pf.StringVarP(&a.flags.aiProvider, "ai-provider", "I", "", "AI CLI for this run: claude or codex (default ai.provider)")

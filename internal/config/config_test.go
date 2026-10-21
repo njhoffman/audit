@@ -140,13 +140,13 @@ func TestLoadErrors(t *testing.T) {
 func TestLoadKeys(t *testing.T) {
 	dir := isolate(t)
 	path := filepath.Join(dir, "k.yaml")
-	write(t, path, "tui: {keys: {quit: [Q, x], status_done: [D], editor: []}}")
+	write(t, path, "tui: {keys: {quit: [Q, z], status_done: [D], editor: []}}")
 	cfg, _, err := Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	k := cfg.TUI.Keys
-	if !reflect.DeepEqual(k["quit"], []string{"Q", "x"}) || !reflect.DeepEqual(k["status_done"], []string{"D"}) {
+	if !reflect.DeepEqual(k["quit"], []string{"Q", "z"}) || !reflect.DeepEqual(k["status_done"], []string{"D"}) {
 		t.Errorf("overrides keep their case and replace the default list: %v %v", k["quit"], k["status_done"])
 	}
 	if len(k["editor"]) != 0 {

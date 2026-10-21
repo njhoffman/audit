@@ -91,12 +91,14 @@ AI features go through a local CLI picked by `ai.provider` (or `-I/--ai-provider
 
 ### Dashboard keys
 
+Reports open collapsed: one line per finding, and only the stats of the shell in `$SHELL`. `x` expands every finding (hint, all details, key) and both shells' stats, and collapses them again; printed reports (`--report`) are always expanded.
+
 The defaults:
 
 | Screen | Keys |
 |---|---|
 | dashboard | `j`/`k` move, `enter` report, `r` rescan, `t` tasks, `q` quit |
-| report | `j`/`k`/`pgup`/`pgdn` scroll, `g`/`G` top and bottom, `r` rescan, `esc` back |
+| report | `j`/`k`/`pgup`/`pgdn` scroll, `g`/`G` top and bottom, `x` expand or collapse findings, `r` rescan, `esc` back |
 | tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `e` explain with AI, `v` editor, `/` find, `c` cycle command, `a` show closed, `esc` back |
 | explanation | `j`/`k`/`pgup`/`pgdn` scroll, `r` ask again, `esc` back to tasks |
 

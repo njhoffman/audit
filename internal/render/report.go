@@ -243,6 +243,12 @@ func (p *Printer) stats(stats []run.Stat) {
 }
 
 func (p *Printer) findings(fs []finding.Finding) {
+	if p.Collapsed {
+		for _, f := range fs {
+			p.println(p.findingLine(f))
+		}
+		return
+	}
 	for _, f := range fs {
 		head := p.sevBadge(f.Severity) + " " + p.fg("12").Render(f.Check)
 		if f.Subject != "" {
@@ -260,17 +266,31 @@ func (p *Printer) findings(fs []finding.Finding) {
 		if shown <= 0 {
 			shown = defaultDetails
 		}
-		if !p.Verbose && len(details) > shown {
+		if !p.AllDetails && len(details) > shown {
 			details = details[:shown]
 		}
 		for _, d := range details {
 			p.println(perLine(p.faint(), p.wrap("- "+p.tilde(d), 11)))
 		}
 		if more := len(f.Details) - len(details); more > 0 {
-			p.println(p.faint().Render(fmt.Sprintf("%s(+%d more, -v shows all)", strings.Repeat(" ", 11), more)))
+			p.println(p.faint().Render(fmt.Sprintf("%s(+%d more; display.details sets how many show)", strings.Repeat(" ", 11), more)))
 		}
 		p.println(p.faint().Render(strings.Repeat(" ", 9) + "key " + f.Key()))
 	}
+}
+
+// findingLine is a collapsed finding: its severity marker, check and the
+// first line of its message (or its subject), cut to the width.
+func (p *Printer) findingLine(f finding.Finding) string {
+	text := firstLine(f.Message)
+	if text == "" {
+		text = f.Subject
+	}
+	line := "  " + p.sevMark(f.Severity) + " " + p.sevStyle(f.Severity).UnsetBackground().Render(f.Check) + "  " + p.tilde(text)
+	if p.Width > 0 {
+		line = truncate(line, p.Width)
+	}
+	return line
 }
 
 // List prints one line per finding: severity, check, subject and message.

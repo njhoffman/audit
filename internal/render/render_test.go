@@ -77,7 +77,7 @@ func TestReport(t *testing.T) {
 		"audit system", "box", "took 2s", "1 error  1 notice  1 info  (2 ignored)",
 		"Summary", "procs", "total  412", "Scan errors", "permission denied",
 		"Issues", "ERROR    logs.oom_kill  journal", "OOM killer activated", "hint: add swap",
-		"- e", "(+2 more, -v shows all)", "key system:logs.oom_kill:journal",
+		"- e", "(+2 more; display.details sets how many show)", "key system:logs.oom_kill:journal",
 		"Suggestions", "users.tidy", "! Saved results",
 	} {
 		if !strings.Contains(out, w) {
@@ -95,13 +95,13 @@ func TestReport(t *testing.T) {
 	}
 }
 
-func TestReportVerboseAndFilter(t *testing.T) {
+func TestReportAllDetailsAndFilter(t *testing.T) {
 	p, b := printer(100)
-	p.Verbose = true
+	p.AllDetails = true
 	p.Report(sampleRun(0), ReportOptions{Filter: finding.Filter{MinSeverity: finding.Warning}})
 	out := b.String()
 	if !strings.Contains(out, "- g") {
-		t.Error("verbose should show every detail")
+		t.Error("AllDetails should show every detail")
 	}
 	if strings.Contains(out, "procs.high_cpu") || !strings.Contains(out, "2 finding(s) hidden by filters") {
 		t.Errorf("filter not applied:\n%s", out)
@@ -395,5 +395,25 @@ func TestTilde(t *testing.T) {
 	}
 	if Tilde("/a", "") != "/a" || Tilde("/a", "/") != "/a" {
 		t.Error("empty or root home changes nothing")
+	}
+}
+
+func TestReportCollapsed(t *testing.T) {
+	p, b := printer(60)
+	p.Collapsed = true
+	p.Home = "/home/u"
+	r := sampleRun(0)
+	r.Findings = append(r.Findings, finding.Finding{Command: "environment", Check: "shell.shellcheck", Severity: finding.Error,
+		Subject: "/home/u/x", Message: "shellcheck reports 5 problems in /home/u/.shell/scripts/ui-widgets/yad/yadcomposite",
+		Hint: "Run shellcheck", Details: []string{"line 1"}})
+	p.Report(r, ReportOptions{})
+	out := b.String()
+	if !strings.Contains(out, "  ● shell.shellcheck  shellcheck reports 5 problems in ~/.s…") {
+		t.Errorf("collapsed line missing or not cut to the width:\n%s", out)
+	}
+	for _, gone := range []string{"hint:", "- line 1", "key "} {
+		if strings.Contains(out, gone) {
+			t.Errorf("collapsed report shows %q:\n%s", gone, out)
+		}
 	}
 }

@@ -34,9 +34,10 @@ import (
 // Backend is what the UI needs from the application.
 type Backend interface {
 	Statuses(ctx context.Context) ([]render.CommandStatus, error)
-	// Report renders the saved run of command at width; ok is false when
-	// the command has never run.
-	Report(ctx context.Context, command string, width int) (text string, ok bool, err error)
+	// Report renders the saved run of command at width, with every finding
+	// in full when expanded or one line each; ok is false when the command
+	// has never run.
+	Report(ctx context.Context, command string, width int, expanded bool) (text string, ok bool, err error)
 	// Rescan scans command and returns how many tasks changed.
 	Rescan(ctx context.Context, command string) (int, error)
 	Todos(ctx context.Context) ([]todo.Todo, error)
@@ -105,6 +106,10 @@ type Model struct {
 	editing int64
 	// home is shown as ~ in paths.
 	home string
+	// expanded shows reports' findings in full; keepScroll restores the
+	// scroll position, as a fraction, once the toggled report arrives.
+	expanded   bool
+	keepScroll float64
 }
 
 // Option configures a Model.
@@ -133,7 +138,7 @@ func StartInTodos(f todo.Filter) Option {
 
 // New returns a Model over b.
 func New(ctx context.Context, b Backend, opts ...Option) *Model {
-	m := &Model{ctx: ctx, b: b, now: time.Now, keys: keys.Defaults(), width: 80, height: 24,
+	m := &Model{ctx: ctx, b: b, now: time.Now, keys: keys.Defaults(), width: 80, height: 24, keepScroll: -1,
 		spinner: spinner.New(spinner.WithSpinner(spinner.Dot))}
 	m.field = textinput.New()
 	m.field.CharLimit = 500
@@ -228,9 +233,9 @@ func (m *Model) loadStatuses() tea.Cmd {
 }
 
 func (m *Model) loadReport(command string) tea.Cmd {
-	width := m.width
+	width, expanded := m.width, m.expanded
 	return func() tea.Msg {
-		text, ok, err := m.b.Report(m.ctx, command, width)
+		text, ok, err := m.b.Report(m.ctx, command, width, expanded)
 		return reportMsg{command, text, ok, err}
 	}
 }
@@ -313,6 +318,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.report.SetContent(fmt.Sprintf("\n  %s has never run.%s", msg.command, m.press(keys.Rescan, "scan now")))
 		default:
 			m.report.SetContent(msg.text)
+		}
+		if m.keepScroll >= 0 {
+			m.report.SetYOffset(int(m.keepScroll * float64(max(0, m.report.TotalLineCount()-m.report.Height))))
+			m.keepScroll = -1
 		}
 		m.reportLoaded = true
 		return m, nil
@@ -480,11 +489,16 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) reportKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.is(k, keys.Rescan) {
+	switch {
+	case m.is(k, keys.Rescan):
 		if m.busy == "" {
 			return m, m.rescan(m.reportCmd)
 		}
 		return m, nil
+	case m.is(k, keys.Details):
+		m.expanded = !m.expanded
+		m.keepScroll = m.report.ScrollPercent()
+		return m, m.loadReport(m.reportCmd)
 	}
 	return m, m.scroll(k)
 }
@@ -802,7 +816,7 @@ func (m *Model) help() string {
 			{"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
 	case m.screen == screenReport:
 		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
-			{"rescan", keys.Rescan}, {"back", keys.Back}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
+			{"details", keys.Details}, {"rescan", keys.Rescan}, {"back", keys.Back}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
 	case m.screen == screenExplain:
 		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
 			{"ask again", keys.Reask}, {"back to tasks", keys.Back}, {"quit", keys.Quit}}

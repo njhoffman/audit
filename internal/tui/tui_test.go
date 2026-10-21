@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ type fake struct {
 	explains []string
 	failAI   bool
 	report   string // report text; empty means "report of <command>"
+	expanded []bool // the expanded argument of each Report
 }
 
 func (f *fake) Explain(_ context.Context, id int64, _ int, refresh bool) (string, error) {
@@ -43,8 +45,9 @@ func (f *fake) Explain(_ context.Context, id int64, _ int, refresh bool) (string
 
 func (f *fake) Statuses(context.Context) ([]render.CommandStatus, error) { return f.rows, nil }
 
-func (f *fake) Report(_ context.Context, c string, _ int) (string, bool, error) {
+func (f *fake) Report(_ context.Context, c string, _ int, expanded bool) (string, bool, error) {
 	f.reports = append(f.reports, c)
+	f.expanded = append(f.expanded, expanded)
 	if c == "packages" {
 		return "", false, nil
 	}
@@ -437,5 +440,27 @@ func TestScrollKeys(t *testing.T) {
 	key(t, m, "l")
 	if m.screen != screenReport || m.report.View() != before {
 		t.Error("l neither leaves the report nor scrolls sideways")
+	}
+}
+
+func TestToggleDetails(t *testing.T) {
+	f := newFake()
+	f.report = strings.Repeat("line\n", 200)
+	m := start(t, f)
+	key(t, m, "enter")
+	key(t, m, "G")
+	key(t, m, "x")
+	if !reflect.DeepEqual(f.expanded, []bool{false, true}) {
+		t.Errorf("reports start collapsed and x expands them: %v", f.expanded)
+	}
+	if !m.report.AtBottom() {
+		t.Error("the toggled report keeps its scroll position")
+	}
+	key(t, m, "x")
+	if f.expanded[len(f.expanded)-1] {
+		t.Error("x collapses them again")
+	}
+	if !strings.Contains(m.help(), "x details") {
+		t.Errorf("help: %s", m.help())
 	}
 }

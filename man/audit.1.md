@@ -208,7 +208,7 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 :   Wrap output at _n_ columns. Default: the terminal width, unlimited when redirected.
 
 **-v**, **\-\-verbose**
-:   Show every detail line and info logs.
+:   Show info logs. **audit packages** also lists each package's source and executables.
 
 **-D**, **\-\-debug**
 :   Show debug logs.
@@ -410,6 +410,7 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     top, bottom         home g, end G         same
     open                enter l right         dashboard (report), tasks (details)
     rescan              r                     dashboard, report
+    toggle_details      x                     report (expand or collapse findings)
     reask               r                     explain (ask the AI again)
     explain             e                     tasks, task
     editor              v                     tasks, task (locations in $EDITOR)
@@ -422,7 +423,7 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     toggle_closed       a                     tasks
     cycle_command       c                     tasks
 
-The note and find fields always use **enter** and **esc**. An unknown action, a blank key, **ctrl+c** or two actions sharing a key on one screen is a config error.
+A report opens collapsed, one line per finding with its severity marker (**◉** critical, **●** error, **▲** warning, **◆** notice, **○** info) and without the summary lines of shells other than **$SHELL**; **toggle_details** expands every finding, with all its detail lines, and collapses them again, keeping the scroll position. Printed reports are always expanded. The note and find fields always use **enter** and **esc**. An unknown action, a blank key, **ctrl+c** or two actions sharing a key on one screen is a config error.
 
 # FZF
 
@@ -480,7 +481,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
         files: {warn: 168h, old: 720h}
     ignore: []                 # command:check:subject, command:check or check
     display:
-      details: 5               # detail lines per finding; -v shows all
+      details: 5               # detail lines per finding; the dashboard's expanded report shows all
     tui:
       interface: tui           # tui or fzf; -F/--fzf per run
       keys: {quit: [q], status_done: [d], ...}   # every action; see KEYS

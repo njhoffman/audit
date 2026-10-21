@@ -181,7 +181,7 @@ func (c AIConfig) For(provider string) (string, ProviderConfig) {
 
 // DisplayConfig configures terminal output.
 type DisplayConfig struct {
-	// Details is how many detail lines a finding shows without --verbose.
+	// Details is how many detail lines a finding shows in a printed report.
 	Details int `mapstructure:"details" yaml:"details"`
 }
 
@@ -668,7 +668,8 @@ stale:
 ignore: []
 
 display:
-  # Detail lines shown per finding; --verbose shows all of them.
+  # Detail lines shown per finding in a printed report; the dashboard's
+  # expanded report (toggle_details) shows all of them.
   details: 5
 
 # The dashboard (bare audit) and task editor (audit todo -i).
@@ -695,6 +696,7 @@ tui:
     bottom: [end, G]
     open: [enter, l, right]        # dashboard: report; tasks: details
     rescan: [r]                    # dashboard, report
+    toggle_details: [x]            # report: expand or collapse findings
     reask: [r]                     # explain: ask the AI again
     explain: [e]                   # tasks, task
     editor: [v]                    # tasks, task: open locations in $EDITOR

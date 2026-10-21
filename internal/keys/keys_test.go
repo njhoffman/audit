@@ -27,9 +27,9 @@ func TestValidate(t *testing.T) {
 		{"reserved", Map{Rescan: {Reserved}}, "always quits"},
 		{"same screen", Map{Quit: {"d"}}, `"d" is bound to both quit and status_done on the tasks screen`},
 		{"twice in one action is fine", Map{Quit: {"q", "q"}}, ""},
-		{"disjoint screens share", Map{Rescan: {"x"}, Reask: {"x"}}, ""},
+		{"disjoint screens share", Map{Rescan: {"z"}, Reask: {"z"}}, ""},
 		{"unbound", Map{Editor: {}}, ""},
-		{"rebinding frees the old key", Map{StatusDone: {"x"}, Quit: {"q", "d"}}, ""},
+		{"rebinding frees the old key", Map{StatusDone: {"z"}, Quit: {"q", "d"}}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := Defaults()

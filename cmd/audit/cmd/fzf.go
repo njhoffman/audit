@@ -221,7 +221,7 @@ func (a *app) fzfRender(ctx context.Context, kind, arg string, width int) (strin
 	b := tuiBackend{a: a, forceColor: true}
 	switch kind {
 	case "report":
-		text, ok, err := b.Report(ctx, arg, width)
+		text, ok, err := b.Report(ctx, arg, width, true)
 		if err != nil || ok {
 			return text, err
 		}

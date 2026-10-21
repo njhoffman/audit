@@ -42,13 +42,14 @@ func (b tuiBackend) Statuses(ctx context.Context) ([]render.CommandStatus, error
 	return b.a.statuses(ctx)
 }
 
-func (b tuiBackend) Report(ctx context.Context, command string, width int) (string, bool, error) {
+func (b tuiBackend) Report(ctx context.Context, command string, width int, expanded bool) (string, bool, error) {
 	r, err := b.a.engine.Saved(ctx, command, "")
 	if err != nil || r == nil {
 		return "", false, err
 	}
 	var buf bytes.Buffer
 	p := b.printer(&buf, width)
+	p.Collapsed, p.AllDetails = !expanded, expanded
 	p.Report(r, render.ReportOptions{Thresholds: b.a.cfg.Stale.For(command), Saved: true,
 		RescanHint: core.RescanHint(command, r.Scope)})
 	return buf.String(), true, nil

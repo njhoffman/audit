@@ -29,8 +29,11 @@ type Printer struct {
 	Details int
 	// Home is shown as ~ in paths; "" leaves paths alone.
 	Home string
-	// Collapsed leaves out the Extra summary lines.
+	// Collapsed prints one line per finding and leaves out the Extra
+	// summary lines.
 	Collapsed bool
+	// AllDetails shows every detail line instead of the first Details.
+	AllDetails bool
 	// Now is the clock used for ages.
 	Now func() time.Time
 }
@@ -112,6 +115,21 @@ func (p *Printer) sevStyle(s finding.Severity) lipgloss.Style {
 		return p.fg("14")
 	}
 	return p.faint()
+}
+
+// sevMarks are the severity markers of collapsed findings.
+var sevMarks = map[finding.Severity]string{
+	finding.Critical: "◉", finding.Error: "●", finding.Warning: "▲", finding.Notice: "◆", finding.Info: "○",
+}
+
+// sevMark is s's marker in its color; critical's badge background would be
+// a block behind one character, so it gets the error red instead.
+func (p *Printer) sevMark(s finding.Severity) string {
+	st := p.sevStyle(s)
+	if s == finding.Critical {
+		st = p.fg("9").Bold(true)
+	}
+	return st.Render(sevMarks[s])
 }
 
 func (p *Printer) sevBadge(s finding.Severity) string {
