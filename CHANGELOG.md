@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-20
+
 ### Added
 
 - `-G/--nerd-fonts` and `display.nerd_fonts`: Nerd Font icons for commands, report sections, summary groups, severities and priorities. Without them, Unicode markers stand for severities (`◉ ● ▲ ◆ ○`) and priorities (`● ◐ ○ ◇`).
