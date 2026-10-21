@@ -168,7 +168,7 @@ func start(t *testing.T, f *fake, opts ...Option) *Model {
 func TestDashboardShowsCommandsAndAges(t *testing.T) {
 	m := start(t, newFake())
 	v := m.View()
-	for _, s := range []string{"system", "environment", "packages", "1h", "10d", "never", "2 err", "2 high"} {
+	for _, s := range []string{"system", "environment", "packages", "1h", "10d", "never", "● 2       ● 2", "✓ none"} {
 		if !strings.Contains(v, s) {
 			t.Errorf("dashboard missing %q:\n%s", s, v)
 		}

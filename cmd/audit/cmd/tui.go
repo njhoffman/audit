@@ -35,7 +35,8 @@ func runTodoEditor(ctx context.Context, a *app, f todo.Filter) error {
 }
 
 func (a *app) tuiOptions() []tui.Option {
-	return []tui.Option{tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys), tui.WithHome(a.env.Home)}
+	return []tui.Option{tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys), tui.WithHome(a.env.Home),
+		tui.WithGlyphs(render.GlyphsFor(a.cfg.Display.NerdFonts))}
 }
 
 func (b tuiBackend) Statuses(ctx context.Context) ([]render.CommandStatus, error) {
@@ -120,6 +121,7 @@ func (b tuiBackend) printer(buf *bytes.Buffer, width int) *render.Printer {
 	p.Verbose = b.a.flags.verbose
 	if b.a.cfg != nil {
 		p.Details = b.a.cfg.Display.Details
+		p.Glyphs = render.GlyphsFor(b.a.cfg.Display.NerdFonts)
 	}
 	if b.a.env != nil {
 		p.Home = b.a.env.Home

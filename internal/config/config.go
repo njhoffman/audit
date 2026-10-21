@@ -183,6 +183,8 @@ func (c AIConfig) For(provider string) (string, ProviderConfig) {
 type DisplayConfig struct {
 	// Details is how many detail lines a finding shows in a printed report.
 	Details int `mapstructure:"details" yaml:"details"`
+	// NerdFonts uses Nerd Font icons instead of Unicode markers.
+	NerdFonts bool `mapstructure:"nerd_fonts" yaml:"nerd_fonts"`
 }
 
 // TUIConfig configures the interactive dashboard.
@@ -345,6 +347,7 @@ func defaults(v *viper.Viper) {
 	})
 	v.SetDefault("ignore", []string{})
 	v.SetDefault("display.details", 5)
+	v.SetDefault("display.nerd_fonts", false)
 	v.SetDefault("tui.interface", InterfaceTUI)
 	for _, a := range keys.Actions {
 		v.SetDefault("tui.keys."+a.Name, a.Default)
@@ -671,6 +674,10 @@ display:
   # Detail lines shown per finding in a printed report; the dashboard's
   # expanded report (toggle_details) shows all of them.
   details: 5
+  # Nerd Font icons for commands, sections, severities and priorities;
+  # needs a patched font. false uses plain Unicode markers. -G/--nerd-fonts
+  # turns them on for one run, --nerd-fonts=false off.
+  nerd_fonts: false
 
 # The dashboard (bare audit) and task editor (audit todo -i).
 tui:

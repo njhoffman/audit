@@ -74,7 +74,7 @@ func TestReport(t *testing.T) {
 	p.Report(sampleRun(3*24*time.Hour), ReportOptions{Thresholds: th, Saved: true})
 	out := b.String()
 	for _, w := range []string{
-		"audit system", "box", "took 2s", "1 error  1 notice  1 info  (2 ignored)",
+		"audit system", "box", "took 2s", "● 1 error  ◆ 1 notice  ○ 1 info  (2 ignored)",
 		"Summary", "procs", "total  412", "Scan errors", "permission denied",
 		"Issues", "ERROR    logs.oom_kill  journal", "OOM killer activated", "hint: add swap",
 		"- e", "(+2 more; display.details sets how many show)", "key system:logs.oom_kill:journal",
@@ -170,8 +170,8 @@ func TestSummary(t *testing.T) {
 		{Command: "repos", Thresholds: th},
 	})
 	out := b.String()
-	for _, w := range []string{"COMMAND", "system", "2h", "2 err 1 info", "2 high 1 low",
-		"packages", "10d", "none", "repos", "never"} {
+	for _, w := range []string{"COMMAND", "system", "2h", "● 2  ○ 1  ● 2  ○ 1",
+		"packages", "10d", "✓ none", "repos", "never"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("summary missing %q:\n%s", w, out)
 		}
@@ -415,5 +415,45 @@ func TestReportCollapsed(t *testing.T) {
 		if strings.Contains(out, gone) {
 			t.Errorf("collapsed report shows %q:\n%s", gone, out)
 		}
+	}
+}
+
+func TestCountColumnsAlign(t *testing.T) {
+	p, _ := printer(0)
+	rows := []CommandStatus{
+		{Command: "a", Latest: &store.RunInfo{Counts: finding.Counts{finding.Error: 8, finding.Warning: 88, finding.Info: 54}},
+			Open: map[todo.Priority]int{todo.High: 3, todo.Low: 5}},
+		{Command: "b", Latest: &store.RunInfo{Counts: finding.Counts{finding.Warning: 4}}, Open: map[todo.Priority]int{todo.Low: 12}},
+		{Command: "c", Latest: &store.RunInfo{}},
+		{Command: "d"},
+	}
+	cc := NewCountColumns(rows)
+	var got []string
+	for _, r := range rows {
+		got = append(got, p.RunCounts(cc, r)+" | "+p.TaskCounts(cc, r.Open))
+	}
+	want := []string{
+		"● 8  ▲ 88  ○ 54 | ● 3  ○  5",
+		"     ▲  4 |      ○ 12",
+		"✓ none | ",
+		" | ",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestNerdGlyphs(t *testing.T) {
+	p, b := printer(0)
+	p.Glyphs = GlyphsFor(true)
+	p.Report(sampleRun(0), ReportOptions{})
+	out := b.String()
+	for _, w := range []string{"\uf108 audit system", "\uf188 Issues", "\uf057 ERROR", "\uf057 1 error"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing %q:\n%s", w, out)
+		}
+	}
+	if GlyphsFor(false).Icon("system") != "" || GlyphsFor(true).Icon("nothing") != "" {
+		t.Error("Unicode markers have no icons, and an unknown name has none")
 	}
 }

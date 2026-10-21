@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `-G/--nerd-fonts` and `display.nerd_fonts`: Nerd Font icons for commands, report sections, summary groups, severities and priorities. Without them, Unicode markers stand for severities (`◉ ● ▲ ◆ ○`) and priorities (`● ◐ ○ ◇`).
+
+### Changed
+
+- The dashboard and `audit --summary` line finding counts up in one column per severity and open tasks in one per priority, each marker and count in a muted shade of its color, blanks where a command has none, and `✓ none` for a run that found nothing. Report headers show their counts with the severity markers.
+
 ## [0.19.0] - 2026-10-20
 
 ### Added

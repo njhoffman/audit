@@ -11,6 +11,7 @@ import (
 	"time"
 
 	clog "github.com/charmbracelet/log"
+	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
 	"github.com/njhoffman/audit/internal/config"
@@ -40,6 +41,9 @@ type globalFlags struct {
 	quiet   bool
 	// aiProvider overrides ai.provider.
 	aiProvider string
+	// nerdFonts overrides display.nerd_fonts when nerdFontsFlag was given.
+	nerdFonts     bool
+	nerdFontsFlag *pflag.Flag
 }
 
 // app is the state every subcommand shares. It is built lazily so that
@@ -95,6 +99,9 @@ func (a *app) load() error {
 		return err
 	}
 	a.cfg, a.cfgPath = cfg, path
+	if f := a.flags.nerdFontsFlag; f != nil && f.Changed {
+		a.cfg.Display.NerdFonts = a.flags.nerdFonts
+	}
 	if err := checkProvider(a.flags.aiProvider); err != nil {
 		return err
 	}
@@ -235,6 +242,7 @@ func (a *app) printer() *render.Printer {
 	}
 	if a.cfg != nil {
 		p.Details = a.cfg.Display.Details
+		p.Glyphs = render.GlyphsFor(a.cfg.Display.NerdFonts)
 	}
 	return p
 }

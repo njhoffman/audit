@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/finding"
@@ -27,36 +28,126 @@ type CommandStatus struct {
 // found and how many tasks are still open.
 func (p *Printer) Summary(rows []CommandStatus) {
 	now := p.Now()
+	cc := NewCountColumns(rows)
 	cols := []column{{title: "COMMAND"}, {title: "LAST RUN"}, {title: "AGE"}, {title: "FINDINGS"}, {title: "TASKS"}}
 	cells := make([][]string, len(rows))
 	styles := make([][]lipgloss.Style, len(rows))
 	for i, r := range rows {
 		st := []lipgloss.Style{p.fg("12").Bold(true), p.style(), p.style(), p.style(), p.style()}
+		name := p.glyphs().Icon(r.Command) + r.Command
 		if r.Latest == nil {
-			cells[i] = []string{r.Command, "never", "-", "-", taskCounts(r.Open)}
+			cells[i] = []string{name, "never", "-", p.RunCounts(cc, r), p.TaskCounts(cc, r.Open)}
 			st[1], st[2] = p.faint(), p.faint()
 		} else {
 			age := now.Sub(r.Latest.FinishedAt)
-			cells[i] = []string{r.Command, r.Latest.FinishedAt.Local().Format("2006-01-02 15:04"),
-				run.HumanAge(age), plainCounts(r.Latest.Counts), taskCounts(r.Open)}
-			switch run.FreshnessOf(age, r.Thresholds.Warn, r.Thresholds.Old) {
-			case run.Old:
-				st[2] = p.fg("9").Bold(true)
-			case run.Stale:
-				st[2] = p.fg("11")
-			default:
-				st[2] = p.fg("10")
-			}
-			if w := r.Latest.Counts.Worst(); w != "" {
-				st[3] = p.sevStyle(w)
-			}
-		}
-		if total(r.Open) > 0 && r.Open[todo.High] > 0 {
-			st[4] = p.prioStyle(todo.High)
+			cells[i] = []string{name, r.Latest.FinishedAt.Local().Format("2006-01-02 15:04"),
+				run.HumanAge(age), p.RunCounts(cc, r), p.TaskCounts(cc, r.Open)}
+			st[2] = p.ageStyle(age, r.Thresholds)
 		}
 		styles[i] = st
 	}
 	p.table(cols, cells, func(row, col int) lipgloss.Style { return styles[row][col] })
+}
+
+// ageStyle colors an age by its freshness.
+func (p *Printer) ageStyle(age time.Duration, th config.Thresholds) lipgloss.Style {
+	switch run.FreshnessOf(age, th.Warn, th.Old) {
+	case run.Old:
+		return p.fg("9").Bold(true)
+	case run.Stale:
+		return p.fg("11")
+	}
+	return p.fg("10")
+}
+
+// CountColumns lines finding and task counts up across rows: one
+// sub-column per severity and priority that some row has, each as wide as
+// its largest count.
+type CountColumns struct {
+	sev  []finding.Severity
+	sevW map[finding.Severity]int
+	pri  []todo.Priority
+	priW map[todo.Priority]int
+}
+
+// NewCountColumns sizes the count sub-columns for rows.
+func NewCountColumns(rows []CommandStatus) CountColumns {
+	cc := CountColumns{sevW: map[finding.Severity]int{}, priW: map[todo.Priority]int{}}
+	for _, r := range rows {
+		if r.Latest != nil {
+			for s, n := range r.Latest.Counts {
+				if n > 0 {
+					cc.sevW[s] = max(cc.sevW[s], len(fmt.Sprint(n)))
+				}
+			}
+		}
+		for pr, n := range r.Open {
+			if n > 0 {
+				cc.priW[pr] = max(cc.priW[pr], len(fmt.Sprint(n)))
+			}
+		}
+	}
+	for _, s := range finding.Severities {
+		if cc.sevW[s] > 0 {
+			cc.sev = append(cc.sev, s)
+		}
+	}
+	for _, pr := range todo.Priorities {
+		if cc.priW[pr] > 0 {
+			cc.pri = append(cc.pri, pr)
+		}
+	}
+	return cc
+}
+
+// RunCounts is the finding counts of r's latest run: aligned cells, a
+// check mark when it found nothing, blank when it never ran.
+func (p *Printer) RunCounts(cc CountColumns, r CommandStatus) string {
+	switch {
+	case r.Latest == nil:
+		return ""
+	case r.Latest.Counts.Total() == 0:
+		mark := "✓"
+		if p.glyphs().Nerd {
+			mark = "\uf00c" // fa-check
+		}
+		return p.fg("10").Render(mark + " none")
+	}
+	return p.FindingCounts(cc, r.Latest.Counts)
+}
+
+// FindingCounts is c as aligned cells: each severity's marker and count in
+// a muted shade of its color, blank where c has none.
+func (p *Printer) FindingCounts(cc CountColumns, c finding.Counts) string {
+	cells := make([]string, len(cc.sev))
+	for i, s := range cc.sev {
+		cells[i] = p.countCell(c[s], cc.sevW[s], p.glyphs().Severity[s], p.mutedSev(s))
+	}
+	return strings.TrimRight(strings.Join(cells, "  "), " ")
+}
+
+// TaskCounts is open as aligned cells, like FindingCounts, by priority.
+func (p *Printer) TaskCounts(cc CountColumns, open map[todo.Priority]int) string {
+	cells := make([]string, len(cc.pri))
+	for i, pr := range cc.pri {
+		cells[i] = p.countCell(open[pr], cc.priW[pr], p.glyphs().Priority[pr], p.prioStyle(pr).UnsetBold())
+	}
+	return strings.TrimRight(strings.Join(cells, "  "), " ")
+}
+
+func (p *Printer) countCell(n, width int, mark string, st lipgloss.Style) string {
+	if n == 0 {
+		return strings.Repeat(" ", ansi.StringWidth(mark)+1+width)
+	}
+	return st.Render(mark + " " + padLeft(fmt.Sprint(n), width))
+}
+
+// mutedSev is s's color without bold or the critical badge background.
+func (p *Printer) mutedSev(s finding.Severity) lipgloss.Style {
+	if s == finding.Critical {
+		return p.fg("9")
+	}
+	return p.sevStyle(s).UnsetBold()
 }
 
 // CountsText abbreviates finding counts, worst first ("2 err 5 warn"), or

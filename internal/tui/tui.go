@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/njhoffman/audit/internal/keys"
 	"github.com/njhoffman/audit/internal/render"
@@ -106,6 +108,8 @@ type Model struct {
 	editing int64
 	// home is shown as ~ in paths.
 	home string
+	// glyphs are the markers and icons.
+	glyphs render.Glyphs
 	// expanded shows reports' findings in full; keepScroll restores the
 	// scroll position, as a fraction, once the toggled report arrives.
 	expanded   bool
@@ -128,6 +132,9 @@ func WithKeys(km keys.Map) Option {
 	}
 }
 
+// WithGlyphs sets the markers and icons (render.UnicodeGlyphs by default).
+func WithGlyphs(g render.Glyphs) Option { return func(m *Model) { m.glyphs = g } }
+
 // WithHome shows paths under home as ~/...
 func WithHome(home string) Option { return func(m *Model) { m.home = home } }
 
@@ -139,6 +146,7 @@ func StartInTodos(f todo.Filter) Option {
 // New returns a Model over b.
 func New(ctx context.Context, b Backend, opts ...Option) *Model {
 	m := &Model{ctx: ctx, b: b, now: time.Now, keys: keys.Defaults(), width: 80, height: 24, keepScroll: -1,
+		glyphs:  render.UnicodeGlyphs,
 		spinner: spinner.New(spinner.WithSpinner(spinner.Dot))}
 	m.field = textinput.New()
 	m.field.CharLimit = 500
@@ -716,38 +724,48 @@ func (m *Model) dashboardView() string {
 		return faintStyle.Render("  loading...")
 	}
 	now := m.now()
-	var b strings.Builder
-	header := fmt.Sprintf("  %-13s %-17s %-8s %-28s %s", "COMMAND", "LAST RUN", "AGE", "FINDINGS", "OPEN TASKS")
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render(header) + "\n")
+	p := render.NewProfile(io.Discard, lipgloss.ColorProfile(), 0)
+	p.Glyphs = m.glyphs
+	cc := render.NewCountColumns(m.rows)
+	type line struct{ name, last, age, findings, tasks string }
+	lines := make([]line, len(m.rows))
+	nameW, findW := len("COMMAND"), len("FINDINGS")
 	for i, r := range m.rows {
-		last, age, findings := "never", "-", "-"
-		ageStyle := faintStyle
+		l := line{name: m.glyphs.Icon(r.Command) + r.Command, last: faintStyle.Render("never"), age: faintStyle.Render("-"),
+			findings: p.RunCounts(cc, r), tasks: p.TaskCounts(cc, r.Open)}
 		if r.Latest != nil {
 			d := now.Sub(r.Latest.FinishedAt)
-			last = r.Latest.FinishedAt.Local().Format("2006-01-02 15:04")
-			age = run.HumanAge(d)
-			findings = render.CountsText(r.Latest.Counts)
+			l.last = r.Latest.FinishedAt.Local().Format("2006-01-02 15:04")
+			ageStyle := okStyle
 			switch run.FreshnessOf(d, r.Thresholds.Warn, r.Thresholds.Old) {
 			case run.Old:
 				ageStyle = oldStyle
 			case run.Stale:
 				ageStyle = staleStyle
-			default:
-				ageStyle = okStyle
 			}
+			l.age = ageStyle.Render(run.HumanAge(d))
 		}
+		nameW = max(nameW, ansi.StringWidth(l.name))
+		findW = max(findW, ansi.StringWidth(l.findings))
+		lines[i] = l
+	}
+	pad := func(s string, w int) string { return s + strings.Repeat(" ", max(0, w-ansi.StringWidth(s))) }
+	var b strings.Builder
+	header := "  " + pad("COMMAND", nameW) + "  " + pad("LAST RUN", 16) + "  " + pad("AGE", 8) + "  " + pad("FINDINGS", findW) +
+		"  " + m.glyphs.Icon("tasks") + "OPEN TASKS"
+	b.WriteString(lipgloss.NewStyle().Bold(true).Render(header) + "\n")
+	for i, l := range lines {
 		marker := "  "
-		name := fmt.Sprintf("%-13s", r.Command)
-		if m.busy == r.Command {
+		if m.busy == m.rows[i].Command {
 			marker = m.spinner.View() + " "
 		}
+		name := pad(l.name, nameW)
 		if i == m.cursor {
 			name = cursorStyle.Render(name)
 		} else {
 			name = titleStyle.Render(name)
 		}
-		fmt.Fprintf(&b, "%s%s %-17s %s %-28s %s\n", marker, name, last, ageStyle.Render(fmt.Sprintf("%-8s", age)),
-			findings, render.TasksText(r.Open))
+		b.WriteString(marker + name + "  " + pad(l.last, 16) + "  " + pad(l.age, 8) + "  " + pad(l.findings, findW) + "  " + l.tasks + "\n")
 	}
 	return b.String()
 }

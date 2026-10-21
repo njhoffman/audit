@@ -60,7 +60,7 @@ func (p *Printer) Banner(r *run.Run, th config.Thresholds, saved bool, hint stri
 
 // Header prints the run's title line, age banner and severity counts.
 func (p *Printer) Header(r *run.Run, o ReportOptions) {
-	title := p.bold().Foreground(lipgloss.Color("12")).Render("audit " + r.Command)
+	title := p.bold().Foreground(lipgloss.Color("12")).Render(p.glyphs().Icon(r.Command) + "audit " + r.Command)
 	meta := []string{r.Host, r.FinishedAt.Local().Format("2006-01-02 15:04"),
 		"took " + r.Duration().Round(100*time.Millisecond).String()}
 	if r.Scope != "" {
@@ -215,7 +215,7 @@ func (p *Printer) stats(stats []run.Stat) {
 		if s.Group != group {
 			group = s.Group
 			if group != "" {
-				p.println("  " + p.bold().Render(group))
+				p.println("  " + p.bold().Render(p.glyphs().Icon(group)+group))
 			}
 		}
 		indent := 4

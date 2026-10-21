@@ -89,6 +89,8 @@ AI features go through a local CLI picked by `ai.provider` (or `-I/--ai-provider
 - `audit todo explain ID`, or `e` in the task editor: cause, impact, fix and how to confirm it for one task, with the full findings behind it.
 - `-e/--explain` on `packages update` and `packages runtimes update|migrate` (also with `-L`): why the failed items failed. This sends the tail of their command output.
 
+The dashboard lines up each command's finding counts by severity (`◉` critical, `●` error, `▲` warning, `◆` notice, `○` info) and its open tasks by priority (`●` high, `◐` medium, `○` low, `◇` suggestion). With a Nerd Font, `display.nerd_fonts: true` (or `-G`) swaps the markers for icons and adds icons to commands, report sections and summary groups.
+
 ### Dashboard keys
 
 Reports open collapsed: one line per finding, and only the stats of the shell in `$SHELL`. `x` expands every finding (hint, all details, key) and both shells' stats, and collapses them again; printed reports (`--report`) are always expanded.

@@ -34,6 +34,8 @@ type Printer struct {
 	Collapsed bool
 	// AllDetails shows every detail line instead of the first Details.
 	AllDetails bool
+	// Glyphs are the markers and icons; the zero value means UnicodeGlyphs.
+	Glyphs Glyphs
 	// Now is the clock used for ages.
 	Now func() time.Time
 }
@@ -100,7 +102,10 @@ func pathByte(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.IndexByte("_.-/~", c) >= 0
 }
 
-func (p *Printer) heading(s string) string { return p.bold().Underline(true).Render(s) }
+// heading is a section title, after its icon when there is one.
+func (p *Printer) heading(s string) string {
+	return p.bold().Render(p.glyphs().Icon(s)) + p.bold().Underline(true).Render(s)
+}
 
 // Severity colors, shared with the HTML report's palette in spirit.
 func (p *Printer) sevStyle(s finding.Severity) lipgloss.Style {
@@ -117,9 +122,11 @@ func (p *Printer) sevStyle(s finding.Severity) lipgloss.Style {
 	return p.faint()
 }
 
-// sevMarks are the severity markers of collapsed findings.
-var sevMarks = map[finding.Severity]string{
-	finding.Critical: "◉", finding.Error: "●", finding.Warning: "▲", finding.Notice: "◆", finding.Info: "○",
+func (p *Printer) glyphs() Glyphs {
+	if p.Glyphs.Severity == nil {
+		return UnicodeGlyphs
+	}
+	return p.Glyphs
 }
 
 // sevMark is s's marker in its color; critical's badge background would be
@@ -129,15 +136,18 @@ func (p *Printer) sevMark(s finding.Severity) string {
 	if s == finding.Critical {
 		st = p.fg("9").Bold(true)
 	}
-	return st.Render(sevMarks[s])
+	return st.Render(p.glyphs().Severity[s])
 }
 
 func (p *Printer) sevBadge(s finding.Severity) string {
-	label := strings.ToUpper(string(s))
+	label, width := strings.ToUpper(string(s)), 8
+	if g := p.glyphs(); g.Nerd {
+		label, width = g.Severity[s]+" "+label, 10
+	}
 	if s == finding.Critical {
 		return p.sevStyle(s).Render(" " + label + " ")
 	}
-	return p.sevStyle(s).Render(padRight(label, 8))
+	return p.sevStyle(s).Render(padRight(label, width))
 }
 
 func (p *Printer) prioStyle(pr todo.Priority) lipgloss.Style {
@@ -169,7 +179,7 @@ func (p *Printer) counts(c finding.Counts) string {
 	var parts []string
 	for _, s := range finding.Severities {
 		if n := c[s]; n > 0 {
-			parts = append(parts, p.sevStyle(s).Render(fmt.Sprintf("%d %s", n, s)))
+			parts = append(parts, p.sevMark(s)+" "+p.sevStyle(s).Render(fmt.Sprintf("%d %s", n, s)))
 		}
 	}
 	if len(parts) == 0 {

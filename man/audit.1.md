@@ -210,6 +210,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 **-v**, **\-\-verbose**
 :   Show info logs. **audit packages** also lists each package's source and executables.
 
+**-G**, **\-\-nerd-fonts**
+:   Use Nerd Font icons for commands, report sections, summary groups, severities and priorities instead of the Unicode markers. Default: **display.nerd_fonts**; **\-\-nerd-fonts=false** turns them off for one run.
+
 **-D**, **\-\-debug**
 :   Show debug logs.
 
@@ -423,7 +426,7 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     toggle_closed       a                     tasks
     cycle_command       c                     tasks
 
-A report opens collapsed, one line per finding with its severity marker (**◉** critical, **●** error, **▲** warning, **◆** notice, **○** info) and without the summary lines of shells other than **$SHELL**; **toggle_details** expands every finding, with all its detail lines, and collapses them again, keeping the scroll position. Printed reports are always expanded. The note and find fields always use **enter** and **esc**. An unknown action, a blank key, **ctrl+c** or two actions sharing a key on one screen is a config error.
+The dashboard and **audit \-\-summary** line finding counts up in one column per severity (**◉** critical, **●** error, **▲** warning, **◆** notice, **○** info) and open task counts in one per priority (**●** high, **◐** medium, **○** low, **◇** suggestion), each in its color; a run that found nothing shows **✓ none**. With **display.nerd_fonts** these markers are Nerd Font icons, and commands, report sections and summary groups get icons too. A report opens collapsed, one line per finding with its severity marker and without the summary lines of shells other than **$SHELL**; **toggle_details** expands every finding, with all its detail lines, and collapses them again, keeping the scroll position. Printed reports are always expanded. The note and find fields always use **enter** and **esc**. An unknown action, a blank key, **ctrl+c** or two actions sharing a key on one screen is a config error.
 
 # FZF
 
@@ -482,6 +485,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     ignore: []                 # command:check:subject, command:check or check
     display:
       details: 5               # detail lines per finding; the dashboard's expanded report shows all
+      nerd_fonts: false        # Nerd Font icons instead of Unicode markers; -G
     tui:
       interface: tui           # tui or fzf; -F/--fzf per run
       keys: {quit: [q], status_done: [d], ...}   # every action; see KEYS
