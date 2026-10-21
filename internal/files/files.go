@@ -205,7 +205,7 @@ func Scan(ctx context.Context, o Options, rep progress.Reporter) (*Data, []findi
 		d.Reclaimable += d.Trash
 	}
 	stats := []run.Stat{
-		{Name: "scanned", Value: fmt.Sprintf("%s in %d files, %d dirs", Human(d.Bytes), d.Files, d.Dirs)},
+		{Name: "scanned", Value: Human(d.Bytes), Note: fmt.Sprintf("%d files, %d dirs", d.Files, d.Dirs)},
 		{Name: "reclaimable", Value: Human(d.Reclaimable)},
 	}
 	if d.Unreadable > 0 {

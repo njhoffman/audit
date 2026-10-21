@@ -343,9 +343,13 @@ func scanPackages(t *testing.T, s *PackagesScanner) (*Outcome, packages.Data) {
 	return out, data
 }
 
+// stat is the value of the stat called name, then " | " and its note.
 func stat(out *Outcome, name string) string {
 	for _, s := range out.Stats {
 		if s.Name == name {
+			if s.Note != "" {
+				return s.Value + " | " + s.Note
+			}
 			return s.Value
 		}
 	}
@@ -508,7 +512,7 @@ func TestPackagesScanRegistryCache(t *testing.T) {
 	if got := checks(out.Findings)["uv:ruff"]; !strings.Contains(got, packages.CheckOutdated) {
 		t.Errorf("cached data should drive the outdated check: %v", checks(out.Findings))
 	}
-	if got := stat(out, "checked"); got != "oldest 2 days ago, 1 never checked" {
+	if got := stat(out, "checked"); got != "oldest 2 days ago | 1 never checked" {
 		t.Errorf("checked stat = %q", got)
 	}
 	if len(store.saved) != 0 {
@@ -528,7 +532,7 @@ func TestPackagesScanRegistryCache(t *testing.T) {
 	if strings.Contains(got["uv:ruff"], packages.CheckOutdated) || !strings.Contains(got["uv:black"], packages.CheckMajorBehind) {
 		t.Errorf("findings should use the refreshed data: %v", got)
 	}
-	if v := stat(out, "looked up"); v != "2 (0 failed, 0 already fresh)" {
+	if v := stat(out, "looked up"); v != "2 | 0 failed, 0 already fresh" {
 		t.Errorf("looked up = %q", v)
 	}
 	if v := stat(out, "checked"); v != "oldest 1 minute ago" {

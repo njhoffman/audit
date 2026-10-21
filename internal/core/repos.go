@@ -235,7 +235,7 @@ func repoStats(rs []repos.Repo, metas map[string]repos.Meta, user string, now ti
 		checked = "oldest " + age + " ago"
 	}
 	return []run.Stat{
-		{Name: "repos", Value: fmt.Sprintf("%d (%d mine)", len(rs), mine)},
+		{Name: "repos", Value: fmt.Sprint(len(rs)), Note: fmt.Sprintf("%d mine", mine)},
 		{Name: "local changes", Value: fmt.Sprint(dirty)},
 		{Name: "unpushed", Value: fmt.Sprint(ahead)},
 		{Name: "behind", Value: fmt.Sprint(behind)},

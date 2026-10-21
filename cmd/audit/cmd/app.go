@@ -230,6 +230,9 @@ func (a *app) printer() *render.Printer {
 	p := render.New(a.out, a.noColor(), width)
 	p.Verbose = a.flags.verbose
 	p.Now = timeNow
+	if a.env != nil {
+		p.Home = a.env.Home
+	}
 	if a.cfg != nil {
 		p.Details = a.cfg.Display.Details
 	}

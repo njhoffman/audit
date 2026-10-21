@@ -186,26 +186,27 @@ func countBins(path string) int {
 }
 
 // shellStats is one summary row per count and shell: the count under a
-// terminal, with the count without one when it differs.
-func shellStats(captures []Capture) []run.Stat {
+// terminal, noting the count without one when it differs. The rows of a
+// shell other than current are Extra.
+func shellStats(captures []Capture, current string) []run.Stat {
 	shells, tty, notty := statsByShell(captures)
 	var out []run.Stat
 	for _, sh := range shells {
 		for _, k := range statKeys {
 			a, inTTY := countOf(tty[sh], k.key)
 			b, inNoTTY := countOf(notty[sh], k.key)
-			var v string
+			st := run.Stat{Group: sh, Name: k.label, Extra: otherShell(sh, current)}
 			switch {
 			case inTTY && (!inNoTTY || a == b):
-				v = strconv.Itoa(a)
+				st.Value = strconv.Itoa(a)
 			case inTTY:
-				v = fmt.Sprintf("%d (no terminal: %d)", a, b)
+				st.Value, st.Note = strconv.Itoa(a), fmt.Sprintf("%d (notty)", b)
 			case inNoTTY:
-				v = fmt.Sprintf("%d (no terminal only)", b)
+				st.Value, st.Note = strconv.Itoa(b), "notty only"
 			default:
 				continue
 			}
-			out = append(out, run.Stat{Group: sh, Name: k.label, Value: v})
+			out = append(out, st)
 		}
 	}
 	return out

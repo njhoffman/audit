@@ -349,27 +349,42 @@ func stats(d Data, env *exec.Env, sc *ShellcheckResult) []run.Stat {
 	for _, s := range d.Scripts {
 		byDialect[s.Dialect]++
 	}
-	dialects := make([]string, 0, len(byDialect))
-	for k, v := range byDialect {
-		dialects = append(dialects, fmt.Sprintf("%s %d", k, v))
+	var dialects []string
+	for dl, n := range byDialect {
+		dialects = append(dialects, fmt.Sprintf("%s %d", dl, n))
 	}
 	sort.Strings(dialects)
-	out = append(out, run.Stat{Group: "scripts", Name: "startup scripts",
-		Value: fmt.Sprintf("%d (%s)", len(d.Scripts), strings.Join(dialects, ", "))})
+	out = append(out, run.Stat{Group: "scripts", Name: "startup scripts", Value: fmt.Sprint(len(d.Scripts)),
+		Note: strings.Join(dialects, ", ")})
 	out = append(out, run.Stat{Group: "scripts", Name: "syntax failures", Value: fmt.Sprint(len(d.Syntax))})
 	if sc != nil && sc.Installed {
 		out = append(out, run.Stat{Group: "scripts", Name: "shellcheck files flagged", Value: fmt.Sprint(len(sc.Comments))})
 	}
+	current := filepath.Base(env.Get("SHELL"))
 	for _, c := range d.Captures {
-		v := "not installed"
+		st := run.Stat{Group: "startup", Name: c.Shell + " " + c.Mode, Value: "not installed", Extra: otherShell(c.Shell, current)}
 		switch {
 		case c.Path == "":
 		case c.TimedOut:
-			v = "timed out"
+			st.Value = "timed out"
 		default:
-			v = fmt.Sprintf("%.2fs, exit %d, %d unexpected line(s)", c.Duration.Seconds(), c.Code, len(c.Output))
+			st.Value = fmt.Sprintf("%.2fs", c.Duration.Seconds())
+			var notes []string
+			if c.Code != 0 {
+				notes = append(notes, fmt.Sprintf("exit %d", c.Code))
+			}
+			if len(c.Output) > 0 {
+				notes = append(notes, fmt.Sprintf("%d unexpected line(s)", len(c.Output)))
+			}
+			st.Note = strings.Join(notes, ", ")
 		}
-		out = append(out, run.Stat{Group: "startup", Name: c.Shell + " " + c.Mode, Value: v})
+		out = append(out, st)
 	}
-	return append(out, shellStats(d.Captures)...)
+	return append(out, shellStats(d.Captures, current)...)
+}
+
+// otherShell reports whether shell is not the user's current one; with no
+// known current shell, every shell is shown.
+func otherShell(shell, current string) bool {
+	return current != "" && current != "." && current != shell
 }

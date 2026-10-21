@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Report summaries are laid out as columns: dim labels, numbers in bold and right-aligned, and what qualifies them (`1936 (notty)`, `7 unexpected line(s)`, `105 mine`) dimmer after them. Environment startup rows drop `exit 0` and a zero output count.
+- Terminal output (reports, task lists, the dashboard and fzf) shows paths under your home directory as `~`. JSON exports and HTML reports keep full paths.
+
+### Added
+
+- Summary stats carry an optional `note`, and `extra` on lines only the expanded view shows (the stats of a shell other than `$SHELL`), in the run JSON and the export files.
+
 ## [0.17.3] - 2026-10-20
 
 ### Fixed

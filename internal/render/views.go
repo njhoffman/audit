@@ -132,7 +132,7 @@ func (p *Printer) Environment(d environment.Data) {
 		if failed[s.Path] {
 			state = "syntax error"
 		}
-		srows[i] = []string{string(s.Dialect), role, state, s.Path}
+		srows[i] = []string{string(s.Dialect), role, state, p.tilde(s.Path)}
 	}
 	p.table([]column{{title: "DIALECT"}, {title: "ROLE"}, {title: "STATE"}, {title: "PATH", flex: true}},
 		srows, func(row, col int) lipgloss.Style {

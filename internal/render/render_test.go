@@ -348,3 +348,52 @@ func TestPackageInfoAndTable(t *testing.T) {
 		t.Errorf("empty titles should print no header:\n%q", out)
 	}
 }
+
+func TestStatsLayout(t *testing.T) {
+	p, b := printer(0)
+	p.Home = "/home/u"
+	stats := []run.Stat{
+		{Group: "scripts", Name: "startup scripts", Value: "791", Note: "bash 352, zsh 193"},
+		{Group: "scripts", Name: "syntax failures", Value: "1"},
+		{Group: "startup", Name: "zsh notty", Value: "0.45s", Note: "7 unexpected line(s)"},
+		{Group: "startup", Name: "bash tty", Value: "0.22s", Extra: true},
+		{Group: "zsh", Name: "config", Value: "/home/u/.zshrc", Note: "read"},
+	}
+	p.stats(stats)
+	want := `  scripts
+    startup scripts    791  bash 352, zsh 193
+    syntax failures      1
+  startup
+    zsh notty        0.45s  7 unexpected line(s)
+    bash tty         0.22s
+  zsh
+    config           ~/.zshrc  read
+`
+	if b.String() != want {
+		t.Errorf("got\n%s\nwant\n%s", b.String(), want)
+	}
+	b.Reset()
+	p.Collapsed = true
+	p.stats(stats)
+	if strings.Contains(b.String(), "bash tty") || !strings.Contains(b.String(), "zsh notty") {
+		t.Errorf("collapsed keeps Extra lines:\n%s", b.String())
+	}
+}
+
+func TestTilde(t *testing.T) {
+	for in, want := range map[string]string{
+		"/home/u":                      "~",
+		"in /home/u/.zshrc: line 2":    "in ~/.zshrc: line 2",
+		"/home/u/a:/home/u/b":          "~/a:~/b",
+		"/home/u2/x /mnt/home/u/x":     "/home/u2/x /mnt/home/u/x",
+		"`shellcheck /home/u/x` fixes": "`shellcheck ~/x` fixes",
+		"no paths":                     "no paths",
+	} {
+		if got := Tilde(in, "/home/u/"); got != want {
+			t.Errorf("%q: %q, want %q", in, got, want)
+		}
+	}
+	if Tilde("/a", "") != "/a" || Tilde("/a", "/") != "/a" {
+		t.Error("empty or root home changes nothing")
+	}
+}

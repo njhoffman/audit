@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/run"
 )
@@ -107,12 +108,12 @@ func statsCaptures() []Capture {
 }
 
 func TestShellStatsRows(t *testing.T) {
-	got := shellStats(statsCaptures())
+	got := shellStats(statsCaptures(), "zsh")
 	want := []run.Stat{
-		{Group: "zsh", Name: "aliases", Value: "10 (no terminal: 8)"},
+		{Group: "zsh", Name: "aliases", Value: "10", Note: "8 (notty)"},
 		{Group: "zsh", Name: "functions", Value: "5"},
 		{Group: "zsh", Name: "fpath entries", Value: "3"},
-		{Group: "bash", Name: "aliases", Value: "2 (no terminal only)"},
+		{Group: "bash", Name: "aliases", Value: "2", Note: "notty only", Extra: true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v", got)
@@ -169,5 +170,31 @@ func TestShellStatsChecks(t *testing.T) {
 
 	if fs := analyze(&State{Env: s.Env, Captures: []Capture{{Shell: "zsh", Mode: ModeTTY}}}); len(byCheck(fs, "shell.alias_broken")) != 0 {
 		t.Error("no stats, no findings")
+	}
+}
+
+func TestStatsExtraForOtherShells(t *testing.T) {
+	d := Data{Captures: []Capture{
+		{Shell: "zsh", Mode: ModeTTY, Path: "/bin/zsh", Code: 1, Output: []string{"x"}, Stats: &ShellStats{Counts: map[string]int{"aliases": 1}}},
+		{Shell: "bash", Mode: ModeTTY, Path: "/bin/bash", Stats: &ShellStats{Counts: map[string]int{"aliases": 2}}},
+	}}
+	extra := func(sh string) map[string]bool {
+		out := map[string]bool{}
+		for _, st := range stats(d, &exec.Env{Vars: map[string]string{"SHELL": sh}}, nil) {
+			if st.Group == "startup" || st.Group == "zsh" || st.Group == "bash" {
+				out[st.Group+"/"+st.Name] = st.Extra
+			}
+			if st.Name == "zsh tty" && st.Note != "exit 1, 1 unexpected line(s)" {
+				t.Errorf("zsh tty note %q", st.Note)
+			}
+		}
+		return out
+	}
+	if got := extra("/usr/bin/zsh"); !reflect.DeepEqual(got, map[string]bool{
+		"startup/zsh tty": false, "startup/bash tty": true, "zsh/aliases": false, "bash/aliases": true}) {
+		t.Errorf("SHELL zsh: %v", got)
+	}
+	if got := extra(""); got["startup/bash tty"] || got["bash/aliases"] {
+		t.Errorf("no SHELL hides nothing: %v", got)
 	}
 }

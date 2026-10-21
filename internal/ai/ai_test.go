@@ -182,7 +182,7 @@ func TestScan(t *testing.T) {
 		p.Tools() != "CLAUDE.md .claude .mcp.json" {
 		t.Errorf("project: %+v", p)
 	}
-	if pinged != 0 || len(stats) != 3 {
+	if pinged != 0 || len(stats) != 4 {
 		t.Errorf("no CLI installed, nothing to ping: %d; stats %v", pinged, stats)
 	}
 }

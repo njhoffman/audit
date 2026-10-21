@@ -189,13 +189,29 @@ func trimPadding(s string) string {
 	return strings.Join(lines, "\n")
 }
 
+// numeric matches a count or a measure ("791", "0.42s", "21.9 GB", "30%"),
+// which the summary right-aligns.
+var numeric = regexp.MustCompile(`^-?[0-9][0-9.,]*( ?[KMGTP]?i?B|%|ms|s)?$`)
+
+// stats prints the summary: group headings, then each line's dim label,
+// its value (numbers bold and right-aligned) and a dimmer note. Collapsed
+// skips the Extra lines.
 func (p *Printer) stats(stats []run.Stat) {
-	nameW := 0
+	shown := make([]run.Stat, 0, len(stats))
+	nameW, numW := 0, 0
 	for _, s := range stats {
-		nameW = max(nameW, len(s.Name))
+		if s.Extra && p.Collapsed {
+			continue
+		}
+		s.Name, s.Value, s.Note = p.tilde(s.Name), p.tilde(s.Value), p.tilde(s.Note)
+		shown = append(shown, s)
+		nameW = max(nameW, ansi.StringWidth(s.Name))
+		if numeric.MatchString(s.Value) {
+			numW = max(numW, ansi.StringWidth(s.Value))
+		}
 	}
 	group := "\x00"
-	for _, s := range stats {
+	for _, s := range shown {
 		if s.Group != group {
 			group = s.Group
 			if group != "" {
@@ -206,12 +222,23 @@ func (p *Printer) stats(stats []run.Stat) {
 		if group == "" {
 			indent = 2
 		}
-		label := strings.Repeat(" ", indent) + p.faint().Render(padRight(s.Name, nameW))
-		value := s.Value
-		if p.Width > 0 {
-			value = truncate(value, p.Width-indent-nameW-2)
+		line := strings.Repeat(" ", indent) + p.label().Render(padRight(s.Name, nameW)) + "  "
+		if numeric.MatchString(s.Value) {
+			line += p.bold().Render(padLeft(s.Value, numW))
+		} else {
+			value := s.Value
+			if s.Note != "" {
+				value = padRight(value, numW)
+			}
+			line += value
 		}
-		p.printf("%s  %s\n", label, value)
+		if s.Note != "" {
+			line += "  " + p.faint().Render(s.Note)
+		}
+		if p.Width > 0 {
+			line = truncate(line, p.Width)
+		}
+		p.println(line)
 	}
 }
 
@@ -219,14 +246,14 @@ func (p *Printer) findings(fs []finding.Finding) {
 	for _, f := range fs {
 		head := p.sevBadge(f.Severity) + " " + p.fg("12").Render(f.Check)
 		if f.Subject != "" {
-			head += "  " + p.bold().Render(f.Subject)
+			head += "  " + p.bold().Render(p.tilde(f.Subject))
 		}
 		p.println(head)
 		if f.Message != "" {
-			p.println(p.wrap(f.Message, 9))
+			p.println(p.wrap(p.tilde(f.Message), 9))
 		}
 		if f.Hint != "" {
-			p.println(perLine(p.fg("10"), p.wrap("hint: "+f.Hint, 9)))
+			p.println(perLine(p.fg("10"), p.wrap("hint: "+p.tilde(f.Hint), 9)))
 		}
 		details := f.Details
 		shown := p.Details
@@ -237,7 +264,7 @@ func (p *Printer) findings(fs []finding.Finding) {
 			details = details[:shown]
 		}
 		for _, d := range details {
-			p.println(perLine(p.faint(), p.wrap("- "+d, 11)))
+			p.println(perLine(p.faint(), p.wrap("- "+p.tilde(d), 11)))
 		}
 		if more := len(f.Details) - len(details); more > 0 {
 			p.println(p.faint().Render(fmt.Sprintf("%s(+%d more, -v shows all)", strings.Repeat(" ", 11), more)))
@@ -260,7 +287,7 @@ func (p *Printer) List(r *run.Run, o ReportOptions) {
 		if f.IsSuggestion() {
 			subject = "(suggestion) " + subject
 		}
-		rows[i] = []string{string(f.Severity), f.Check, subject, firstLine(f.Message)}
+		rows[i] = []string{string(f.Severity), f.Check, p.tilde(subject), p.tilde(firstLine(f.Message))}
 	}
 	p.table([]column{{title: "SEVERITY"}, {title: "CHECK"}, {title: "SUBJECT"}, {title: "MESSAGE", flex: true}},
 		rows, func(row, col int) lipgloss.Style {

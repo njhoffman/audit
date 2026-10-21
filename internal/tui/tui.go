@@ -103,6 +103,8 @@ type Model struct {
 	input   input
 	field   textinput.Model
 	editing int64
+	// home is shown as ~ in paths.
+	home string
 }
 
 // Option configures a Model.
@@ -120,6 +122,9 @@ func WithKeys(km keys.Map) Option {
 		}
 	}
 }
+
+// WithHome shows paths under home as ~/...
+func WithHome(home string) Option { return func(m *Model) { m.home = home } }
 
 // StartInTodos opens the task list first, filtered by f.
 func StartInTodos(f todo.Filter) Option {
@@ -625,7 +630,7 @@ func (m *Model) applyFilter() {
 	m.tasks = ts
 	rows := make([]table.Row, len(ts))
 	for i, t := range ts {
-		rows[i] = table.Row{fmt.Sprintf("%d", t.ID), string(t.Priority), t.Status.Label(), t.Command, t.Title}
+		rows[i] = table.Row{fmt.Sprintf("%d", t.ID), string(t.Priority), t.Status.Label(), t.Command, render.Tilde(t.Title, m.home)}
 	}
 	cur := m.table.Cursor()
 	m.table.SetRows(rows)
@@ -758,7 +763,7 @@ func (m *Model) todosView() string {
 		sel := m.selected()
 		var hint, note string
 		if sel != nil {
-			hint, note = sel.Hint, sel.Note
+			hint, note = render.Tilde(sel.Hint, m.home), sel.Note
 		}
 		b.WriteString(clip(faintStyle.Render("hint: ")+hint, m.width) + "\n")
 		b.WriteString(clip(faintStyle.Render("note: ")+note, m.width) + "\n")
@@ -838,7 +843,7 @@ func (m *Model) press(action, what string) string {
 func (m *Model) showTask(t todo.Todo) {
 	var b bytes.Buffer
 	p := render.New(&b, false, m.width)
-	p.Now = m.now
+	p.Now, p.Home = m.now, m.home
 	p.Todo(t)
 	if locs := todo.Locations(t); len(locs) > 0 {
 		fmt.Fprintf(&b, "\n%s\n", faintStyle.Render(fmt.Sprintf("%d file location(s).%s", len(locs), m.press(keys.Editor, "open them in $EDITOR"))))

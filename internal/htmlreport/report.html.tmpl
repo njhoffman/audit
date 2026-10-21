@@ -22,7 +22,7 @@
 {{if .Groups}}
 <h2>Summary</h2>
 <div class="stats">
-{{range .Groups}}<div class="panel">{{if .Name}}<h3>{{.Name}}</h3>{{end}}<dl>{{range .Stats}}<dt>{{.Name}}</dt><dd>{{.Value}}</dd>{{end}}</dl></div>
+{{range .Groups}}<div class="panel">{{if .Name}}<h3>{{.Name}}</h3>{{end}}<dl>{{range .Stats}}<dt>{{.Name}}</dt><dd>{{.Value}}{{with .Note}} <span class="note">{{.}}</span>{{end}}</dd>{{end}}</dl></div>
 {{end}}
 </div>
 {{end}}

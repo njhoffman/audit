@@ -85,7 +85,8 @@ func Scan(ctx context.Context, o ScanOptions, rep progress.Reporter) (*Data, []f
 	stats := []run.Stat{
 		{Name: "scripts", Value: fmt.Sprint(len(d.Scripts))},
 		{Name: "shell scripts linted", Value: linted},
-		{Name: "described", Value: fmt.Sprintf("%d (%d without a description; audit scripts describe fills them)", described, len(d.Scripts)-described)},
+		{Name: "described", Value: fmt.Sprint(described),
+			Note: fmt.Sprintf("%d without a description; audit scripts describe fills them", len(d.Scripts)-described)},
 	}
 	return d, out, stats, errs, ctx.Err()
 }

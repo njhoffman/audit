@@ -131,7 +131,7 @@ func (p *Printer) Todos(ts []todo.Todo) {
 	}
 	rows := make([][]string, len(ts))
 	for i, t := range ts {
-		rows[i] = []string{fmt.Sprintf("%d", t.ID), string(t.Priority), t.Status.Label(), t.Command, t.Title}
+		rows[i] = []string{fmt.Sprintf("%d", t.ID), string(t.Priority), t.Status.Label(), t.Command, p.tilde(t.Title)}
 	}
 	p.table([]column{{title: "ID"}, {title: "PRIORITY"}, {title: "STATUS"}, {title: "COMMAND"}, {title: "TITLE", flex: true}},
 		rows, func(row, col int) lipgloss.Style {
@@ -154,7 +154,7 @@ func (p *Printer) Todos(ts []todo.Todo) {
 
 // Todo prints one task with every field.
 func (p *Printer) Todo(t todo.Todo) {
-	p.printf("%s %s\n", p.faint().Render(fmt.Sprintf("#%d", t.ID)), p.bold().Render(t.Title))
+	p.printf("%s %s\n", p.faint().Render(fmt.Sprintf("#%d", t.ID)), p.bold().Render(p.tilde(t.Title)))
 	field := func(name, value string, st lipgloss.Style) {
 		if value != "" {
 			p.printf("  %s %s\n", p.faint().Render(padRight(name, 9)), st.Render(value))
@@ -169,10 +169,10 @@ func (p *Printer) Todo(t todo.Todo) {
 	field("updated", stamp(t.UpdatedAt), p.style())
 	field("seen", stamp(t.LastSeenAt), p.style())
 	field("resolved", stamp(t.ResolvedAt), p.style())
-	field("hint", t.Hint, p.fg("10"))
+	field("hint", p.tilde(t.Hint), p.fg("10"))
 	field("note", t.Note, p.style())
 	for _, d := range t.Details {
-		p.println(perLine(p.faint(), p.wrap("- "+d, 4)))
+		p.println(perLine(p.faint(), p.wrap("- "+p.tilde(d), 4)))
 	}
 	if len(todo.Locations(t)) > 0 && t.ID > 0 {
 		p.printf("  %s %s\n", p.faint().Render(padRight("editor", 9)), fmt.Sprintf("vim -q <(audit todo show %d -l)", t.ID))

@@ -41,6 +41,7 @@ pre { background: var(--code); padding: 10px 12px; border-radius: 6px; overflow-
 .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .stats dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; }
 .stats dt { color: var(--muted); } .stats dd { margin: 0; overflow-wrap: anywhere; }
+.stats .note { color: var(--muted); }
 .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0 12px; }
 .controls input[type=search] { flex: 1 1 220px; padding: 6px 10px; border-radius: 6px;
   border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; }

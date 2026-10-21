@@ -24,14 +24,18 @@ type tuiBackend struct {
 }
 
 func runDashboard(ctx context.Context, a *app) error {
-	return tui.Run(ctx, tuiBackend{a: a}, tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys))
+	return tui.Run(ctx, tuiBackend{a: a}, a.tuiOptions()...)
 }
 
 func runTodoEditor(ctx context.Context, a *app, f todo.Filter) error {
 	if !a.interactive() {
 		return fmt.Errorf("--interactive needs a terminal")
 	}
-	return tui.Run(ctx, tuiBackend{a: a}, tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys), tui.StartInTodos(f))
+	return tui.Run(ctx, tuiBackend{a: a}, append(a.tuiOptions(), tui.StartInTodos(f))...)
+}
+
+func (a *app) tuiOptions() []tui.Option {
+	return []tui.Option{tui.WithClock(timeNow), tui.WithKeys(a.cfg.TUI.Keys), tui.WithHome(a.env.Home)}
 }
 
 func (b tuiBackend) Statuses(ctx context.Context) ([]render.CommandStatus, error) {
@@ -43,11 +47,8 @@ func (b tuiBackend) Report(ctx context.Context, command string, width int) (stri
 	if err != nil || r == nil {
 		return "", false, err
 	}
-	profile := b.profile()
 	var buf bytes.Buffer
-	p := render.NewProfile(&buf, profile, width)
-	p.Now = timeNow
-	p.Verbose = b.a.flags.verbose
+	p := b.printer(&buf, width)
 	p.Report(r, render.ReportOptions{Thresholds: b.a.cfg.Stale.For(command), Saved: true,
 		RescanHint: core.RescanHint(command, r.Scope)})
 	return buf.String(), true, nil
@@ -82,10 +83,8 @@ func (b tuiBackend) Explain(ctx context.Context, id int64, width int, refresh bo
 	if err != nil {
 		return "", err
 	}
-	profile := b.profile()
 	var buf bytes.Buffer
-	p := render.NewProfile(&buf, profile, width)
-	p.Now = timeNow
+	p := b.printer(&buf, width)
 	p.AI(fmt.Sprintf("#%d %s", t.ID, t.Title), resp.Model, resp.Cached, resp.CreatedAt, resp.CostUSD, resp.Text)
 	return buf.String(), nil
 }
@@ -111,6 +110,20 @@ func (a *app) defaultScanner(command string) (core.Scanner, error) {
 		return a.aiScanner(false), nil
 	}
 	return nil, fmt.Errorf("unknown command %q", command)
+}
+
+// printer renders into buf at width in the backend's color profile.
+func (b tuiBackend) printer(buf *bytes.Buffer, width int) *render.Printer {
+	p := render.NewProfile(buf, b.profile(), width)
+	p.Now = timeNow
+	p.Verbose = b.a.flags.verbose
+	if b.a.cfg != nil {
+		p.Details = b.a.cfg.Display.Details
+	}
+	if b.a.env != nil {
+		p.Home = b.a.env.Home
+	}
+	return p
 }
 
 func (b tuiBackend) profile() termenv.Profile {

@@ -23,10 +23,14 @@ type Printer struct {
 	// Width is the terminal width used for wrapping and truncation; 0 means
 	// unlimited (output is not a terminal).
 	Width int
-	// Verbose shows every detail line instead of the first Details.
+	// Verbose shows the full tags column of the package list.
 	Verbose bool
 	// Details is how many detail lines a finding shows; 0 means the default.
 	Details int
+	// Home is shown as ~ in paths; "" leaves paths alone.
+	Home string
+	// Collapsed leaves out the Extra summary lines.
+	Collapsed bool
 	// Now is the clock used for ages.
 	Now func() time.Time
 }
@@ -58,6 +62,40 @@ func (p *Printer) fg(c string) lipgloss.Style { return p.style().Foreground(lipg
 
 func (p *Printer) bold() lipgloss.Style  { return p.style().Bold(true) }
 func (p *Printer) faint() lipgloss.Style { return p.fg("8") }
+
+// label is the color of summary labels: dimmed, but less than faint.
+func (p *Printer) label() lipgloss.Style { return p.fg("248") }
+
+func (p *Printer) tilde(s string) string { return Tilde(s, p.Home) }
+
+// Tilde replaces home with ~ wherever it starts a path in s: not inside a
+// longer name (/home/nick2) or a deeper path (/mnt/home/nick).
+func Tilde(s, home string) string {
+	home = strings.TrimRight(home, "/")
+	if home == "" || !strings.Contains(s, home) {
+		return s
+	}
+	var b strings.Builder
+	for {
+		i := strings.Index(s, home)
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		j := i + len(home)
+		b.WriteString(s[:i])
+		if (i == 0 || !pathByte(s[i-1])) && (j == len(s) || s[j] == '/' || !pathByte(s[j])) {
+			b.WriteString("~")
+		} else {
+			b.WriteString(home)
+		}
+		s = s[j:]
+	}
+}
+
+func pathByte(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.IndexByte("_.-/~", c) >= 0
+}
 
 func (p *Printer) heading(s string) string { return p.bold().Underline(true).Render(s) }
 
@@ -151,6 +189,13 @@ func truncate(s string, n int) string {
 		return "…"
 	}
 	return ansi.Truncate(s, n-1, "") + "…"
+}
+
+func padLeft(s string, n int) string {
+	if w := ansi.StringWidth(s); w < n {
+		return strings.Repeat(" ", n-w) + s
+	}
+	return s
 }
 
 func padRight(s string, n int) string {

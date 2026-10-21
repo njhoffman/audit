@@ -351,7 +351,7 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 			}
 			errs = append(errs, rerrs...)
 			regStats = append(regStats, run.Stat{Group: "registry", Name: "looked up",
-				Value: fmt.Sprintf("%d (%d failed, %d already fresh)", st.Checked, st.Failed, st.Fresh)})
+				Value: fmt.Sprint(st.Checked), Note: fmt.Sprintf("%d failed, %d already fresh", st.Failed, st.Fresh)})
 		}
 		regStats = append(regStats, registryAge(invs, metas, now))
 	}
@@ -363,7 +363,7 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 		}
 		if last != nil {
 			regStats = append(regStats, run.Stat{Group: "update", Name: "last",
-				Value: last.FinishedAt.Local().Format("2006-01-02 15:04") + ": " + last.Summary()})
+				Value: last.FinishedAt.Local().Format("2006-01-02 15:04"), Note: last.Summary()})
 		}
 		if failures, err = s.Updates.UpdateFailures(ctx); err != nil {
 			return nil, fmt.Errorf("load update failures: %w", err)
@@ -524,7 +524,7 @@ func registryAge(invs []packages.Inventory, metas map[string]packages.Meta, now 
 	default:
 		st.Value = "oldest " + packages.Age(now.Sub(oldest)) + " ago"
 		if unchecked > 0 {
-			st.Value += fmt.Sprintf(", %d never checked", unchecked)
+			st.Note = fmt.Sprintf("%d never checked", unchecked)
 		}
 	}
 	return st
@@ -567,7 +567,7 @@ func packageStats(invs []packages.Inventory) []run.Stat {
 		case inv.Available && inv.Error != "":
 			v = "error"
 		case inv.Available:
-			v = fmt.Sprintf("%d package(s)", len(inv.Packages))
+			v = fmt.Sprint(len(inv.Packages))
 			total += len(inv.Packages)
 		}
 		out = append(out, run.Stat{Group: "managers", Name: inv.Manager, Value: v})

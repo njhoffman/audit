@@ -19,7 +19,6 @@ import (
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/fzf"
 	"github.com/njhoffman/audit/internal/packages"
-	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/todo"
 	"github.com/njhoffman/audit/internal/tui"
 )
@@ -69,7 +68,7 @@ func runFzfTasks(ctx context.Context, a *app, flt todo.Filter) error {
 	}
 	state := fzf.State{Command: flt.Command, Closed: flt.ShowClosed}
 	f := fzf.Filter{Priorities: flt.Priorities, Statuses: flt.Statuses}
-	return fzf.Run(ctx, a.fzfInterface().TasksArgs(state, flt.Search), fzf.TaskLines(ts, state, f),
+	return fzf.Run(ctx, a.fzfInterface().TasksArgs(state, flt.Search), fzf.TaskLines(ts, state, f, a.env.Home),
 		[]string{fzf.FilterEnv + "=" + f.Encode()})
 }
 
@@ -118,7 +117,7 @@ func (a *app) fzfQuiet(ctx context.Context, op string, args []string) error {
 		if err != nil {
 			return err
 		}
-		return writeLines(a.out, fzf.TaskLines(ts, state, fzf.DecodeFilter(os.Getenv(fzf.FilterEnv))))
+		return writeLines(a.out, fzf.TaskLines(ts, state, fzf.DecodeFilter(os.Getenv(fzf.FilterEnv)), a.env.Home))
 	case op == "preview" && len(args) == 2:
 		width, _ := strconv.Atoi(os.Getenv("FZF_PREVIEW_COLUMNS"))
 		text, err := a.fzfRender(ctx, args[0], args[1], width)
@@ -233,8 +232,7 @@ func (a *app) fzfRender(ctx context.Context, kind, arg string, width int) (strin
 			return "", err
 		}
 		var buf bytes.Buffer
-		p := render.NewProfile(&buf, b.profile(), width)
-		p.Now = timeNow
+		p := b.printer(&buf, width)
 		p.Todo(t)
 		return buf.String(), nil
 	case "explain":

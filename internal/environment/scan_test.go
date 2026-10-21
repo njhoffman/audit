@@ -126,11 +126,11 @@ func TestScan(t *testing.T) {
 		t.Error("captured environments must not be persisted")
 	}
 
-	stats := map[string]string{}
+	stats, notes := map[string]string{}, map[string]string{}
 	for _, st := range res.Stats {
-		stats[st.Name] = st.Value
+		stats[st.Name], notes[st.Name] = st.Value, st.Note
 	}
-	if stats["startup scripts"] != "3 (bash 1, sh 1, zsh 1)" || stats["bash notty"] != "timed out" ||
+	if stats["startup scripts"] != "3" || notes["startup scripts"] != "bash 1, sh 1, zsh 1" || stats["bash notty"] != "timed out" ||
 		stats["syntax failures"] != "1" || stats["analyzed env"] != "zsh login shell (tty)" {
 		t.Errorf("stats = %v", stats)
 	}

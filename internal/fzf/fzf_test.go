@@ -134,16 +134,16 @@ func TestTaskLines(t *testing.T) {
 		}
 		return out
 	}
-	if got := ids(TaskLines(ts, State{}, Filter{})); !reflect.DeepEqual(got, []string{"1", "2"}) {
+	if got := ids(TaskLines(ts, State{}, Filter{}, "")); !reflect.DeepEqual(got, []string{"1", "2"}) {
 		t.Errorf("open: %v", got)
 	}
-	if got := ids(TaskLines(ts, State{Command: "system", Closed: true}, Filter{})); !reflect.DeepEqual(got, []string{"1", "3"}) {
+	if got := ids(TaskLines(ts, State{Command: "system", Closed: true}, Filter{}, "")); !reflect.DeepEqual(got, []string{"1", "3"}) {
 		t.Errorf("system with closed: %v", got)
 	}
-	if got := ids(TaskLines(ts, State{}, Filter{Priorities: []todo.Priority{todo.Low}})); !reflect.DeepEqual(got, []string{"2"}) {
+	if got := ids(TaskLines(ts, State{}, Filter{Priorities: []todo.Priority{todo.Low}}, "")); !reflect.DeepEqual(got, []string{"2"}) {
 		t.Errorf("low only: %v", got)
 	}
-	if l := TaskLines(ts, State{}, Filter{})[0]; !strings.HasSuffix(l, "fix sshd") || !strings.Contains(l, " open ") || !strings.Contains(l, " high ") {
+	if l := TaskLines(ts, State{}, Filter{}, "")[0]; !strings.HasSuffix(l, "fix sshd") || !strings.Contains(l, " open ") || !strings.Contains(l, " high ") {
 		t.Errorf("line: %q", l)
 	}
 	cmds := Commands(ts)

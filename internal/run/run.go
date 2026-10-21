@@ -27,10 +27,15 @@ type Run struct {
 }
 
 // Stat is one labelled number or fact shown in a report's summary section.
+// Value is the headline, a number where there is one; Note qualifies it.
+// Extra marks a line only the expanded view shows, such as the counts of a
+// shell other than the user's.
 type Stat struct {
 	Group string `json:"group,omitempty"`
 	Name  string `json:"name"`
 	Value string `json:"value"`
+	Note  string `json:"note,omitempty"`
+	Extra bool   `json:"extra,omitempty"`
 }
 
 // Analysis is an LLM review attached to a run.

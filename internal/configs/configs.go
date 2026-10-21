@@ -349,7 +349,7 @@ func Scan(ctx context.Context, o Options, rep progress.Reporter) (*Data, []findi
 	}
 	stats := []run.Stat{
 		{Name: "files parsed", Value: fmt.Sprint(d.Parsed)},
-		{Name: "config entries", Value: fmt.Sprintf("%d (%d orphaned)", len(d.Entries), orphans)},
+		{Name: "config entries", Value: fmt.Sprint(len(d.Entries)), Note: fmt.Sprintf("%d orphaned", orphans)},
 	}
 	return d, out, stats, errs, ctx.Err()
 }

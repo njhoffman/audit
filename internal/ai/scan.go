@@ -174,9 +174,10 @@ func Scan(ctx context.Context, o Options, rep progress.Reporter) (*Data, []findi
 		}
 	}
 	stats := []run.Stat{
-		{Name: "AI tools", Value: fmt.Sprintf("%d installed, %d provider key(s) in the environment", installed, keys)},
-		{Name: "MCP servers", Value: fmt.Sprintf("%d (%d cannot start)", len(d.MCP), missing)},
-		{Name: "AI projects", Value: fmt.Sprintf("%d (%d with Claude sessions)", len(d.Projects), withSessions)},
+		{Name: "AI tools", Value: fmt.Sprint(installed), Note: "installed"},
+		{Name: "provider keys", Value: fmt.Sprint(keys), Note: "in the environment"},
+		{Name: "MCP servers", Value: fmt.Sprint(len(d.MCP)), Note: fmt.Sprintf("%d cannot start", missing)},
+		{Name: "AI projects", Value: fmt.Sprint(len(d.Projects)), Note: fmt.Sprintf("%d with Claude sessions", withSessions)},
 	}
 	return d, out, stats, errs, nil
 }
