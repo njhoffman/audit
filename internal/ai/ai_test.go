@@ -48,6 +48,10 @@ func TestBroadRulesAndHooks(t *testing.T) {
 	exe(t, bin, "bash", "python")
 	write(t, filepath.Join(home, ".config/claude/hooks/ok.sh"), "")
 	exe(t, filepath.Join(home, ".config/claude/hooks"), "run")
+	if err := os.MkdirAll(filepath.Join(home, "my hooks"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	exe(t, filepath.Join(home, "my hooks"), "spaced")
 	env := &exec.Env{Vars: map[string]string{"PATH": bin + ":/bin", "HOME": home}, Home: home}
 	for cmd, want := range map[string]string{
 		"/bin/bash ~/.config/claude/hooks/ok.sh":           "",
@@ -58,6 +62,11 @@ func TestBroadRulesAndHooks(t *testing.T) {
 		"FOO=1 anything":                                   "",
 		`"$HOME/.config/claude/hooks/run"`:                 "",
 		`'/bin/bash' "$HOME/.config/claude/hooks/gone.sh"`: filepath.Join(home, ".config/claude/hooks/gone.sh") + " does not exist",
+		`"$HOME/my hooks/spaced" --x`:                      "",
+		`bash "$HOME/my hooks/gone.sh"`:                    filepath.Join(home, "my hooks/gone.sh") + " does not exist",
+		`"$CLAUDE_PROJECT_DIR"/.claude/hooks/x.sh`:         "",
+		`bash "$CLAUDE_PROJECT_DIR/.claude/hooks/x.sh"`:    "",
+		`bash "$HOME/oops`:                                 "the command has an unterminated quote",
 	} {
 		if got := HookProblem(env, cmd); got != want {
 			t.Errorf("%q: %q, want %q", cmd, got, want)
@@ -172,5 +181,31 @@ func TestScan(t *testing.T) {
 	}
 	if pinged != 0 || len(stats) != 3 {
 		t.Errorf("no CLI installed, nothing to ping: %d; stats %v", pinged, stats)
+	}
+}
+
+func TestShellWords(t *testing.T) {
+	env := &exec.Env{Vars: map[string]string{"X": "x y"}, Home: "/h"}
+	for in, want := range map[string][]word{
+		`a  b`:                          {{text: "a"}, {text: "b"}},
+		`"$HOME/my hooks/run" --flag`:   {{text: "/h/my hooks/run"}, {text: "--flag"}},
+		`'$HOME/x' ~/y "~/z" a~/b`:      {{text: "$HOME/x"}, {text: "/h/y"}, {text: "~/z"}, {text: "a~/b"}},
+		`my\ hook "a\"b" 'it'\''s'`:     {{text: "my hook"}, {text: `a"b`}, {text: "it's"}},
+		`${HOME}/a $X "$X" ${X:-z}`:     {{text: "/h/a"}, {text: "x y"}, {text: "x y"}, {text: "", unknown: true}},
+		`"$CLAUDE_PROJECT_DIR"/hooks/a`: {{text: "/hooks/a", unknown: true}},
+		`$(pwd)/a $1 cost$`:             {{text: "$(pwd)/a", unknown: true}, {text: "$1", unknown: true}, {text: "cost$"}},
+		`a "" b;rm -rf /`:               {{text: "a"}, {text: ""}, {text: "b"}},
+		`a|b`:                           {{text: "a"}},
+		``:                              nil,
+	} {
+		got, err := shellWords(env, in)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: %+v %v, want %+v", in, got, err, want)
+		}
+	}
+	for _, in := range []string{`"open`, `a 'open`, `"a\"`} {
+		if _, err := shellWords(env, in); err == nil {
+			t.Errorf("%s: no error", in)
+		}
 	}
 }

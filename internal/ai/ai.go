@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -334,38 +335,179 @@ func BroadRules(allow []string) []string {
 	return out
 }
 
-// HookProblem says what is wrong with a hook command: a script path that
-// does not exist, or a program not on PATH; "" when both are fine. Quotes
-// around the program or the script path are the shell's, not the path's.
+// HookProblem says what is wrong with a hook command: a quote left open, a
+// script path that does not exist, or a program not on PATH; "" when all
+// are fine. A word using a variable the scan cannot see is not checked.
 func HookProblem(env *exec.Env, command string) string {
-	fields := strings.Fields(command)
-	if len(fields) == 0 {
+	words, err := shellWords(env, command)
+	if err != nil {
+		return "the command has an " + err.Error()
+	}
+	if len(words) == 0 {
 		return ""
 	}
-	prog := strings.Trim(fields[0], `"'`)
-	if strings.Contains(prog, "=") {
+	prog := words[0]
+	if prog.unknown || strings.Contains(prog.text, "=") {
 		return ""
 	}
-	if env.Which(env.Expand(prog)) == "" {
-		if strings.ContainsRune(prog, '/') {
-			return env.Expand(prog) + " does not exist or is not executable"
+	if env.Which(prog.text) == "" {
+		if strings.ContainsRune(prog.text, '/') {
+			return prog.text + " does not exist or is not executable"
 		}
-		return prog + " is not installed"
+		return prog.text + " is not installed"
 	}
-	for _, f := range fields[1:] {
-		f = strings.Trim(f, `"'`)
-		if strings.HasPrefix(f, "-") {
+	for _, w := range words[1:] {
+		if strings.HasPrefix(w.text, "-") {
 			continue
 		}
-		if strings.HasPrefix(f, "~/") || strings.HasPrefix(f, "/") || strings.HasPrefix(f, "$HOME/") {
-			p := env.Expand(f)
-			if _, err := os.Stat(p); err != nil {
-				return p + " does not exist"
+		if !w.unknown && filepath.IsAbs(w.text) {
+			if _, err := os.Stat(w.text); err != nil {
+				return w.text + " does not exist"
 			}
 		}
 		break
 	}
 	return ""
+}
+
+// word is one word of a shell command, unquoted and expanded.
+type word struct {
+	text string
+	// unknown is set when the word uses a variable the scan cannot see, such
+	// as $CLAUDE_PROJECT_DIR, which Claude Code sets when it runs a hook, or
+	// a command substitution.
+	unknown bool
+}
+
+var errQuote = errors.New("unterminated quote")
+
+// shellWords splits the first simple command of an sh -c string the way sh
+// does: quotes removed, backslash escapes applied, and ~ at the start of an
+// unquoted word and $VAR outside single quotes expanded from env. It stops
+// at an unquoted ;, & or |.
+func shellWords(env *exec.Env, s string) ([]word, error) {
+	var out []word
+	var cur word
+	var b strings.Builder
+	started := false
+	flush := func() {
+		if started {
+			cur.text = b.String()
+			out = append(out, cur)
+		}
+		cur, started = word{}, false
+		b.Reset()
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == ' ' || c == '\t' || c == '\n':
+			flush()
+			continue
+		case c == ';' || c == '&' || c == '|':
+			flush()
+			return out, nil
+		case c == '\'':
+			j := strings.IndexByte(s[i+1:], '\'')
+			if j < 0 {
+				return nil, errQuote
+			}
+			b.WriteString(s[i+1 : i+1+j])
+			i += j + 1
+		case c == '"':
+			for i++; i < len(s) && s[i] != '"'; i++ {
+				switch {
+				case s[i] == '\\' && i+1 < len(s) && strings.IndexByte("$`\"\\\n", s[i+1]) >= 0:
+					i++
+					b.WriteByte(s[i])
+				case s[i] == '$':
+					i = expandVar(env, s, i, &b, &cur)
+				case s[i] == '`':
+					cur.unknown = true
+					b.WriteByte(s[i])
+				default:
+					b.WriteByte(s[i])
+				}
+			}
+			if i == len(s) {
+				return nil, errQuote
+			}
+		case c == '\\':
+			if i+1 < len(s) {
+				i++
+			}
+			b.WriteByte(s[i])
+		case c == '$':
+			i = expandVar(env, s, i, &b, &cur)
+		case c == '`':
+			cur.unknown = true
+			b.WriteByte(c)
+		case c == '~' && !started && (i+1 == len(s) || s[i+1] == '/'):
+			b.WriteString(env.Home)
+		default:
+			b.WriteByte(c)
+		}
+		started = true
+	}
+	flush()
+	return out, nil
+}
+
+// expandVar expands the $ at s[i] into b and returns the index of its last
+// byte. A variable env does not hold, a special parameter, ${...} with an
+// operator or $(...) marks w unknown.
+func expandVar(env *exec.Env, s string, i int, b *strings.Builder, w *word) int {
+	lookup := func(name string) {
+		switch v := env.Vars[name]; {
+		case v != "":
+			b.WriteString(v)
+		case name == "HOME" && env.Home != "":
+			b.WriteString(env.Home)
+		default:
+			w.unknown = true
+		}
+	}
+	rest := s[i+1:]
+	if strings.HasPrefix(rest, "{") {
+		end := strings.IndexByte(rest, '}')
+		if end < 0 {
+			w.unknown = true
+			return len(s) - 1
+		}
+		if name := rest[1:end]; validName(name) {
+			lookup(name)
+		} else {
+			w.unknown = true
+		}
+		return i + 1 + end
+	}
+	n := 0
+	for n < len(rest) && (rest[n] == '_' || rest[n] >= 'a' && rest[n] <= 'z' || rest[n] >= 'A' && rest[n] <= 'Z' || n > 0 && rest[n] >= '0' && rest[n] <= '9') {
+		n++
+	}
+	switch {
+	case n > 0:
+		lookup(rest[:n])
+		return i + n
+	case rest != "" && strings.IndexByte("0123456789@*#?$!-(", rest[0]) >= 0:
+		w.unknown = true
+		b.WriteString(s[i : i+2])
+		return i + 1
+	}
+	b.WriteByte('$')
+	return i
+}
+
+func validName(name string) bool {
+	if name == "" || name[0] >= '0' && name[0] <= '9' {
+		return false
+	}
+	for _, r := range name {
+		if r != '_' && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 // Project is a directory set up for an AI assistant.

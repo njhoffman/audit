@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `ai.hook_broken` splits a hook command the way sh does (quotes, backslash escapes, `~` and `$VAR`), so a script path with spaces is checked whole. A word using a variable that is only set when the hook runs, such as `$CLAUDE_PROJECT_DIR`, is no longer reported as missing, and a command that leaves a quote open is reported.
+
 ## [0.17.1] - 2026-10-20
 
 ### Fixed
