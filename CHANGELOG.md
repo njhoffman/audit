@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-21
+
 ### Changed
 
 - The collapsed report in the dashboard packs each summary group onto as few lines as fit (`zsh  540 aliases  1890 functions ...`), numbers first and notes left to the expanded view; environment's summary goes from about 40 lines to 6. Printed reports and `--summary` keep the full columns.
