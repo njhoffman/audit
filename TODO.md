@@ -111,9 +111,10 @@ Decisions to make: which of these is worth building at all; whether
 All packages pass and lint is clean (checked 2026-10-20); these are the thin
 spots from `go test -cover`.
 
-- [ ] **`internal/core` at 41.7%.** (p1) This is the engine (Resolve, Execute,
-  task reconcile across commands). Narrowed-scope resolution and the
-  rescan/saved-only paths are the riskiest parts to leave untested.
+- [ ] **`internal/core` at 84.8%** (was 41.7%). (p3) What is left: the
+  Prune and SaveTodos failure branches of Execute (testing them needs
+  `Engine.Store` as an interface), the `time.Now` fallbacks, and the
+  json.Marshal errors of the adapters.
 - [ ] **Legacy system scanners at 34-43%**: `scan/procs`, `scan/services`,
   `scan/logs`, `scan/programs` (the sysaudit-era code). The newer
   `scan/resources`, `scan/updates`, `scan/security` are at 88-94%; bring the
