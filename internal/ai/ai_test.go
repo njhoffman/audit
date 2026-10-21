@@ -66,6 +66,9 @@ func TestBroadRulesAndHooks(t *testing.T) {
 		`bash "$HOME/my hooks/gone.sh"`:                    filepath.Join(home, "my hooks/gone.sh") + " does not exist",
 		`"$CLAUDE_PROJECT_DIR"/.claude/hooks/x.sh`:         "",
 		`bash "$CLAUDE_PROJECT_DIR/.claude/hooks/x.sh"`:    "",
+		`cd "$HOME/gone" && ./x`:                           "",
+		`[ -x ~/y ] && ~/y`:                                "",
+		`(cd /tmp; make)`:                                  "",
 		`bash "$HOME/oops`:                                 "the command has an unterminated quote",
 	} {
 		if got := HookProblem(env, cmd); got != want {

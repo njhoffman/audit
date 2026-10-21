@@ -347,7 +347,7 @@ func HookProblem(env *exec.Env, command string) string {
 		return ""
 	}
 	prog := words[0]
-	if prog.unknown || strings.Contains(prog.text, "=") {
+	if prog.unknown || strings.Contains(prog.text, "=") || shellBuiltins[prog.text] || strings.HasPrefix(prog.text, "(") || strings.HasPrefix(prog.text, "{") {
 		return ""
 	}
 	if env.Which(prog.text) == "" {
@@ -368,6 +368,16 @@ func HookProblem(env *exec.Env, command string) string {
 		break
 	}
 	return ""
+}
+
+// shellBuiltins are the sh builtins and keywords a hook command can start
+// with; they are not on PATH, and what they run is not checked.
+var shellBuiltins = map[string]bool{
+	".": true, ":": true, "[": true, "!": true, "alias": true, "break": true, "case": true, "cd": true, "command": true,
+	"continue": true, "echo": true, "eval": true, "exec": true, "exit": true, "export": true, "false": true, "for": true,
+	"if": true, "printf": true, "pwd": true, "read": true, "readonly": true, "return": true, "set": true, "shift": true,
+	"source": true, "test": true, "trap": true, "true": true, "type": true, "ulimit": true, "umask": true,
+	"unset": true, "until": true, "wait": true, "while": true,
 }
 
 // word is one word of a shell command, unquoted and expanded.
