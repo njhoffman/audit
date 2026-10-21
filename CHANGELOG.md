@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-20
+
 ### Added
 
 - The dashboard's report screen opens collapsed: one line per finding (a colored severity marker, the check and the message) and only the summary of the shell in `$SHELL`. `x` (`toggle_details` in `tui.keys`) expands every finding with all its detail lines and both shells' stats, and collapses them again, keeping the scroll position.
