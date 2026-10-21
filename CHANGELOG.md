@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-21
+
 ### Added
 
 - `audit -r/--rescan` rescans every command whose results are stale or missing, then prints the summary; `-a/--all` rescans every command, `-O/--only` takes command names. `packages` scans first (configs reads its inventory), the rest `scan.concurrency` (default 3) at a time. A terminal shows one live line per command; a failed scan does not stop the others, and the exit status says it failed.
