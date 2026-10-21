@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-21
+
 ### Fixed
 
 - `audit repos refresh` and `audit repos sync` ran git with an environment holding only `GIT_TERMINAL_PROMPT` and `GIT_SSH_COMMAND`, so every fetch (and every sync step) failed with `git: command not found`. They now run in the scan's environment with those two set on top.
