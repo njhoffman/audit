@@ -40,6 +40,15 @@ show the current state, not what moved.
   editor and tasks page.
 - [ ] **Trend in the HTML index.** (p3) Finding counts per severity over the kept
   runs, as a small inline chart per command.
+- [ ] **History of fixes and what audit has done.** A log that outlives run
+  pruning: every task resolved by a rescan or closed by hand, every package
+  update, repo sync, files or configs clean, with the date, command, check,
+  subject and what changed (space reclaimed, versions moved, task title and
+  details as they were). A summary view (`audit history fixes`, a dashboard
+  panel, an HTML page) totals it: problems fixed per command and severity,
+  space reclaimed, packages updated. The past entries double as diagnostics:
+  when a finding comes back, its task and the explain prompt can show that it
+  was fixed before, when and how.
 
 ## 3. New scanners (candidates)
 
@@ -125,3 +134,30 @@ spots from `go test -cover`.
   still omits `internal/{ai,configs,export,files,registry,
   repos,scripts,taskserver}` and `internal/scan/{resources,security,storage,
   updates}`.
+
+## 8. Display
+
+- [ ] **Compact summaries in the collapsed view.** The collapsed report still
+  prints one summary line per stat, so a command like environment shows 40+
+  lines before its findings. Collapsed, each group should fit one or two
+  lines (`zsh  540 aliases  1890 functions  227 arrays  16153 commands`),
+  for every command's summary, with the full columns in the expanded view.
+
+Decisions to make: which stats each group keeps when compact (a fixed
+headline per group, or the first N); whether `--summary` on the CLI uses the
+compact form too.
+
+## 9. Tips
+
+- [ ] **Proactive tips, not tied to a problem.** Advice on performance,
+  organization and good practice found while scanning (a slow startup file
+  that could be lazy-loaded, aliases scattered over many files, a cache
+  directory worth moving, a config that could use a newer option), as their
+  own lowest level below suggestions: a `tip` finding kind and a `tip` task
+  priority, hidden from counts and the dashboard's columns by default and
+  shown in their own report section. Suggestions today (`Kind ==
+  Suggestion`) still answer a detected issue; tips need no issue.
+
+Decisions to make: whether tips become tasks at all or only show in reports;
+whether they come from static checks, the AI review, or both; how to keep
+them from being noise (one per check, dismissable like ignore rules).
