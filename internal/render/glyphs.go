@@ -53,6 +53,7 @@ var NerdGlyphs = Glyphs{
 		"files":       "\uf07b", // fa-folder
 		"configs":     "\uf013", // fa-cog
 		"scripts":     "\uf1c9", // fa-file_code_o
+		"history":     "\uf1da", // fa-history
 		"ai":          "\uf0d0", // fa-magic
 		"tasks":       "\uf4a0", // oct-tasklist
 		// report sections

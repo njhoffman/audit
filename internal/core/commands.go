@@ -32,7 +32,7 @@ import (
 )
 
 // Commands lists the audit commands in dashboard order.
-var Commands = []string{system.Command, environment.Command, packages.Command, repos.Command, files.Command, configs.Command, scripts.Command, ai.Command}
+var Commands = []string{system.Command, environment.Command, packages.Command, repos.Command, files.Command, configs.Command, scripts.Command, "history", ai.Command}
 
 // ScopeFlags names the flag that selects each command's scope.
 var ScopeFlags = map[string]string{system.Command: "--only", packages.Command: "--manager"}

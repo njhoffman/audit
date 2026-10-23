@@ -108,6 +108,8 @@ func (a *app) defaultScanner(command string) (core.Scanner, error) {
 		return a.configsScanner(context.Background()), nil
 	case "scripts":
 		return a.scriptsScanner(), nil
+	case "history":
+		return core.NewHistory(a.cfg, a.env), nil
 	case "ai":
 		return a.aiScanner(false), nil
 	}

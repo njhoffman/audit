@@ -121,6 +121,7 @@ func TestLoadErrors(t *testing.T) {
 	for _, body := range []string{
 		"history: 0", "stale: {warn: 5h, old: 1h}", "environment: {shells: [fish]}", "ai: {provider: gemini}",
 		"display: {details: 0}", "ai: {max_details: -1}", "system: {log_max_lines: 0}",
+		"shell_history: {max_lines: 0}", "shell_history: {max_mb: 0}", "shell_history: {max_mb: 1025}", `shell_history: {patterns: [""]}`,
 		"system: {procs: {high_cpu: 0}}", "system: {services: {high_restarts: -1}}",
 		"environment: {shellcheck: {severity: loud}}", "packages: {env: shell}",
 		"packages: {registry: {max_age: 0s}}", "packages: {registry: {metadata_max_age: -1h}}",

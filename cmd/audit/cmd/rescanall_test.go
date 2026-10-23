@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -107,7 +108,7 @@ func TestRescanAllKeepsGoing(t *testing.T) {
 	if got := f.scanned(); len(got) != len(core.Commands) {
 		t.Errorf("a failed scan does not stop the others: %v", got)
 	}
-	if r.e == nil || !strings.Contains(r.e.Error(), "1 of 8 scans failed") || !strings.Contains(r.e.Error(), "files: boom") {
+	if r.e == nil || !strings.Contains(r.e.Error(), fmt.Sprintf("1 of %d scans failed", len(core.Commands))) || !strings.Contains(r.e.Error(), "files: boom") {
 		t.Errorf("error = %v", r.e)
 	}
 	r = runArgsWith(t, f.setup, "-r")

@@ -293,10 +293,10 @@ func TestTodoBadInput(t *testing.T) {
 
 func TestHistoryValidatesCommand(t *testing.T) {
 	env(t)
-	if r := runArgs(t, "history", "nosuch"); r.e == nil {
+	if r := runArgs(t, "history", "runs", "nosuch"); r.e == nil {
 		t.Fatal("unknown command should fail")
 	}
-	r := runArgs(t, "history", "-j")
+	r := runArgs(t, "history", "runs", "-j")
 	if r.e != nil || strings.TrimSpace(r.out) != "[]" {
 		t.Fatalf("%q %v", r.out, r.e)
 	}

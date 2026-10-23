@@ -19,6 +19,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **packages** **registry** [**-M** _managers_] [**-F**] [**-a**|**-A**] [**-j**|**-l**] [_package_...]
 
+**audit** **packages** **outdated** [_scan options_] [**-M** _managers_] [**-F**] [**-f** _text_]
+
 **audit** **packages** **update** [**-M** _managers_] [**-N**] [**-y**] [**-m**] [**-x**] [**-j**] [_package_...]
 
 **audit** **packages** **update** **-L** [**-j**|**-e**]
@@ -69,7 +71,11 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **analyze** [**-t**] [**-A**] [**-L** _level_] [**-j**]
 
-**audit** **history** [_command_] [**-l** _n_] [**-j**]
+**audit** **history** [_scan options_]
+
+**audit** **history prune** [**-O** _categories_] [**-N**] [**-y**] [**-j**] [_file_...]
+
+**audit** **history runs** [_command_] [**-l** _n_] [**-j**]
 
 **audit** **config** [**-i** [**-f**]] [**-p**]
 
@@ -110,6 +116,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **packages registry** [_package_...]
 :   Looks installed packages up on PyPI, npm, crates.io, the Go module proxy, rubygems.org and GitHub (through **gh**), caches the latest version, release date, description, repository, homepage, license, keywords and deprecation, archive and yank status, then rescans so findings and tasks reflect it. Entries younger than **packages.registry.max_age** are reused unless **-F** is given; named packages are always looked up. Descriptions are refreshed after **packages.registry.metadata_max_age** where that costs extra requests. Go modules matched by **GONOPROXY**/**GOPRIVATE**, or with **GOPROXY** set to **direct** or **off**, are not looked up. Requests to crates.io are spaced one second apart, as its crawler policy asks.
+
+**packages outdated**
+:   Scans installed packages, refreshes registry data subject to **packages.registry.max_age**, and lists only outdated packages with their installed/latest versions, release ages and tags. **-F**/**\-\-force** rescans and refreshes registry versions regardless of cache age. **-M** restricts managers; **-f** filters by package name, description or executable. System managers use their existing package lists; this command neither refreshes apt lists nor installs packages. **-l**, **-R**, **-s** and **-j** read saved results unless **-r** or **-F** is given. To apply updates, preview with **audit packages update -N**, then run **audit packages update** or **audit packages update** _manager:name_ for selected packages. Updates require confirmation or **-y**, and major releases require **-m**.
 
 **packages update** [_package_...]
 :   Updates packages behind their latest release, one at a time, with each manager's own command: **uv tool upgrade**, **pnpm add -g** _name_**@latest**, **cargo install \-\-locked**, **go install** _package_**@latest** (each Go binary by its own package path), **gem update \-\-user-install**, **gh extension upgrade**, and for system packages one command per manager: **sudo -n apt-get install -y \-\-only-upgrade** (non-interactive, keeping changed config files) for every selected apt package, **sudo -n snap refresh**, **sudo -n flatpak update \-\-system** and **flatpak update \-\-user**; each package is still verified on its own. Held apt packages are skipped. When apt is among the managers and no package is named (or one is named **apt:**_name_), apt's lists are refreshed first with **sudo apt-get update**. Sudo is authenticated once with **sudo -v**, asking for the password on the terminal, and kept fresh until the update ends; without a terminal it needs cached credentials or a NOPASSWD rule, and otherwise the items that need it are skipped with the reason. A dry run never uses sudo. The inventory is scanned and the registry cache refreshed first, then the plan is printed and confirmed with **[y/N]**; without a terminal, **-y** is required. Without packages, every outdated package is planned except major releases (**-m** includes them), **packages.update.exclude** entries and packages installed from git or a path. Named packages are always listed, with the reason when one is skipped; a name that matches nothing is an error.
@@ -189,8 +198,14 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 **analyze**
 :   Sends the latest saved results of every command, the open tasks and the last update's failures to the AI CLI and prints one review: problems that share a root cause across commands, the errors that matter and an order to fix them in. Nothing is scanned. With **-t**, asks instead for at most ten structured suggestions that no open task covers, and files them as tasks with source **ai** under the command they concern (or **ai**). A later **-t** run keeps the suggestions it repeats, adds new ones and resolves open AI tasks it no longer suggests; AI tasks you moved to in progress, done or won't do keep their status, and scans never resolve them. **-A** asks again instead of using the cache, **-L** sets the level, **-j** prints JSON.
 
-**history** [_command_]
-:   Lists saved runs, newest first.
+**history**
+:   Checks **shell_history.files** for **history.duplicates** (entries repeated within each file, ignoring surrounding whitespace), **history.multiline** (entries with at least **shell_history.max_lines** logical lines) and **history.pattern** (case-sensitive literal substring matches from **shell_history.patterns**). Reads zsh extended and plain histories, bash histories and fish command records. Bash needs saved timestamps to recover multiline entry boundaries; without them each physical line is an entry. Missing files are skipped; unreadable files and files over **shell_history.max_mb** produce scan errors. Only counts and up to 100 file:line locations per check and file are retained; command text and pattern values are never saved or sent to AI. Histories are never changed. Custom history locations must be configured explicitly.
+
+**history prune** [_file_...]
+:   Rechecks current configured histories and removes whole matching records, including bash timestamps and fish metadata. **-O**/**\-\-only** selects **duplicates** (default, keeps the first occurrence), **multiline**, **patterns**, or **all**. Ignore rules apply. Optional paths must name configured files. **-N**/**\-\-dry-run** previews counts and start lines without modifying files; **-j -N** prints a JSON plan. Otherwise the plan is confirmed, or **-y** skips confirmation; JSON execution requires **-y**. Each modified file gets a private mode-0600 **.NAME.audit-backup-*** beside it, then an atomic replacement preserving its permissions. Files changed after the preview, locked files, symlinks, hard links and files owned by others are refused. Successful or partial pruning is followed by a rescan to reconcile tasks. Close other shell sessions first: their in-memory histories can restore removed entries on their next save. Backups contain the original commands, including any removed secrets; restore by copying the backup over the original path while shells are closed, and remove backups when no longer needed.
+
+**history runs** [_command_]
+:   Lists saved audit runs, newest first. This was previously **audit history**. **-l** limits the count (20 by default, 0 for all); **-j** prints JSON. The top-level **history** configuration key still controls saved run retention.
 
 **config**
 :   Prints the effective configuration and the file it came from. **-i** writes the default file (**-f** overwrites), **-p** prints the path.
@@ -487,6 +502,11 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     data_dir: ""               # empty: $XDG_DATA_HOME/audit
     github_user: ""            # empty: detected with gh api user on the first registry run
     history: 20                # saved runs kept per command
+    shell_history:
+      files: [~/.zsh_history, ~/.bash_history, "$XDG_DATA_HOME/fish/fish_history"]
+      patterns: []             # case-sensitive literal substrings
+      max_lines: 10            # report entries with at least this many lines
+      max_mb: 32               # skip larger files (1..1024), with a scan error
     no_color: false
     stale:
       warn: 24h

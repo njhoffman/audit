@@ -24,21 +24,31 @@ type Config struct {
 	NoColor bool   `mapstructure:"no_color" yaml:"no_color"`
 	// GitHubUser is the login whose repositories are tagged "mine"; empty
 	// means ask gh once and remember the answer.
-	GitHubUser  string            `mapstructure:"github_user" yaml:"github_user"`
-	Stale       StaleConfig       `mapstructure:"stale" yaml:"stale"`
-	Ignore      []string          `mapstructure:"ignore" yaml:"ignore"`
-	Scan        ScanConfig        `mapstructure:"scan" yaml:"scan"`
-	Display     DisplayConfig     `mapstructure:"display" yaml:"display"`
-	TUI         TUIConfig         `mapstructure:"tui" yaml:"tui"`
-	AI          AIConfig          `mapstructure:"ai" yaml:"ai"`
-	System      SystemConfig      `mapstructure:"system" yaml:"system"`
-	Packages    PackagesConfig    `mapstructure:"packages" yaml:"packages"`
-	Environment EnvironmentConfig `mapstructure:"environment" yaml:"environment"`
-	Export      ExportConfig      `mapstructure:"export" yaml:"export"`
-	Repos       ReposConfig       `mapstructure:"repos" yaml:"repos"`
-	Files       FilesConfig       `mapstructure:"files" yaml:"files"`
-	Configs     ConfigsConfig     `mapstructure:"configs" yaml:"configs"`
-	Scripts     ScriptsConfig     `mapstructure:"scripts" yaml:"scripts"`
+	GitHubUser   string             `mapstructure:"github_user" yaml:"github_user"`
+	Stale        StaleConfig        `mapstructure:"stale" yaml:"stale"`
+	Ignore       []string           `mapstructure:"ignore" yaml:"ignore"`
+	Scan         ScanConfig         `mapstructure:"scan" yaml:"scan"`
+	Display      DisplayConfig      `mapstructure:"display" yaml:"display"`
+	TUI          TUIConfig          `mapstructure:"tui" yaml:"tui"`
+	AI           AIConfig           `mapstructure:"ai" yaml:"ai"`
+	System       SystemConfig       `mapstructure:"system" yaml:"system"`
+	Packages     PackagesConfig     `mapstructure:"packages" yaml:"packages"`
+	Environment  EnvironmentConfig  `mapstructure:"environment" yaml:"environment"`
+	Export       ExportConfig       `mapstructure:"export" yaml:"export"`
+	Repos        ReposConfig        `mapstructure:"repos" yaml:"repos"`
+	Files        FilesConfig        `mapstructure:"files" yaml:"files"`
+	Configs      ConfigsConfig      `mapstructure:"configs" yaml:"configs"`
+	Scripts      ScriptsConfig      `mapstructure:"scripts" yaml:"scripts"`
+	ShellHistory ShellHistoryConfig `mapstructure:"shell_history" yaml:"shell_history"`
+}
+
+// ShellHistoryConfig controls read-only shell history checks. History above
+// remains the number of saved audit runs to retain.
+type ShellHistoryConfig struct {
+	Files    []string `mapstructure:"files" yaml:"files"`
+	Patterns []string `mapstructure:"patterns" yaml:"patterns"`
+	MaxLines int      `mapstructure:"max_lines" yaml:"max_lines"`
+	MaxMB    int64    `mapstructure:"max_mb" yaml:"max_mb"`
 }
 
 // ScriptsConfig configures the scripts scanner.
@@ -413,6 +423,10 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("scripts.max_depth", 2)
 	v.SetDefault("scripts.exclude", []string{".git", "node_modules", "__pycache__", "venv", ".venv"})
 	v.SetDefault("scripts.max_kb", 512)
+	v.SetDefault("shell_history.files", []string{"~/.zsh_history", "~/.bash_history", "$XDG_DATA_HOME/fish/fish_history"})
+	v.SetDefault("shell_history.patterns", []string{})
+	v.SetDefault("shell_history.max_lines", 10)
+	v.SetDefault("shell_history.max_mb", 32)
 	v.SetDefault("scripts.stale_after", 2*365*24*time.Hour)
 	v.SetDefault("configs.roots", []string{"~/.config"})
 	v.SetDefault("configs.max_depth", 4)
@@ -486,6 +500,14 @@ func Load(explicit string) (*Config, string, error) {
 }
 
 func (c *Config) validate() error {
+	if c.ShellHistory.MaxMB > 1024 {
+		return errors.New("shell_history.max_mb must be at most 1024")
+	}
+	for _, pattern := range c.ShellHistory.Patterns {
+		if pattern == "" {
+			return errors.New("shell_history.patterns must not contain empty strings")
+		}
+	}
 	if c.History < 1 {
 		return fmt.Errorf("history must be at least 1, got %d", c.History)
 	}
@@ -518,6 +540,8 @@ func (c *Config) validate() error {
 		{"configs.max_depth", float64(c.Configs.MaxDepth)},
 		{"scripts.max_depth", float64(c.Scripts.MaxDepth)},
 		{"scripts.max_kb", float64(c.Scripts.MaxKB)},
+		{"shell_history.max_lines", float64(c.ShellHistory.MaxLines)},
+		{"shell_history.max_mb", float64(c.ShellHistory.MaxMB)},
 		{"configs.max_kb", float64(c.Configs.MaxKB)},
 		{"files.dup_min_mb", float64(c.Files.DupMinMB)},
 		{"files.hash_limit_gb", float64(c.Files.HashLimitGB)},
@@ -840,6 +864,13 @@ environment:
 export:
   enabled: true
   dir: ""   # empty means <data_dir>/export
+
+# Shell-history scans never save command text or send it to AI.
+shell_history:
+  files: [~/.zsh_history, ~/.bash_history, "$XDG_DATA_HOME/fish/fish_history"]
+  patterns: []          # case-sensitive literal substrings; e.g. ["curl | sh"]
+  max_lines: 10         # report entries with at least this many logical lines
+  max_mb: 32            # skip larger history files, reporting an error
 
 scripts:
   # Script directories (globs expanded), walked max_depth levels deep.

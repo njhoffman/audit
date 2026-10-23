@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Shell-history scanner in `audit history` and the dashboard: duplicate entries within each file, large multiline entries, and configured literal substring matches. `shell_history` configures paths, patterns and limits. Supports zsh, timestamped bash multiline records and fish; saves counts and file locations without command text or pattern values.
+- `audit history prune`: preview and confirm removal of duplicate, large multiline or pattern-matched records, with private backups, atomic replacement, changed-file and lock checks, ignore rules, and a rescan afterwards.
+- `audit packages outdated`: refresh installed/registry versions and show outdated packages, with manager/text filters, forced registry refresh and saved-result views; uses the existing `packages update` workflow for all or selected packages.
+
+### Changed
+
+- Saved audit run listings move from `audit history [COMMAND]` to `audit history runs [COMMAND]`; the existing `history` retention setting is unchanged.
+
 ## [0.22.1] - 2026-10-21
 
 ### Fixed

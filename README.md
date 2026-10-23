@@ -14,6 +14,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit environment` | each configured login shell with and without a terminal: unexpected startup output, which files are sourced, startup time, PATH problems, environment variables, startup script syntax and shellcheck (files under `scripts.roots` are left to `audit scripts`); counts of aliases, functions, variables, commands, completions, key bindings, fpath, widgets and zinit plugins; aliases that run a missing command or hide a program, and fpath problems |
 | `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh) and system ones (apt, snap, flatpak, no sudo needed to scan): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs; checked against a fresh login shell's PATH and variables, not the terminal's; latest releases, release age, deprecation and archive status from a cached registry lookup; tags |
 | `audit packages registry` | look packages up on PyPI, npm, crates.io, the Go proxy, rubygems.org and GitHub, cache the results, optionally AI-tag them |
+| `audit packages outdated` | refresh the inventory and registry cache, then show outdated packages with installed/latest versions; `-F` forces registry checks, `-l` reads saved results |
 | `audit packages update` | update outdated packages one at a time with their own managers (apt, snap and flatpak in one command each, under one `sudo -v` session; apt lists refreshed first), verify the new versions, save and itemize failures |
 | `audit packages runtimes` | python, node, rust, go and ruby: installed version, owner (uv, pnpm, rustup, system), newest release of the line and overall, packages on another version |
 | `audit packages runtimes update` / `migrate` | update uv pythons, pnpm's node and rustup toolchains (same line by default, `-m` for a new python minor or node LTS); reinstall packages onto the current runtime, then offer to trash stale runtime dirs |
@@ -28,7 +29,9 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit files clean` | reclaim it: caches through their own cleaners (sudo once for apt, journal, snaps), idle build dirs and core dumps deleted, your own files (orphaned data, old downloads, duplicate copies) to the trash; `-C all` adds those and emptying the trash |
 | `audit todo` | the tasks scans create, plus tasks added by hand; `todo explain ID` asks the AI about one |
 | `audit analyze` | AI review across every command's saved results, open tasks and failed updates; `-t` files AI suggestions as tasks |
-| `audit history` | saved runs |
+| `audit history` | shell history: duplicate entries within each file, large multiline entries and configured literal substring matches; counts and file locations only |
+| `audit history prune` | preview and remove duplicates or selected unwanted entries, preserving whole records and keeping private backups; `-O patterns,multiline` selects other checks |
+| `audit history runs` | saved audit runs (formerly `audit history`) |
 | `audit config` | the effective configuration; `--init` rewrites the default file |
 | `audit export` | write the JSON snapshots other programs read (they are also rewritten after every command that saves) |
 
@@ -48,10 +51,21 @@ audit system -r -O logs,services   # rescan only some parts
 audit packages -l              # one line per finding plus the package inventory (never scans)
 audit environment -R           # full saved report (never scans)
 audit packages -j              # saved run as JSON
+audit history -r               # check saved zsh, bash and fish histories
+audit history prune -N         # preview duplicate removals (keeps the first occurrence)
+audit history prune            # confirm, back up, remove duplicates, then rescan
+audit history prune -O all -N  # preview duplicates, large entries and pattern matches
+audit history prune -O patterns # remove configured substring matches after confirmation
+audit history runs packages    # list saved audit runs for packages
 audit packages registry        # refresh the registry cache (entries younger than 24h are reused), then report
 audit packages registry -a     # also AI-tag packages that have no AI tags yet
 audit packages update -N       # show what would be updated and the commands
+audit packages outdated        # refresh and list installed/latest versions of outdated packages
+audit packages outdated -F     # force fresh registry lookups
+audit packages outdated -l     # view saved outdated packages without scanning
 audit packages update          # update outdated packages (minor and patch), after confirming
+audit packages update gh:ok    # update one named package (manager:name)
+audit packages update -m       # also permit major releases
 audit packages update -L       # show the last update and its failures again
 audit packages -u              # outdated packages, with latest version and release age
 audit packages -t cli -f json  # packages tagged cli whose name or description mentions json
@@ -119,6 +133,14 @@ Every action can be rebound, to as many keys as you like, under `tui.keys` in th
 Besides history, freshness thresholds, ignore rules and the AI settings, the file sets how many detail lines each finding shows (`display.details`), the system scanner's limits (log lines read, process CPU/memory/thread thresholds, service restart threshold, user units, programs checked) which environment the packages scan uses (`packages.env`: `login` or `process`), the registry cache ages, concurrency, timeout and unmaintained threshold (`packages.registry.*`), the per-package update timeout and packages never updated (`packages.update.*`), the AI tag vocabulary (`packages.tags`), your GitHub login for the `mine` tag (`github_user`, detected through `gh` when empty), and the environment scanner's shells, startup files, slow-startup threshold and shellcheck severity and excludes.
 
 Data lives in `$XDG_DATA_HOME/audit`: `audit.db` (runs, findings, tasks, package registry cache and tags, saved updates, AI cache) `reports/` (HTML) and `export/`: JSON snapshots for a dashboard or script to read without touching the database. `summary.json` has each command's freshness, finding counts and open tasks, `<command>.json` the latest run's findings (`packages.json` also the annotated inventory and the runtimes), `tasks.json` every task, `updates.json` the saved package updates. Files are replaced atomically and carry `schema_version`, `generated_at` and `host`; raw scanner data and command output are left out. `export.enabled` and `export.dir` control them; `man audit` (EXPORT FILES) documents the fields.
+
+Shell history checks use `shell_history.files` (default `~/.zsh_history`, `~/.bash_history`, and `$XDG_DATA_HOME/fish/fish_history`), `shell_history.patterns` (case-sensitive literal substrings), `shell_history.max_lines` (10 or more lines per entry), and `shell_history.max_mb` (32 MB per file; larger files are skipped with a scan error). Missing files are skipped. Set `files` explicitly for custom history paths. Bash needs timestamped history to distinguish multiline entries; plain bash history is checked one physical line at a time. Duplicate checks ignore leading and trailing whitespace and compare entries within each file. Findings retain counts and up to 100 file:line locations per check and file, never command text or pattern values. Histories are never modified. The top-level `history: 20` setting still controls saved audit run retention.
+
+Package management from the Python `pkgm` prototype is integrated into `audit packages`: installed versions, cached registry releases, updates through the owning managers, runtime updates and migrations, and tracked loose binaries. `audit system -O programs` checks service configuration; the roadmap in `TODO.md` tracks exposing package version and update information alongside those checks.
+
+`audit history prune` rechecks current history files and honors ignore rules. `--only`/`-O` selects `duplicates` (default), `multiline`, `patterns`, or `all`; optional paths limit it to specific configured files. `-N` previews counts and start lines; `-j -N` produces a JSON plan. Without `-N`, confirm the plan or use `-y`; `-j` execution requires `-y`. It removes whole records with their timestamps/metadata, keeps the first duplicate, creates a mode-0600 `.NAME.audit-backup-*` beside each changed file, replaces the file atomically, and rescans to reconcile tasks. Changed or locked files are refused, as are symlinks, hard links and files owned by others. Close other shell sessions before pruning so they cannot save old entries back from memory. Backups contain the original commands, including removed secrets; restore by copying a backup over its original history path while shells are closed, and remove backups when no longer needed.
+
+`audit packages outdated` refreshes the inventory and registry data subject to cache age; `-F` forces registry lookups. `-M gh,uv` limits managers and `-f TEXT` filters the displayed packages. `-l`, `-R`, `-s` and `-j` use saved results unless `-r` or `-F` is also supplied. System-manager checks use their existing package lists; `audit packages update` refreshes apt lists before applying updates. Preview with `audit packages update -N`, then run `audit packages update` (all eligible packages) or `audit packages update manager:name` (selected packages). Updates require confirmation or `-y`, and major versions require `-m`.
 
 ## Development
 
