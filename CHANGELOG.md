@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-22
+
 ### Added
 
 - Shell-history scanner in `audit history` and the dashboard: duplicate entries within each file, large multiline entries, and configured literal substring matches. `shell_history` configures paths, patterns and limits. Supports zsh, timestamped bash multiline records and fish; saves counts and file locations without command text or pattern values.
