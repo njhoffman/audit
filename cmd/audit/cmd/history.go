@@ -25,7 +25,47 @@ Bash multiline entries require saved timestamps to recover their boundaries.
 Only counts and file:line locations are saved, never command text or pattern
 values. No history is changed. Use audit history runs to list saved audit runs.`,
 		func() (core.Scanner, error) { return core.NewHistory(a.cfg, a.env), nil }, nil)
-	c.AddCommand(newHistoryRunsCmd(a), newHistoryPruneCmd(a))
+	c.AddCommand(newHistoryRunsCmd(a), newHistoryPruneCmd(a), newHistorySyncCmd(a))
+	return c
+}
+
+func newHistorySyncCmd(a *app) *cobra.Command {
+	var yes bool
+	c := &cobra.Command{Use: "sync", Short: "Rebuild a zsh history file from histdb", Args: cobra.NoArgs,
+		Long: `Reconcile the configured zsh history file from histdb, which is the source of truth. Histdb timestamps and durations are retained. A private backup is created beside the history file before replacement.`,
+		RunE: func(c *cobra.Command, _ []string) error {
+			if err := a.load(); err != nil {
+				return err
+			}
+			o := core.NewHistory(a.cfg, a.env).Options
+			var target string
+			for _, p := range o.Files {
+				if strings.Contains(filepath.Base(p), "zsh") {
+					target = p
+					break
+				}
+			}
+			if target == "" {
+				return errors.New("history sync requires a zsh history file in shell_history.files")
+			}
+			if !yes {
+				ok, err := a.confirm("Replace " + target + " from histdb (private backup kept)?")
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
+			}
+			n, err := history.ExportHistDB(c.Context(), o.HistDB, target)
+			if err != nil {
+				return err
+			}
+			say(a.out, "Wrote %d histdb entries to %s\n", n, target)
+			_, err = a.engine.Execute(context.WithoutCancel(c.Context()), core.NewHistory(a.cfg, a.env), a.progress(true))
+			return err
+		}}
+	c.Flags().BoolVarP(&yes, "yes", "y", false, "replace without asking; keep a private backup")
 	return c
 }
 

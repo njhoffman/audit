@@ -3,12 +3,17 @@ package history
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
+	"unicode/utf8"
+
+	_ "modernc.org/sqlite"
 
 	"github.com/njhoffman/audit/internal/finding"
 )
@@ -16,9 +21,108 @@ import (
 // Options selects files, literal patterns and resource limits.
 type Options struct {
 	Files    []string
+	HistDB   string
+	Host     string
+	Session  int
 	Patterns []string
 	MaxLines int
 	MaxBytes int64
+}
+
+// HistDBCounts reports entry totals without reading or returning command text.
+func HistDBCounts(ctx context.Context, path, host string, session int) (total, onHost, onSession int, err error) {
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro")
+	if err != nil {
+		return
+	}
+	defer func() { _ = db.Close() }()
+	err = db.QueryRowContext(ctx, `SELECT count(*), coalesce(sum(CASE WHEN p.host=? THEN 1 ELSE 0 END),0), coalesce(sum(CASE WHEN h.session=? AND ? != 0 THEN 1 ELSE 0 END),0) FROM history h LEFT JOIN places p ON p.id=h.place_id`, host, session, session).Scan(&total, &onHost, &onSession)
+	return
+}
+
+// ExportHistDB writes histdb's full timestamped history to a zsh history file.
+func ExportHistDB(ctx context.Context, dbPath, filePath string) (int, error) {
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?mode=ro")
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.QueryContext(ctx, `SELECT h.start_time, coalesce(h.duration,0), c.argv FROM history h JOIN commands c ON c.id=h.command_id ORDER BY h.start_time, h.id`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out strings.Builder
+	n := 0
+	for rows.Next() {
+		var started, duration int64
+		var command string
+		if err := rows.Scan(&started, &duration, &command); err != nil {
+			return 0, err
+		}
+		if !utf8.ValidString(command) {
+			return 0, fmt.Errorf("histdb contains invalid UTF-8 command data")
+		}
+		command = strings.ReplaceAll(command, "\n", "\\\n")
+		fmt.Fprintf(&out, ": %d:%d;%s\n", started, duration, command)
+		n++
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if err := atomicHistoryReplace(filePath, []byte(out.String())); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+func atomicHistoryReplace(path string, body []byte) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to replace non-regular or symlink history file")
+	}
+	backup, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".histdb-backup-*")
+	if err != nil {
+		return err
+	}
+	backupName := backup.Name()
+	if err = backup.Chmod(0o600); err == nil {
+		var src *os.File
+		src, err = os.Open(path) // #nosec G304 -- configured history file
+		if err == nil {
+			_, err = io.Copy(backup, src)
+			_ = src.Close()
+		}
+	}
+	_ = backup.Close()
+	if err != nil {
+		_ = os.Remove(backupName)
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".histdb-sync-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if err = tmp.Chmod(info.Mode().Perm()); err == nil {
+		_, err = tmp.Write(body)
+	}
+	if err == nil {
+		err = tmp.Sync()
+	}
+	_ = tmp.Close()
+	if err == nil {
+		err = os.Rename(tmpName, path)
+	}
+	if err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	_ = os.Chtimes(path, time.Now(), info.ModTime())
+	return nil
 }
 
 type entry struct {

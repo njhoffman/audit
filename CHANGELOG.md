@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit history` reports histdb totals by database, host and session and warns when configured history files appear behind. `audit history sync` rebuilds the zsh history file from histdb, preserving timestamps and durations with a private backup.
+
 ## [0.23.0] - 2026-10-22
 
 ### Added

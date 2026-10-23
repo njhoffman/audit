@@ -46,6 +46,7 @@ type Config struct {
 // remains the number of saved audit runs to retain.
 type ShellHistoryConfig struct {
 	Files    []string `mapstructure:"files" yaml:"files"`
+	HistDB   string   `mapstructure:"histdb" yaml:"histdb"`
 	Patterns []string `mapstructure:"patterns" yaml:"patterns"`
 	MaxLines int      `mapstructure:"max_lines" yaml:"max_lines"`
 	MaxMB    int64    `mapstructure:"max_mb" yaml:"max_mb"`
@@ -424,6 +425,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("scripts.exclude", []string{".git", "node_modules", "__pycache__", "venv", ".venv"})
 	v.SetDefault("scripts.max_kb", 512)
 	v.SetDefault("shell_history.files", []string{"~/.zsh_history", "~/.bash_history", "$XDG_DATA_HOME/fish/fish_history"})
+	v.SetDefault("shell_history.histdb", "~/.histdb/zsh-history.db")
 	v.SetDefault("shell_history.patterns", []string{})
 	v.SetDefault("shell_history.max_lines", 10)
 	v.SetDefault("shell_history.max_mb", 32)
@@ -868,6 +870,7 @@ export:
 # Shell-history scans never save command text or send it to AI.
 shell_history:
   files: [~/.zsh_history, ~/.bash_history, "$XDG_DATA_HOME/fish/fish_history"]
+  histdb: ~/.histdb/zsh-history.db
   patterns: []          # case-sensitive literal substrings; e.g. ["curl | sh"]
   max_lines: 10         # report entries with at least this many logical lines
   max_mb: 32            # skip larger history files, reporting an error
