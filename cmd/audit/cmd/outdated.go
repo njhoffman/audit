@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -27,7 +28,8 @@ lists; this command does not refresh apt lists or install anything.
 --list, --report, --summary and --json use saved results unless --rescan
 or --force is given. Use audit packages update --dry-run to preview updates,
 audit packages update to apply them after confirmation, or name individual
-packages (manager:name when ambiguous). Major releases need --major.`,
+packages (manager:name when ambiguous). Printed update hints select only the
+displayed packages and preserve --manager. Major releases need --major.`,
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			if err := a.load(); err != nil {
@@ -56,7 +58,8 @@ packages (manager:name when ambiguous). Major releases need --major.`,
 					return
 				}
 				p.Packages(as)
-				sayln(a.out, "Preview updates: audit packages update --dry-run\nUpdate: audit packages update [manager:name...] (add --major for major releases)")
+				args := outdatedUpdateArgs(as, splitList(managers))
+				sayln(a.out, "Preview updates: "+outdatedUpdateHint(append([]string{"--dry-run"}, args...))+"\nUpdate: "+outdatedUpdateHint(args)+" (add --major before -- for major releases)")
 			})
 		},
 	}
@@ -65,4 +68,38 @@ packages (manager:name when ambiguous). Major releases need --major.`,
 	c.Flags().BoolVarP(&force, "force", "F", false, "rescan and refresh registry versions regardless of cache age")
 	c.Flags().StringVarP(&q.Find, "find", "f", "", "filter by package name, description or executable")
 	return c
+}
+
+// outdatedUpdateArgs selects the displayed items by name: registry IDs can
+// cover multiple Go binaries, including binaries outside a text-filtered view.
+func outdatedUpdateArgs(as []packages.Annotated, managers []string) []string {
+	var args []string
+	if len(managers) > 0 {
+		args = append(args, "--manager", strings.Join(managers, ","))
+	}
+	args = append(args, "--")
+	seen := map[string]bool{}
+	for _, inv := range as {
+		for _, item := range inv.Items {
+			ref := item.Manager + ":" + item.Name
+			if !seen[ref] {
+				args = append(args, ref)
+				seen[ref] = true
+			}
+		}
+	}
+	return args
+}
+
+var safeUpdateHintWord = regexp.MustCompile(`^[a-zA-Z0-9_@%+=:,./-]+$`)
+
+func outdatedUpdateHint(args []string) string {
+	words := []string{"audit", "packages", "update"}
+	for _, arg := range args {
+		if !safeUpdateHintWord.MatchString(arg) {
+			arg = "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+		}
+		words = append(words, arg)
+	}
+	return strings.Join(words, " ")
 }

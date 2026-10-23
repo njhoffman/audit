@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Outdated-package preview and update hints select only displayed packages and preserve manager filters, including text-filtered and saved views.
+
+### Changed
+
+- Repeated shell commands no longer create history issues; all historical entries are retained and counted. Histdb total, host and session statistics appear under the history summary.
+
 ## [0.24.0] - 2026-10-22
 
 ### Added

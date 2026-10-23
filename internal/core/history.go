@@ -52,11 +52,11 @@ func (s *HistoryScanner) Scan(ctx context.Context, rep progress.Reporter) (*Outc
 		host, _ = os.Hostname()
 	}
 	if total, onHost, onSession, e := history.HistDBCounts(ctx, s.Options.HistDB, host, s.Options.Session); e == nil {
-		stats = append(stats, run.Stat{Group: "histdb", Name: "total entries", Value: fmt.Sprint(total)}, run.Stat{Group: "histdb", Name: "this host", Value: fmt.Sprint(onHost)})
+		stats = append(stats, run.Stat{Group: "history", Name: "histdb total entries", Value: fmt.Sprint(total)}, run.Stat{Group: "history", Name: "histdb this host", Value: fmt.Sprint(onHost)})
 		if s.Options.Session != 0 {
-			stats = append(stats, run.Stat{Group: "histdb", Name: "this session", Value: fmt.Sprint(onSession)})
+			stats = append(stats, run.Stat{Group: "history", Name: "histdb this session", Value: fmt.Sprint(onSession)})
 		} else {
-			stats = append(stats, run.Stat{Group: "histdb", Name: "this session", Value: "unavailable (SESSION is not set)"})
+			stats = append(stats, run.Stat{Group: "history", Name: "histdb this session", Value: "unavailable (SESSION is not set)"})
 		}
 		if total > entries {
 			fs = append(fs, finding.Finding{Command: "history", Check: "history.histdb_behind", Subject: "histdb", Kind: finding.Issue, Severity: finding.Warning, Message: fmt.Sprintf("histdb has %d more entries than configured history files", total-entries), Hint: "Run audit history sync to rebuild the zsh history file from histdb."})

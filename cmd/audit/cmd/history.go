@@ -16,14 +16,15 @@ import (
 )
 
 func newHistoryCmd(a *app) *cobra.Command {
-	c, _ := scanCommand(a, "history", "Check shell history for duplicates, large entries and configured patterns",
-		`Read shell_history.files (zsh, bash and fish), reporting repeated entries,
-entries with at least shell_history.max_lines logical lines, and matches of
-case-sensitive literal substrings in shell_history.patterns. Missing files
-are skipped; oversized or unreadable files are reported as scan errors.
+	c, _ := scanCommand(a, "history", "Check shell history and show histdb statistics",
+		`Read shell_history.files (zsh, bash and fish), reporting entries with at
+least shell_history.max_lines logical lines, and matches of case-sensitive
+literal substrings in shell_history.patterns. Missing files are skipped; oversized or unreadable files are reported as scan errors.
 Bash multiline entries require saved timestamps to recover their boundaries.
 Only counts and file:line locations are saved, never command text or pattern
-values. No history is changed. Use audit history runs to list saved audit runs.`,
+values. Repeated commands are retained and are not issues. The history summary
+includes histdb total, current-host and current-session entry counts when available.
+No history is changed. Use audit history runs to list saved audit runs.`,
 		func() (core.Scanner, error) { return core.NewHistory(a.cfg, a.env), nil }, nil)
 	c.AddCommand(newHistoryRunsCmd(a), newHistoryPruneCmd(a), newHistorySyncCmd(a))
 	return c

@@ -39,11 +39,14 @@ func TestScanFindingsAndPrivacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	fs, files, entries, errs, err := Scan(context.Background(), Options{Files: []string{path, path}, Patterns: []string{secret, "ABSENT"}, MaxLines: 3, MaxBytes: 1 << 20})
-	if err != nil || len(errs) != 0 || files != 1 || entries != 4 || len(fs) != 3 {
+	if err != nil || len(errs) != 0 || files != 1 || entries != 4 || len(fs) != 2 {
 		t.Fatalf("%+v, %d %d %v %v", fs, files, entries, errs, err)
 	}
-	want := map[string]int{"history.duplicates": 3, "history.multiline": 4, "history.pattern": 1}
+	want := map[string]int{"history.multiline": 4, "history.pattern": 1}
 	for _, f := range fs {
+		if _, ok := want[f.Check]; !ok {
+			t.Fatalf("unexpected finding: %+v", f)
+		}
 		if !strings.HasSuffix(f.Details[0], fmt.Sprintf(":%d", want[f.Check])) {
 			t.Errorf("unexpected location: %+v", f)
 		}

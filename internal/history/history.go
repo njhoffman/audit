@@ -285,8 +285,7 @@ func Scan(ctx context.Context, o Options) ([]finding.Finding, int, int, []string
 		es := parse(string(body), formatOf(path, body))
 		files++
 		entries += len(es)
-		byText := map[string]int{}
-		var duplicates, large []int
+		var large []int
 		matches := make([][]int, len(o.Patterns))
 		for _, e := range es {
 			if err := ctx.Err(); err != nil {
@@ -295,10 +294,6 @@ func Scan(ctx context.Context, o Options) ([]finding.Finding, int, int, []string
 			text := strings.TrimSpace(e.text)
 			if text == "" {
 				continue
-			}
-			byText[text]++
-			if byText[text] > 1 {
-				duplicates = append(duplicates, e.line)
 			}
 			if strings.Count(e.text, "\n")+1 >= o.MaxLines {
 				large = append(large, e.line)
@@ -321,7 +316,6 @@ func Scan(ctx context.Context, o Options) ([]finding.Finding, int, int, []string
 				Message: fmt.Sprintf("%d %s", len(lines), message), Details: details,
 				Hint: "Review these entries locally in your history file; command text is omitted. At most 100 locations are listed."})
 		}
-		add("history.duplicates", path, "repeated history entries", finding.Notice, duplicates)
 		add("history.multiline", path, fmt.Sprintf("history entries with at least %d lines", o.MaxLines), finding.Notice, large)
 		for i, lines := range matches {
 			add("history.pattern", fmt.Sprintf("%s:pattern-%d", path, i+1), fmt.Sprintf("history entries match shell_history.patterns item %d", i+1), finding.Warning, lines)

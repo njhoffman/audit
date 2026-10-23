@@ -167,7 +167,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
 - [x] **Update all or selected packages.** `audit packages update` supports
   named `manager:name` packages, manager filters, dry-run plans, confirmation,
   opt-in major updates, post-update verification and saved failures.
-- [ ] **Keep update hints within the displayed scope.** (p1)
+- [x] **Keep update hints within the displayed scope.** (p1)
   `cmd/audit/cmd/outdated.go` prints a bare `audit packages update` even
   after `-M` or `-f` narrows the list. Following that hint plans packages
   outside the view. Carry manager filters forward, and generate explicit
