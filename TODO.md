@@ -244,6 +244,10 @@ whether format detection should refuse pruning ambiguous histories.
   Offer outdated-only inventory, selected-package update plans and history
   prune plans from the dashboard/fzf interfaces. Keep scope visible, require
   confirmation for changes, and display failures and backup locations.
+- [ ] **Markers and icons in the printed task list.** (p3) [feature]
+  The task editor now marks priorities and shows command icons (internal/tui/tasks.go),
+  but `audit todo` (render.Printer.Todos in internal/render/summary.go) and the fzf
+  task lines still print bare words. Use the same Glyphs there so the three agree.
 
 ## 11. Tips
 
