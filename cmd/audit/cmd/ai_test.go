@@ -218,3 +218,43 @@ func TestExplainUpdateFailures(t *testing.T) {
 		t.Error("--explain and --json are exclusive")
 	}
 }
+
+func TestTodoFix(t *testing.T) {
+	cfgHome, _ := env(t)
+	claude, _, argv := fakeAI(t, "claude", "fixed it")
+	writeConfig(t, cfgHome, "ai: {claude: {command: "+claude+", model: m1}}\n")
+	seedScan(t)
+	if r := runArgs(t, "todo", "fix", "1"); r.e == nil || !strings.Contains(r.e.Error(), "needs a terminal") {
+		t.Errorf("fix without a terminal: %v", r.e)
+	}
+
+	a, _, _ := loadedApp(t)
+	cmd, err := a.fixSession(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := cmd.Args[len(cmd.Args)-1]
+	if cmd.Args[0] != claude || !strings.Contains(prompt, "Fix task #1") || !strings.Contains(prompt, "interpreter /gone/python missing") ||
+		!strings.Contains(prompt, "`audit packages update`") {
+		t.Errorf("session: %q", cmd.Args)
+	}
+	if _, err := a.store.SetTodoStatus(context.Background(), 1, todo.WontDo, nil, timeNow()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.fixSession(context.Background(), 1); err == nil || !strings.Contains(err.Error(), "#1 is won't do") {
+		t.Errorf("a closed task is refused: %v", err)
+	}
+	a.close()
+
+	// A manual task is not rescanned; the outcome says it is up to you.
+	if r := runArgs(t, "todo", "add", "rotate the backup key"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	r := runArgsWith(t, func(a *app) { a.interactive = func() bool { return true } }, "todo", "fix", "2")
+	if r.e != nil || !strings.Contains(r.err, "#2 was added by hand") {
+		t.Fatalf("fix: %v\n%s", r.e, r.err)
+	}
+	if got := readFile(t, argv); !strings.Contains(got, "--model\nm1\n--\n") || !strings.Contains(got, "Fix task #2") {
+		t.Errorf("claude argv:\n%s", got)
+	}
+}

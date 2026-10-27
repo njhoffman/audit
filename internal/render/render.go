@@ -150,6 +150,12 @@ func (p *Printer) sevBadge(s finding.Severity) string {
 	return p.sevStyle(s).Render(padRight(label, width))
 }
 
+// PriorityStyle is the color of priority pr.
+func (p *Printer) PriorityStyle(pr todo.Priority) lipgloss.Style { return p.prioStyle(pr) }
+
+// StatusStyle is the color of status s.
+func (p *Printer) StatusStyle(s todo.Status) lipgloss.Style { return p.statusStyle(s) }
+
 func (p *Printer) prioStyle(pr todo.Priority) lipgloss.Style {
 	switch pr {
 	case todo.High:

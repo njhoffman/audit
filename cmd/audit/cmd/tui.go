@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	osexec "os/exec"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -89,6 +90,10 @@ func (b tuiBackend) Explain(ctx context.Context, id int64, width int, refresh bo
 	p := b.printer(&buf, width)
 	p.AI(fmt.Sprintf("#%d %s", t.ID, t.Title), resp.Model, resp.Cached, resp.CreatedAt, resp.CostUSD, resp.Text)
 	return buf.String(), nil
+}
+
+func (b tuiBackend) FixSession(ctx context.Context, id int64) (*osexec.Cmd, error) {
+	return b.a.fixSession(ctx, id)
 }
 
 // defaultScanner builds command's scanner with its configured scope.

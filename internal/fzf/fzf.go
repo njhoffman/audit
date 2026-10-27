@@ -145,7 +145,7 @@ func (in Interface) TasksArgs(state State, query string) []string {
 	args := common(state.Prompt(), in.header([][2]string{
 		{keys.Open, "details"}, {keys.Editor, "editor"}, {keys.StatusOpen, "open"}, {keys.StatusDoing, "in progress"},
 		{keys.StatusDone, "done"}, {keys.StatusWontDo, "won't do"}, {keys.Note, "note"}, {keys.ExplainTask, "explain"},
-		{keys.CycleCommand, "command"}, {keys.ToggleClosed, "closed"},
+		{keys.FixTask, "fix"}, {keys.CycleCommand, "command"}, {keys.ToggleClosed, "closed"},
 	}))
 	if query != "" {
 		args = append(args, "--query", query)
@@ -154,6 +154,7 @@ func (in Interface) TasksArgs(state State, query string) []string {
 	args = append(args, in.bind(keys.Open, act("execute", in.helper("page", "task", "{1}")))...)
 	args = append(args, in.bind(keys.Editor, act("execute", in.helper("edit", "{1}")))...)
 	args = append(args, in.bind(keys.ExplainTask, act("execute", in.helper("page", "explain", "{1}")))...)
+	args = append(args, in.bind(keys.FixTask, act("execute", in.helper("fix", "{1}")), reload, "refresh-preview")...)
 	for _, s := range []struct {
 		action string
 		status todo.Status

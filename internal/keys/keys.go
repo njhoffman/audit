@@ -51,6 +51,7 @@ const (
 	Reask        = "reask"
 	ExplainTask  = "explain"
 	Editor       = "editor"
+	FixTask      = "fix"
 	StatusOpen   = "status_open"
 	StatusDoing  = "status_in_progress"
 	StatusDone   = "status_done"
@@ -88,6 +89,7 @@ var Actions = []Action{
 	{Reask, "ask again", []Screen{Explain}, []string{"r"}},
 	{ExplainTask, "explain", []Screen{Tasks, Task}, []string{"e"}},
 	{Editor, "editor", []Screen{Tasks, Task}, []string{"v"}},
+	{FixTask, "fix with AI", []Screen{Tasks, Task}, []string{"F"}},
 	{StatusOpen, "open", []Screen{Tasks}, []string{"o"}},
 	{StatusDoing, "in progress", []Screen{Tasks}, []string{"i"}},
 	{StatusDone, "done", []Screen{Tasks}, []string{"d"}},
@@ -201,6 +203,7 @@ var fzfDefaults = Map{
 	ShowTasks:    {"alt-t"},
 	ExplainTask:  {"alt-e"},
 	Editor:       {"alt-v"},
+	FixTask:      {"alt-f"},
 	StatusOpen:   {"alt-o"},
 	StatusDoing:  {"alt-i"},
 	StatusDone:   {"alt-d"},

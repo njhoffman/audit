@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -232,6 +233,25 @@ func (c *Client) askClaude(ctx context.Context, req Request) (*Response, error) 
 		text = string(out.Structured)
 	}
 	return &Response{Text: text, CostUSD: out.CostUSD}, nil
+}
+
+// SessionCommand starts the CLI interactively with prompt as the first
+// message: claude with its usual permission prompts, codex with its default
+// approvals. The caller attaches it to the terminal. CLAUDECODE is removed
+// so a session started from inside Claude Code is not taken as nested.
+func (c *Client) SessionCommand(ctx context.Context, prompt string) *osexec.Cmd {
+	var args []string
+	if c.Model != "" {
+		args = append(args, "--model", c.Model)
+	}
+	args = append(args, "--", prompt)
+	cmd := osexec.CommandContext(ctx, c.command(), args...) // #nosec G204 -- the configured AI CLI
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "CLAUDECODE=") {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
+	return cmd
 }
 
 // codexPreamble keeps codex, an agent with a shell, answering from the data

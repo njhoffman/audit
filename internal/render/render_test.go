@@ -463,3 +463,19 @@ func TestNerdGlyphs(t *testing.T) {
 		t.Error("Unicode markers have no icons, and an unknown name has none")
 	}
 }
+
+func TestFixOutcome(t *testing.T) {
+	for _, c := range []struct {
+		t    todo.Todo
+		want string
+	}{
+		{todo.Todo{ID: 1, Status: todo.Resolved, Source: todo.FromFinding}, "#1 resolved"},
+		{todo.Todo{ID: 2, Status: todo.Open, Source: todo.FromAggregate, Command: "configs"}, "#2 is still open: configs still reports it"},
+		{todo.Todo{ID: 3, Status: todo.InProgress, Source: todo.Manual}, "#3 was added by hand"},
+		{todo.Todo{ID: 4, Status: todo.Open, Source: todo.FromAI}, "#4 is an AI suggestion"},
+	} {
+		if got := FixOutcome(c.t); !strings.HasPrefix(got, c.want) {
+			t.Errorf("%+v: got %q want prefix %q", c.t, got, c.want)
+		}
+	}
+}

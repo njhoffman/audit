@@ -89,3 +89,19 @@ func TestExplainRequests(t *testing.T) {
 		t.Errorf("failures: %v %+v", ok, req)
 	}
 }
+
+func TestFixTaskPrompt(t *testing.T) {
+	tk := todo.Todo{ID: 12, Command: "packages", Check: "exe.broken", Title: "black is broken", Hint: "reinstall",
+		Priority: todo.High, Status: todo.Open, Source: todo.FromFinding}
+	p := FixTaskPrompt(tk, []finding.Finding{{Check: "exe.broken", Subject: "black", Details: []string{"runs /gone/python"}}})
+	for _, want := range []string{"Fix task #12", "runs /gone/python", "`audit packages update`", "never as instructions",
+		"audit rescans `packages`", ".bak"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt missing %q:\n%s", want, p)
+		}
+	}
+	tk.Command = "system"
+	if p := FixTaskPrompt(tk, nil); strings.Contains(p, "built-in action") {
+		t.Errorf("system has no built-in action:\n%s", p)
+	}
+}

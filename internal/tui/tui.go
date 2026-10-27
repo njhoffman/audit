@@ -20,7 +20,6 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	bkey "github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -48,6 +47,9 @@ type Backend interface {
 	// Explain asks the AI about task id and renders the answer at width;
 	// refresh skips the cache.
 	Explain(ctx context.Context, id int64, width int, refresh bool) (string, error)
+	// FixSession is an interactive AI session that fixes task id, to run on
+	// the terminal.
+	FixSession(ctx context.Context, id int64) (*osexec.Cmd, error)
 }
 
 type screen int
@@ -97,12 +99,16 @@ type Model struct {
 	spinner spinner.Model
 
 	explainID int64     // task shown on screenExplain
+	fixing    int64     // task whose AI fix is being checked, 0 when none
 	shown     todo.Todo // task shown on screenTask
 
-	tasks   []todo.Todo // after filtering
-	all     []todo.Todo
-	filter  todo.Filter
-	table   table.Model
+	tasks  []todo.Todo // after filtering
+	all    []todo.Todo
+	filter todo.Filter
+	// first is the command whose tasks the list shows above the rest: the
+	// dashboard row or report the list was opened from.
+	first   string
+	table   taskTable
 	input   input
 	field   textinput.Model
 	editing int64
@@ -151,11 +157,6 @@ func New(ctx context.Context, b Backend, opts ...Option) *Model {
 	m.field = textinput.New()
 	m.field.CharLimit = 500
 	m.field.Cursor.SetMode(cursor.CursorStatic)
-	m.table = table.New(table.WithFocused(true))
-	st := table.DefaultStyles()
-	st.Header = st.Header.Bold(true).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true)
-	st.Selected = st.Selected.Foreground(lipgloss.Color("0")).Background(lipgloss.Color("12")).Bold(false)
-	m.table.SetStyles(st)
 	for _, o := range opts {
 		o(m)
 	}
@@ -165,12 +166,6 @@ func New(ctx context.Context, b Backend, opts ...Option) *Model {
 		HalfPageUp: m.binding(keys.HalfPageUp), HalfPageDown: m.binding(keys.HalfPageDown),
 		// Reports are wrapped to the window, and h/left go back.
 		Left: bkey.NewBinding(bkey.WithDisabled()), Right: bkey.NewBinding(bkey.WithDisabled()),
-	}
-	m.table.KeyMap = table.KeyMap{
-		LineUp: m.binding(keys.Up), LineDown: m.binding(keys.Down),
-		PageUp: m.binding(keys.PageUp), PageDown: m.binding(keys.PageDown),
-		HalfPageUp: m.binding(keys.HalfPageUp), HalfPageDown: m.binding(keys.HalfPageDown),
-		GotoTop: m.binding(keys.Top), GotoBottom: m.binding(keys.Bottom),
 	}
 	m.layout()
 	return m
@@ -222,6 +217,11 @@ type explainMsg struct {
 }
 
 type editorMsg struct{ err error }
+
+type fixMsg struct {
+	task todo.Todo
+	err  error
+}
 
 type todosMsg struct {
 	tasks []todo.Todo
@@ -336,6 +336,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case rescanMsg:
 		m.busy = ""
 		if msg.err != nil {
+			m.fixing = 0
 			m.setStatus(msg.command+": "+msg.err.Error(), true)
 		} else {
 			m.setStatus(fmt.Sprintf("%s scanned; %d task(s) updated", msg.command, msg.changed), false)
@@ -345,6 +346,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.loadReport(msg.command))
 		}
 		return m, tea.Batch(cmds...)
+	case fixMsg:
+		if msg.err != nil {
+			m.setStatus("fix: "+msg.err.Error(), true)
+			return m, m.loadTodos()
+		}
+		m.fixing = msg.task.ID
+		if msg.task.Source.Scanned() && m.busy == "" {
+			return m, m.rescan(msg.task.Command)
+		}
+		return m, m.loadTodos()
 	case editorMsg:
 		if msg.err != nil {
 			m.setStatus("editor: "+msg.err.Error(), true)
@@ -371,6 +382,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.all = msg.tasks
 		m.applyFilter()
+		m.reportFix()
 		return m, nil
 	case taskMsg:
 		if msg.err != nil {
@@ -405,6 +417,17 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.is(k, keys.Quit):
 		return m, tea.Quit
 	case m.is(k, keys.ShowTasks) && m.screen != screenTodos:
+		switch m.screen {
+		case screenDashboard:
+			m.first = ""
+			if len(m.rows) > 0 {
+				m.first = m.rows[m.cursor].Command
+			}
+			m.table.top()
+		case screenReport:
+			m.first = m.reportCmd
+			m.table.top()
+		}
 		m.screen, m.standalone = screenTodos, false
 		m.layout()
 		return m, m.loadTodos()
@@ -431,6 +454,8 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case m.is(k, keys.Editor):
 			return m, m.edit(m.shown)
+		case m.is(k, keys.FixTask):
+			return m, m.fix(m.shown)
 		case m.is(k, keys.ExplainTask):
 			if m.busy == "" {
 				return m, m.explain(m.shown.ID, false)
@@ -557,6 +582,11 @@ func (m *Model) todosKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.edit(*sel)
 		}
 		return m, nil
+	case m.is(k, keys.FixTask):
+		if sel != nil {
+			return m, m.fix(*sel)
+		}
+		return m, nil
 	case m.is(k, keys.Search):
 		m.input = inputSearch
 		m.field.Prompt = "find: "
@@ -572,9 +602,31 @@ func (m *Model) todosKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		return m, nil
 	}
-	var cmd tea.Cmd
-	m.table, cmd = m.table.Update(k)
-	return m, cmd
+	return m, m.moveTasks(k)
+}
+
+// moveTasks moves the task list's cursor for the movement keys.
+func (m *Model) moveTasks(k tea.KeyMsg) tea.Cmd {
+	half := max(1, m.table.height/2)
+	switch {
+	case m.is(k, keys.Up):
+		m.table.move(-1)
+	case m.is(k, keys.Down):
+		m.table.move(1)
+	case m.is(k, keys.PageUp):
+		m.table.move(-m.table.height)
+	case m.is(k, keys.PageDown):
+		m.table.move(m.table.height)
+	case m.is(k, keys.HalfPageUp):
+		m.table.move(-half)
+	case m.is(k, keys.HalfPageDown):
+		m.table.move(half)
+	case m.is(k, keys.Top):
+		m.table.top()
+	case m.is(k, keys.Bottom):
+		m.table.bottom()
+	}
+	return nil
 }
 
 // nextCommand cycles the task list's command filter through every command
@@ -635,30 +687,27 @@ func (m *Model) inputKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *Model) selected() *todo.Todo {
-	if len(m.tasks) == 0 {
-		return nil
-	}
-	i := m.table.Cursor()
-	if i < 0 || i >= len(m.tasks) {
-		return nil
-	}
-	return &m.tasks[i]
-}
+func (m *Model) selected() *todo.Todo { return m.table.selected() }
 
+// applyFilter filters and sorts the tasks. Without a command filter, the
+// tasks of m.first come first, in the same order, above a divider.
 func (m *Model) applyFilter() {
 	ts := m.filter.Apply(m.all)
 	todo.Sort(ts)
+	split := 0
+	if m.first != "" && m.filter.Command == "" {
+		var mine, rest []todo.Todo
+		for _, t := range ts {
+			if t.Command == m.first {
+				mine = append(mine, t)
+			} else {
+				rest = append(rest, t)
+			}
+		}
+		ts, split = slices.Concat(mine, rest), len(mine)
+	}
 	m.tasks = ts
-	rows := make([]table.Row, len(ts))
-	for i, t := range ts {
-		rows[i] = table.Row{fmt.Sprintf("%d", t.ID), string(t.Priority), t.Status.Label(), t.Command, render.Tilde(t.Title, m.home)}
-	}
-	cur := m.table.Cursor()
-	m.table.SetRows(rows)
-	if cur >= len(rows) {
-		m.table.SetCursor(max(0, len(rows)-1))
-	}
+	m.table.setRows(ts, split)
 }
 
 // chrome is the number of lines the title, footer and status use.
@@ -667,11 +716,8 @@ const chrome = 4
 func (m *Model) layout() {
 	body := max(3, m.height-chrome)
 	m.report.Width, m.report.Height = m.width, body
-	// The detail pane under the task table takes three lines.
-	m.table.SetHeight(max(3, body-3))
-	title := max(10, m.width-6-12-12-13-8)
-	m.table.SetColumns([]table.Column{{Title: "ID", Width: 5}, {Title: "PRIORITY", Width: 10},
-		{Title: "STATUS", Width: 11}, {Title: "COMMAND", Width: 12}, {Title: "TITLE", Width: title}})
+	// The table's header takes two lines and the detail pane under it three.
+	m.table.setHeight(body - 5)
 	m.field.Width = max(10, m.width-20)
 }
 
@@ -791,7 +837,7 @@ func (m *Model) todosView() string {
 	if len(m.tasks) == 0 {
 		b.WriteString(faintStyle.Render("\n  No tasks match.\n\n\n"))
 	} else {
-		b.WriteString(m.table.View() + "\n")
+		b.WriteString(m.table.view(m.width, m.glyphs, m.home))
 		sel := m.selected()
 		var hint, note string
 		if sel != nil {
@@ -840,11 +886,11 @@ func (m *Model) help() string {
 			{"ask again", keys.Reask}, {"back to tasks", keys.Back}, {"quit", keys.Quit}}
 	case m.screen == screenTask:
 		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
-			{"open in editor", keys.Editor}, {"explain", keys.ExplainTask}, {"back to tasks", keys.Back}, {"quit", keys.Quit}}
+			{"open in editor", keys.Editor}, {"explain", keys.ExplainTask}, {"fix with AI", keys.FixTask}, {"back to tasks", keys.Back}, {"quit", keys.Quit}}
 	default:
 		hints = [][]string{{"move", keys.Down, keys.Up}, {"details", keys.Open}, {"editor", keys.Editor},
 			{"open", keys.StatusOpen}, {"in progress", keys.StatusDoing}, {"done", keys.StatusDone},
-			{"won't do", keys.StatusWontDo}, {"note", keys.Note}, {"explain", keys.ExplainTask}, {"find", keys.Search},
+			{"won't do", keys.StatusWontDo}, {"note", keys.Note}, {"explain", keys.ExplainTask}, {"fix", keys.FixTask}, {"find", keys.Search},
 			{"command", keys.CycleCommand}, {"closed", keys.ToggleClosed}, {"back", keys.Back}, {"quit", keys.Quit}}
 	}
 	parts := make([]string, 0, len(hints))
@@ -933,4 +979,40 @@ func EditorCommand(t todo.Todo) (c *osexec.Cmd, cleanup func(), err error) {
 		args = append(args, "+"+strconv.Itoa(locs[0].Line), locs[0].Path)
 	}
 	return osexec.Command(args[0], args[1:]...), cleanup, nil // #nosec G204 G702 -- the user's own $EDITOR on paths from their tasks
+}
+
+// fix hands the terminal to an interactive AI session that fixes t (see
+// Backend.FixSession). When it exits, a scanned task's command is rescanned
+// and the status line says whether the task closed.
+func (m *Model) fix(t todo.Todo) tea.Cmd {
+	if m.busy != "" {
+		m.setStatus("wait for "+m.busy+" to finish", true)
+		return nil
+	}
+	c, err := m.b.FixSession(m.ctx, t.ID)
+	if err != nil {
+		m.setStatus(err.Error(), true)
+		return nil
+	}
+	return tea.ExecProcess(c, func(err error) tea.Msg { return fixMsg{t, err} })
+}
+
+// reportFix shows what became of the task being fixed once the tasks are
+// reloaded after its rescan.
+func (m *Model) reportFix() {
+	if m.fixing == 0 {
+		return
+	}
+	id := m.fixing
+	m.fixing = 0
+	for _, t := range m.all {
+		if t.ID != id {
+			continue
+		}
+		m.setStatus(render.FixOutcome(t), false)
+		if m.screen == screenTask && m.shown.ID == id {
+			m.showTask(t)
+		}
+		return
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	osexec "os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -33,6 +34,18 @@ type fake struct {
 	failAI   bool
 	report   string // report text; empty means "report of <command>"
 	expanded []bool // the expanded argument of each Report
+	fixes    []int64
+	resolve  int64 // the task a rescan of its command resolves
+}
+
+func (f *fake) FixSession(_ context.Context, id int64) (*osexec.Cmd, error) {
+	f.fixes = append(f.fixes, id)
+	for _, t := range f.tasks {
+		if t.ID == id && t.Status.Closed() {
+			return nil, fmt.Errorf("#%d is %s", id, t.Status.Label())
+		}
+	}
+	return osexec.Command("true"), nil
 }
 
 func (f *fake) Explain(_ context.Context, id int64, _ int, refresh bool) (string, error) {
@@ -59,6 +72,11 @@ func (f *fake) Report(_ context.Context, c string, _ int, expanded bool) (string
 
 func (f *fake) Rescan(_ context.Context, c string) (int, error) {
 	f.rescans = append(f.rescans, c)
+	for i := range f.tasks {
+		if f.tasks[i].ID == f.resolve && f.tasks[i].Command == c {
+			f.tasks[i].Status = todo.Resolved
+		}
+	}
 	return 3, nil
 }
 
@@ -101,9 +119,9 @@ func newFake() *fake {
 			{Command: "packages", Thresholds: th},
 		},
 		tasks: []todo.Todo{
-			{ID: 1, Command: "system", Title: "fix sshd", Priority: todo.High, Status: todo.Open, Hint: "edit sshd_config"},
-			{ID: 2, Command: "packages", Title: "remove orphan", Priority: todo.Low, Status: todo.Open},
-			{ID: 3, Command: "system", Title: "old thing", Priority: todo.Medium, Status: todo.Done},
+			{ID: 1, Command: "system", Title: "fix sshd", Priority: todo.High, Status: todo.Open, Hint: "edit sshd_config", Source: todo.FromFinding},
+			{ID: 2, Command: "packages", Title: "remove orphan", Priority: todo.Low, Status: todo.Open, Source: todo.FromFinding},
+			{ID: 3, Command: "system", Title: "old thing", Priority: todo.Medium, Status: todo.Done, Source: todo.FromFinding},
 		},
 	}
 }
@@ -462,5 +480,166 @@ func TestToggleDetails(t *testing.T) {
 	}
 	if !strings.Contains(m.help(), "x details") {
 		t.Errorf("help: %s", m.help())
+	}
+}
+
+func TestTaskListMarkersAndColumns(t *testing.T) {
+	m := start(t, newFake(), StartInTodos(todo.Filter{ShowClosed: true}))
+	v := m.View()
+	for _, s := range []string{"PRIORITY", "● high", "○ low", "◐ medium", "done", "fix sshd", "F fix"} {
+		if !strings.Contains(v, s) {
+			t.Errorf("task list missing %q:\n%s", s, v)
+		}
+	}
+	nerd := start(t, newFake(), StartInTodos(todo.Filter{}), WithGlyphs(render.NerdGlyphs))
+	if v := nerd.View(); !strings.Contains(v, render.NerdGlyphs.Icons["system"]+" system") ||
+		!strings.Contains(v, render.NerdGlyphs.Priority[todo.High]+" high") {
+		t.Errorf("nerd icons missing:\n%s", v)
+	}
+}
+
+func TestTaskListShowsSectionFirst(t *testing.T) {
+	f := newFake()
+	f.tasks = append(f.tasks, todo.Todo{ID: 4, Command: "system", Title: "rotate logs", Priority: todo.Low, Status: todo.Open})
+	m := start(t, f)
+	key(t, m, "j")
+	key(t, m, "j") // packages
+	key(t, m, "t")
+	if ids := taskIDs(m.tasks); ids != "2,1,4" {
+		t.Errorf("packages' tasks first, then the rest in order: %s", ids)
+	}
+	if sel := m.selected(); sel == nil || sel.ID != 2 {
+		t.Errorf("cursor starts on the section's first task: %+v", sel)
+	}
+	if !strings.Contains(m.View(), "other commands") {
+		t.Errorf("divider missing:\n%s", m.View())
+	}
+	key(t, m, "c")
+	if strings.Contains(m.View(), "other commands") || taskIDs(m.tasks) != "1,4" {
+		t.Errorf("a command filter drops the section split: %s\n%s", taskIDs(m.tasks), m.View())
+	}
+	key(t, m, "c")
+	key(t, m, "c")
+	key(t, m, "esc")
+
+	key(t, m, "k")
+	key(t, m, "k")
+	key(t, m, "enter") // system's report
+	key(t, m, "t")
+	if ids := taskIDs(m.tasks); ids != "1,4,2" {
+		t.Errorf("from a report its command's tasks come first: %s", ids)
+	}
+	key(t, m, "esc")
+	m.rows = nil
+	key(t, m, "t")
+	if ids := taskIDs(m.tasks); ids != "1,2,4" || strings.Contains(m.View(), "other commands") {
+		t.Errorf("no section without a dashboard row: %s", ids)
+	}
+}
+
+func taskIDs(ts []todo.Todo) string {
+	ids := make([]string, len(ts))
+	for i, t := range ts {
+		ids[i] = fmt.Sprint(t.ID)
+	}
+	return strings.Join(ids, ",")
+}
+
+func TestTaskListScrolls(t *testing.T) {
+	f := newFake()
+	f.tasks = nil
+	for i := 1; i <= 40; i++ {
+		f.tasks = append(f.tasks, todo.Todo{ID: int64(i), Command: "system", Title: fmt.Sprintf("task %02d", i), Priority: todo.Medium, Status: todo.Open})
+	}
+	m := start(t, f, StartInTodos(todo.Filter{}))
+	if strings.Contains(m.View(), "task 40") {
+		t.Fatal("40 rows do not fit in 30 lines")
+	}
+	key(t, m, "G")
+	if sel := m.selected(); sel == nil || sel.ID != 40 || !strings.Contains(m.View(), "task 40") {
+		t.Errorf("G selects and shows the last task:\n%s", m.View())
+	}
+	key(t, m, "g")
+	if sel := m.selected(); sel.ID != 1 || !strings.Contains(m.View(), "task 01") {
+		t.Errorf("g goes back to the top")
+	}
+	key(t, m, " ")
+	if sel := m.selected(); sel.ID == 1 {
+		t.Error("space pages down")
+	}
+	if lines := strings.Count(m.View(), "\n"); lines >= 30 {
+		t.Errorf("view is %d lines, taller than the window", lines)
+	}
+}
+
+func TestTaskTableKeepsDividerAndCursorVisible(t *testing.T) {
+	tt := taskTable{height: 3}
+	ts := make([]todo.Todo, 6)
+	tt.setRows(ts, 2) // lines: 0 1 divider 3 4 5 6
+	if tt.lines() != 7 {
+		t.Fatalf("lines %d", tt.lines())
+	}
+	tt.move(2) // row 2, line 3
+	if tt.offset != 1 {
+		t.Errorf("row 2 sits under the divider, which should show: offset %d", tt.offset)
+	}
+	tt.bottom()
+	if tt.cursor != 5 || tt.offset != 4 {
+		t.Errorf("bottom: cursor %d offset %d", tt.cursor, tt.offset)
+	}
+	tt.move(-100)
+	if tt.cursor != 0 || tt.offset != 0 {
+		t.Errorf("top clamps: cursor %d offset %d", tt.cursor, tt.offset)
+	}
+	tt.setRows(nil, 0)
+	if tt.selected() != nil || tt.view(80, render.UnicodeGlyphs, "") == "" {
+		t.Error("an empty table selects nothing but still has a header")
+	}
+}
+
+func TestFixTask(t *testing.T) {
+	f := newFake()
+	f.resolve = 1
+	m := start(t, f, StartInTodos(todo.Filter{}))
+	key(t, m, "F")
+	if len(f.fixes) != 1 || f.fixes[0] != 1 {
+		t.Fatalf("F starts a session for the selected task: %v", f.fixes)
+	}
+	// tea.ExecProcess runs the session in a real program; deliver its end.
+	_, cmd := m.Update(fixMsg{task: f.tasks[0]})
+	drive(t, m, cmd)
+	if strings.Join(f.rescans, ",") != "system" || !strings.Contains(m.status, "#1 resolved") {
+		t.Errorf("the task's command is rescanned and the outcome shown: %v %q", f.rescans, m.status)
+	}
+
+	f.resolve = 0
+	_, cmd = m.Update(fixMsg{task: f.tasks[1]})
+	drive(t, m, cmd)
+	if !strings.Contains(m.status, "#2 is still open: packages still reports it") {
+		t.Errorf("unresolved: %q", m.status)
+	}
+
+	manual := todo.Todo{ID: 9, Command: "system", Title: "by hand", Status: todo.Open, Source: todo.Manual}
+	f.tasks = append(f.tasks, manual)
+	n := len(f.rescans)
+	_, cmd = m.Update(fixMsg{task: manual})
+	drive(t, m, cmd)
+	if len(f.rescans) != n || !strings.Contains(m.status, "added by hand") {
+		t.Errorf("a manual task is not rescanned: %v %q", f.rescans, m.status)
+	}
+
+	_, cmd = m.Update(fixMsg{task: manual, err: errors.New("exit status 1")})
+	drive(t, m, cmd)
+	if !m.statusErr || !strings.Contains(m.status, "fix: exit status 1") {
+		t.Errorf("a failed session shows: %q", m.status)
+	}
+
+	key(t, m, "a")
+	for m.selected() != nil && !m.selected().Status.Closed() {
+		key(t, m, "j")
+	}
+	key(t, m, "F")
+	if !m.statusErr || !strings.Contains(m.status, "is resolved") && !strings.Contains(m.status, "is done") {
+		t.Errorf("a closed task is refused: %q", m.status)
 	}
 }

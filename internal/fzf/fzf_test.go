@@ -62,6 +62,9 @@ func TestTasksArgs(t *testing.T) {
 		}
 	}
 	done := bindFor(args, "ctrl-d")
+	if fix := bindFor(args, "alt-f"); !strings.HasPrefix(fix, "execute(") || !strings.Contains(fix, "'fix' {1}") || !strings.Contains(fix, "+reload(") {
+		t.Errorf("alt-f runs the fix helper and reloads: %q", fix)
+	}
 	if done == "" || done != bindFor(args, "alt-d") || !strings.Contains(done, `'todo' 'set' {1} 'done'`) ||
 		!strings.Contains(done, "+reload(") || !strings.HasPrefix(done, "execute-silent(") {
 		t.Errorf("status_done bind: %q", done)

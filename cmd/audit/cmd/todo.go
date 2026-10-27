@@ -134,7 +134,7 @@ token that every request needs.`,
 	c.MarkFlagsMutuallyExclusive("json", "serve")
 	c.MarkFlagsMutuallyExclusive("json", "html")
 
-	c.AddCommand(newTodoShowCmd(a), newTodoSetCmd(a), newTodoNoteCmd(a), newTodoAddCmd(a), newTodoRmCmd(a), newTodoExplainCmd(a))
+	c.AddCommand(newTodoShowCmd(a), newTodoSetCmd(a), newTodoNoteCmd(a), newTodoAddCmd(a), newTodoRmCmd(a), newTodoExplainCmd(a), newTodoFixCmd(a))
 	return c
 }
 

@@ -308,3 +308,18 @@ func (p *Printer) History(runs []store.RunInfo) {
 		return p.style()
 	})
 }
+
+// FixOutcome says what became of task t after an AI fix and the rescan of
+// its command: closed, still reported, or, for a task no scan owns, that
+// closing it is up to you.
+func FixOutcome(t todo.Todo) string {
+	switch {
+	case t.Status.Closed():
+		return fmt.Sprintf("#%d %s", t.ID, t.Status.Label())
+	case t.Source == todo.Manual:
+		return fmt.Sprintf("#%d was added by hand, so no rescan closes it; mark it done if it is fixed", t.ID)
+	case t.Source == todo.FromAI:
+		return fmt.Sprintf("#%d is an AI suggestion, so no rescan closes it; mark it done if it is fixed", t.ID)
+	}
+	return fmt.Sprintf("#%d is still %s: %s still reports it", t.ID, t.Status.Label(), t.Command)
+}

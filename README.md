@@ -27,7 +27,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit ai` | AI CLIs (installed, logged in), provider keys by name, ollama, MCP servers whose commands are missing, Claude Code hooks and over-broad permissions, AI projects with their sessions; `--ping` checks providers answer |
 | `audit files` | where disk space goes (largest directories) and what can be reclaimed: tool and system caches, idle projects' node_modules/target/.venv, data of uninstalled programs, large files, old downloads, the trash, duplicates (hash-confirmed), core dumps, empty dirs, broken links |
 | `audit files clean` | reclaim it: caches through their own cleaners (sudo once for apt, journal, snaps), idle build dirs and core dumps deleted, your own files (orphaned data, old downloads, duplicate copies) to the trash; `-C all` adds those and emptying the trash |
-| `audit todo` | the tasks scans create, plus tasks added by hand; `todo explain ID` asks the AI about one |
+| `audit todo` | the tasks scans create, plus tasks added by hand; `todo explain ID` asks the AI about one, `todo fix ID` has it fix one |
 | `audit analyze` | AI review across every command's saved results, open tasks and failed updates; `-t` files AI suggestions as tasks |
 | `audit history` | shell history: large multiline entries and configured literal substring matches; histdb total, host and session statistics in the history summary; repeated commands are retained without issues |
 | `audit history sync` | rebuild the configured zsh history file from histdb, preserving its timestamps and durations and keeping a private backup |
@@ -104,6 +104,7 @@ AI features go through a local CLI picked by `ai.provider` (or `-I/--ai-provider
 - `--ai` on any scan: a review of that run.
 - `audit analyze`: one review across all commands (shared root causes, the errors that matter, a fix order). `-t` asks for structured suggestions instead and files them as tasks with source `ai`; later runs keep repeated suggestions, add new ones and resolve dropped ones, but never override a status you set, and scans leave them alone.
 - `audit todo explain ID`, or `e` in the task editor: cause, impact, fix and how to confirm it for one task, with the full findings behind it.
+- `audit todo fix ID`, or `F` in the task editor: starts `claude` or `codex` interactively with the task and its findings, asking it to fix the task. This is the one AI feature that can change your machine: the CLI runs with its normal permission prompts, so you approve each edit and command. Tasks a built-in action covers (`packages update`, `repos sync`, `files clean`, `configs clean`) are pointed at that action. When you leave the session, audit rescans the task's command and says whether the task resolved.
 - `-e/--explain` on `packages update` and `packages runtimes update|migrate` (also with `-L`): why the failed items failed. This sends the tail of their command output.
 
 The dashboard lines up each command's finding counts by severity (`◉` critical, `●` error, `▲` warning, `◆` notice, `○` info) and its open tasks by priority (`●` high, `◐` medium, `○` low, `◇` suggestion). With a Nerd Font, `display.nerd_fonts: true` (or `-G`) swaps the markers for icons and adds icons to commands, report sections and summary groups.
@@ -118,14 +119,16 @@ The defaults:
 |---|---|
 | dashboard | `j`/`k` move, `enter` report, `r` rescan, `t` tasks, `q` quit |
 | report | `j`/`k`/`pgup`/`pgdn` scroll, `g`/`G` top and bottom, `x` expand or collapse findings, `r` rescan, `esc` back |
-| tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `e` explain with AI, `v` editor, `/` find, `c` cycle command, `a` show closed, `esc` back |
+| tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `e` explain with AI, `F` fix with AI, `v` editor, `/` find, `c` cycle command, `a` show closed, `esc` back |
 | explanation | `j`/`k`/`pgup`/`pgdn` scroll, `r` ask again, `esc` back to tasks |
+
+The task list colors each task's priority and status and marks them like the dashboard (with Nerd Fonts, commands get their icons). Opened with `t` from a dashboard row or a report, it lists that command's tasks first, above an "other commands" divider; `c` filters to one command instead.
 
 Every action can be rebound, to as many keys as you like, under `tui.keys` in the config (`status_done: [d, x]`, `editor: []` to unbind); the help line follows the bindings. `man audit` (KEYS) lists the actions and the screens they work on.
 
 ### fzf interface
 
-`tui.interface: fzf` (or `-F`/`--fzf` on bare `audit` and `audit todo`) uses fzf lists instead of the terminal UI: the command list previews saved reports, the task list previews tasks, and typing filters as usual. Since letters go to the query, actions are on alt- keys under `tui.fzf_keys`: `enter` report or details in `$PAGER`, `alt-r` rescan, `alt-t` tasks, `alt-o`/`alt-i`/`alt-d`/`alt-w` status, `alt-n` note, `alt-e` explain, `alt-v` editor, `alt-c` cycle command, `alt-a` show closed. Needs fzf 0.51 or later; `man audit` (FZF) has the details.
+`tui.interface: fzf` (or `-F`/`--fzf` on bare `audit` and `audit todo`) uses fzf lists instead of the terminal UI: the command list previews saved reports, the task list previews tasks, and typing filters as usual. Since letters go to the query, actions are on alt- keys under `tui.fzf_keys`: `enter` report or details in `$PAGER`, `alt-r` rescan, `alt-t` tasks, `alt-o`/`alt-i`/`alt-d`/`alt-w` status, `alt-n` note, `alt-e` explain, `alt-f` fix with AI, `alt-v` editor, `alt-c` cycle command, `alt-a` show closed. Needs fzf 0.51 or later; `man audit` (FZF) has the details.
 
 ## Configuration
 

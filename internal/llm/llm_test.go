@@ -294,3 +294,20 @@ func TestAskJSON(t *testing.T) {
 		t.Error("AskJSON without a schema must fail")
 	}
 }
+
+func TestSessionCommand(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	c := (&Client{Model: "m1"}).SessionCommand(context.Background(), "-fix this")
+	if got := strings.Join(c.Args, "|"); got != "claude|--model|m1|--|-fix this" {
+		t.Errorf("claude args: %s", got)
+	}
+	for _, kv := range c.Env {
+		if strings.HasPrefix(kv, "CLAUDECODE=") {
+			t.Error("CLAUDECODE must be unset for the session")
+		}
+	}
+	c = (&Client{Provider: Codex, Command: "/opt/codex"}).SessionCommand(context.Background(), "fix")
+	if got := strings.Join(c.Args, "|"); got != "/opt/codex|--|fix" {
+		t.Errorf("codex args: %s", got)
+	}
+}

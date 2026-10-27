@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit todo fix ID`, `F` in the task editor and `alt-f` in fzf: fix a task in an interactive `claude` or `codex` session that starts with the task and its findings, with the CLI's own permission prompts. Tasks a built-in action covers are pointed at it. When the session ends, audit rescans the task's command and says whether the task resolved.
+
+### Changed
+
+- The task editor colors priority and status, marks priorities and command icons as the dashboard does, and, opened from a dashboard row or a report, lists that command's tasks first above an "other commands" divider.
+
 ## [0.25.0] - 2026-10-22
 
 ### Fixed

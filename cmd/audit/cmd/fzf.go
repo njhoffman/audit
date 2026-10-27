@@ -191,6 +191,21 @@ func (a *app) fzfInteractive(ctx context.Context, op string, args []string) erro
 		}
 		_, err = a.store.SetTodoNote(ctx, t.ID, line, timeNow())
 		return err
+	case op == "fix" && len(args) == 1:
+		id, err := parseID(args[0])
+		if err != nil {
+			return err
+		}
+		say(a.errOut, "\x1b[H\x1b[2J") // fzf leaves its screen behind
+		if err := a.fixTask(ctx, id); err != nil {
+			sayln(a.errOut, err.Error())
+		}
+		say(a.errOut, "press enter to return ")
+		_, err = bufio.NewReader(os.Stdin).ReadString('\n')
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
 	case op == "edit" && len(args) == 1:
 		t, err := a.fzfTask(ctx, args[0])
 		if err != nil {

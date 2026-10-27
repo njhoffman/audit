@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	osexec "os/exec"
 	"slices"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/packages"
+	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/todo"
 )
 
@@ -252,23 +255,99 @@ In the task editor (audit todo -i), e does the same for the selected task.`,
 
 // explainTask asks about task id with the findings behind it.
 func (a *app) explainTask(ctx context.Context, id int64, refresh bool, level string, bar bool) (todo.Todo, *llm.Response, error) {
-	t, err := a.store.GetTodo(ctx, id)
+	t, fs, err := a.taskFindings(ctx, id)
 	if err != nil {
 		return t, nil, err
-	}
-	var fs []finding.Finding
-	if t.Source.Scanned() {
-		r, err := a.engine.Saved(ctx, t.Command, "")
-		if err != nil {
-			return t, nil, err
-		}
-		if r != nil {
-			fs = findingsFor(t, r.Findings)
-		}
 	}
 	client := a.aiClient(level)
 	resp, err := a.ask(ctx, client, llm.ExplainTaskRequest(t, fs, a.cfg.AI.AnalysisLevel), refresh, bar, fmt.Sprintf("explaining #%d", id))
 	return t, resp, err
+}
+
+// taskFindings loads task id and, for a scanned task, the saved findings
+// behind it.
+func (a *app) taskFindings(ctx context.Context, id int64) (todo.Todo, []finding.Finding, error) {
+	t, err := a.store.GetTodo(ctx, id)
+	if err != nil || !t.Source.Scanned() {
+		return t, nil, err
+	}
+	r, err := a.engine.Saved(ctx, t.Command, "")
+	if err != nil || r == nil {
+		return t, nil, err
+	}
+	return t, findingsFor(t, r.Findings), nil
+}
+
+func newTodoFixCmd(a *app) *cobra.Command {
+	return &cobra.Command{
+		Use:   "fix ID",
+		Short: "Fix a task in an interactive AI session, then rescan to check it",
+		Long: `Start the AI CLI (ai.provider, or --ai-provider) interactively with the
+task and every detail of the saved findings behind it, asking it to fix the
+task. The CLI asks before each edit or command as usual. Tasks that a
+built-in action handles (packages update, repos sync, files clean, configs
+clean) are pointed at that action. When the session exits, the task's
+command is rescanned and the task's new status printed.
+In the task editor (audit todo -i), F does the same for the selected task.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			id, err := parseID(args[0])
+			if err != nil {
+				return err
+			}
+			if !a.interactive() {
+				return fmt.Errorf("todo fix needs a terminal")
+			}
+			if err := a.load(); err != nil {
+				return err
+			}
+			return a.fixTask(c.Context(), id)
+		},
+	}
+}
+
+// fixTask runs the AI session that fixes task id on the terminal, then
+// checks the result.
+func (a *app) fixTask(ctx context.Context, id int64) error {
+	cmd, err := a.fixSession(ctx, id)
+	if err != nil {
+		return err
+	}
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s: %w", cmd.Args[0], err)
+	}
+	t, err := a.store.GetTodo(ctx, id)
+	if err != nil {
+		return err
+	}
+	if t.Source.Scanned() {
+		s, err := a.defaultScanner(t.Command)
+		if err != nil {
+			return err
+		}
+		if _, err := a.engine.Execute(ctx, s, a.progress(true)); err != nil {
+			return err
+		}
+		if t, err = a.store.GetTodo(ctx, id); err != nil {
+			return err
+		}
+	}
+	sayln(a.errOut, render.FixOutcome(t))
+	return nil
+}
+
+// fixSession is the interactive AI session that fixes task id. Closed
+// tasks are refused.
+func (a *app) fixSession(ctx context.Context, id int64) (*osexec.Cmd, error) {
+	t, fs, err := a.taskFindings(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if t.Status.Closed() {
+		return nil, fmt.Errorf("#%d is %s", t.ID, t.Status.Label())
+	}
+	return a.aiClient("").SessionCommand(ctx, llm.FixTaskPrompt(t, fs)), nil
 }
 
 // findingsFor picks the findings a scanned task was derived from.

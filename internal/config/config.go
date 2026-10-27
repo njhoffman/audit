@@ -747,6 +747,7 @@ tui:
     reask: [r]                     # explain: ask the AI again
     explain: [e]                   # tasks, task
     editor: [v]                    # tasks, task: open locations in $EDITOR
+    fix: [F]                       # tasks, task: fix in an interactive AI session
     status_open: [o]               # tasks
     status_in_progress: [i]
     status_done: [d]
@@ -764,6 +765,7 @@ tui:
     tasks: [alt-t]                 # command list: open the task list
     explain: [alt-e]               # this one and the rest: task list
     editor: [alt-v]
+    fix: [alt-f]
     status_open: [alt-o]
     status_in_progress: [alt-i]
     status_done: [alt-d]
