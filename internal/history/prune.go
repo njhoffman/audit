@@ -165,10 +165,10 @@ func ApplyPrune(ctx context.Context, p PrunePlan) (string, error) {
 		return "", err
 	}
 	defer func() { _ = f.Close() }()
-	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil { // #nosec G115 -- file descriptors fit in int
 		return "", fmt.Errorf("history is locked: %w", err)
 	}
-	defer func() { _ = unix.Flock(int(f.Fd()), unix.LOCK_UN) }()
+	defer func() { _ = unix.Flock(int(f.Fd()), unix.LOCK_UN) }() // #nosec G115 -- file descriptors fit in int
 	unchanged := func() error {
 		opened, err := f.Stat()
 		if err != nil {

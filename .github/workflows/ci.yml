@@ -44,12 +44,13 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # Pinned to match the local toolchain. golangci-lint-action v7+ is
+      # Keep in step with the version the justfile's tools recipe lists.
+      # golangci-lint-action v7+ is
       # required for golangci-lint v2.x; v6 errors with "invalid version".
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.11.4
+          version: v2.15.0
 
       - name: Test (race, single run)
         run: just test

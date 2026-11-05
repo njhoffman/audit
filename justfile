@@ -104,7 +104,7 @@ clean:
 # List the development tools the recipes use.
 tools:
     @echo "Required tools (install with: go install ...):"
-    @echo "  github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
+    @echo "  github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"
     @echo "  gotest.tools/gotestsum@latest"
     @echo "  github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest"
     @echo "  github.com/mfridman/tparse@latest"

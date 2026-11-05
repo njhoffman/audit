@@ -159,6 +159,12 @@ coverage run.
   core.Commands includes it, and its "untagged is p2" (also in this file's intro)
   contradicts the rule that every open item has an explicit priority.
 
+- [x] **Fix CI lint, failing on main since at least v0.22.1.** (p1) [bug] CI pins golangci-lint
+  v2.11.4 and the local copy is 2.15.0, so `just lint` passes while CI stops at two gosec
+  G115 errors in internal/history/prune.go:168,171 and never reaches its test step. Fix or
+  annotate those conversions and use one version in both places, since `just release`
+  cannot catch what only CI reports.
+
 ## 8. Package management integration
 
 The Python `pkgm` prototype is integrated into `audit packages`, starting in
