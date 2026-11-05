@@ -18,6 +18,9 @@ func testEnv(t *testing.T) (*exec.Env, *exec.Fake, string) {
 	t.Helper()
 	home := filepath.Join(t.TempDir(), "home")
 	mkdir(t, home)
+	prev := systemPipConf
+	systemPipConf = filepath.Join(home, "etc-pip.conf")
+	t.Cleanup(func() { systemPipConf = prev })
 	fake := &exec.Fake{}
 	env := &exec.Env{
 		Vars:   map[string]string{"HOME": home, "PATH": filepath.Join(home, "bin")},

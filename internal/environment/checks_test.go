@@ -121,6 +121,10 @@ func TestBreakSystemPackages(t *testing.T) {
 	if fs := byCheck(analyze(&State{Env: env}), "python.break_system_packages"); len(fs) != 0 {
 		t.Errorf("disabled settings should not be reported: %+v", fs)
 	}
+	writeFile(t, systemPipConf, "[global]\nbreak-system-packages = true\n")
+	if got := subjects(byCheck(analyze(&State{Env: env}), "python.break_system_packages")); !reflect.DeepEqual(got, []string{systemPipConf}) {
+		t.Errorf("the machine-wide config is checked too: %v", got)
+	}
 }
 
 func TestUserSite(t *testing.T) {

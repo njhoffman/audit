@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The test suite no longer depends on the machine's `/etc/pip.conf`, which failed it on GitHub's runners.
+
 ## [0.27.1] - 2026-11-05
 
 ### Fixed

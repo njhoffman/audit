@@ -271,9 +271,13 @@ func pipConfigFiles(env *exec.Env) []string {
 	return []string{
 		filepath.Join(env.XDG("XDG_CONFIG_HOME"), "pip", "pip.conf"),
 		filepath.Join(env.Home, ".pip", "pip.conf"),
-		"/etc/pip.conf",
+		systemPipConf,
 	}
 }
+
+// systemPipConf is the machine-wide pip config (a variable for tests, since
+// the machine running them may have one).
+var systemPipConf = "/etc/pip.conf"
 
 func breakSystemPackages(s *State) []finding.Finding {
 	const hint = "It disables PEP 668 for every pip call, so `pip install` can overwrite " +
