@@ -64,6 +64,9 @@ type app struct {
 	interactive func() bool
 	// scanner builds a command's scanner with its configured scope.
 	scanner func(command string) (core.Scanner, error)
+	// systemAnswer is whether this run's package scans include apt, snap and
+	// flatpak, once --system or a prompt has settled it.
+	systemAnswer *bool
 	// in answers confirmation prompts.
 	in io.Reader
 	// runner and looker replace the command runner and the registry client

@@ -41,6 +41,10 @@ type Backend interface {
 	Report(ctx context.Context, command string, width int, expanded bool) (text string, ok bool, err error)
 	// Rescan scans command and returns how many tasks changed.
 	Rescan(ctx context.Context, command string) (int, error)
+	// RescanQuestion is what to ask before rescanning command, "" for nothing.
+	RescanQuestion(command string) string
+	// AnswerRescan gives the answer for the next Rescan of command.
+	AnswerRescan(command string, yes bool)
 	Todos(ctx context.Context) ([]todo.Todo, error)
 	SetStatus(ctx context.Context, id int64, s todo.Status) (todo.Todo, error)
 	SetNote(ctx context.Context, id int64, note string) (todo.Todo, error)
@@ -81,6 +85,9 @@ type Model struct {
 	b    Backend
 	now  func() time.Time
 	keys keys.Map
+
+	// askRescan is the command whose rescan waits on a yes or no.
+	askRescan string
 
 	screen        screen
 	standalone    bool // started on the task list; leaving it quits
@@ -269,6 +276,36 @@ func (m *Model) explain(id int64, refresh bool) tea.Cmd {
 	})
 }
 
+// requestRescan starts a rescan of command, or asks the backend's question
+// first; rescanKey handles the answer.
+func (m *Model) requestRescan(command string) (tea.Model, tea.Cmd) {
+	if q := m.b.RescanQuestion(command); q != "" {
+		m.askRescan = command
+		m.setStatus(q+" [y/n, esc cancels]", false)
+		return m, nil
+	}
+	return m, m.rescan(command)
+}
+
+// rescanKey answers the pending rescan question; other keys wait for one.
+func (m *Model) rescanKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	command := m.askRescan
+	switch k.String() {
+	case "y", "Y":
+		m.askRescan = ""
+		m.b.AnswerRescan(command, true)
+		return m, m.rescan(command)
+	case "n", "N":
+		m.askRescan = ""
+		m.b.AnswerRescan(command, false)
+		return m, m.rescan(command)
+	case "esc":
+		m.askRescan = ""
+		m.setStatus("", false)
+	}
+	return m, nil
+}
+
 func (m *Model) rescan(command string) tea.Cmd {
 	m.busy = command
 	m.setStatus("scanning "+command+"...", false)
@@ -410,6 +447,9 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if k.String() == "ctrl+c" {
 		return m, tea.Quit
 	}
+	if m.askRescan != "" {
+		return m.rescanKey(k)
+	}
 	if m.input != inputNone {
 		return m.inputKey(k)
 	}
@@ -515,7 +555,7 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadReport(m.reportCmd)
 	case m.is(k, keys.Rescan):
 		if len(m.rows) > 0 && m.busy == "" {
-			return m, m.rescan(m.rows[m.cursor].Command)
+			return m.requestRescan(m.rows[m.cursor].Command)
 		}
 	}
 	return m, nil
@@ -525,7 +565,7 @@ func (m *Model) reportKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.is(k, keys.Rescan):
 		if m.busy == "" {
-			return m, m.rescan(m.reportCmd)
+			return m.requestRescan(m.reportCmd)
 		}
 		return m, nil
 	case m.is(k, keys.Details):

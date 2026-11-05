@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/njhoffman/audit/internal/packages"
 )
@@ -162,4 +163,46 @@ func (s *Store) SetSetting(ctx context.Context, key, value string) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
 	return err
+}
+
+// LatestInventories returns the newest saved inventory of each of managers
+// that has one, from runs of any scope, with CarriedFrom set to when it was
+// really scanned. Managers that were not installed are left out.
+func (s *Store) LatestInventories(ctx context.Context, managers []string) ([]packages.Inventory, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT data, finished_at FROM runs WHERE command=? ORDER BY finished_at DESC, id DESC`, packages.Command)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	found := map[string]packages.Inventory{}
+	for len(found) < len(managers) && rows.Next() {
+		var data []byte
+		var finished string
+		if err := rows.Scan(&data, &finished); err != nil {
+			return nil, err
+		}
+		var d packages.Data
+		if len(data) == 0 || json.Unmarshal(data, &d) != nil {
+			continue
+		}
+		for _, inv := range d.Inventories {
+			if _, done := found[inv.Manager]; done || !inv.Available || inv.Error != "" || !slices.Contains(managers, inv.Manager) {
+				continue
+			}
+			if inv.CarriedFrom.IsZero() {
+				inv.CarriedFrom = parseTS(finished)
+			}
+			found[inv.Manager] = inv
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var out []packages.Inventory
+	for _, m := range managers {
+		if inv, ok := found[m]; ok {
+			out = append(out, inv)
+		}
+	}
+	return out, nil
 }

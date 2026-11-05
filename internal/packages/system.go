@@ -20,6 +20,9 @@ var systemManagers = map[string]bool{"apt": true, "snap": true, "flatpak": true}
 // IsSystem reports whether manager is apt, snap or flatpak.
 func IsSystem(manager string) bool { return systemManagers[manager] }
 
+// SystemNames lists the system managers in display order.
+func SystemNames() []string { return []string{"apt", "snap", "flatpak"} }
+
 // LocalMeta returns metas with an entry for every package of a system
 // manager, built from the version the manager itself offers (Package.Latest
 // in the inventory). These entries are never saved; they let the outdated

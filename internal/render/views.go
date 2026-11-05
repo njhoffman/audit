@@ -35,8 +35,12 @@ func (p *Printer) Packages(as []packages.Annotated) {
 		case inv.Error != "":
 			meta = append(meta, p.fg("9").Render("error: "+inv.Error))
 		default:
-			meta = append(meta, fmt.Sprintf("%d package(s)", len(inv.Packages)),
-				inv.Duration.Round(time.Millisecond).String())
+			meta = append(meta, fmt.Sprintf("%d package(s)", len(inv.Packages)))
+			if !inv.CarriedFrom.IsZero() {
+				meta = append(meta, p.fg("11").Render("not rescanned; checked "+packages.Age(now.Sub(inv.CarriedFrom))+" ago"))
+				break
+			}
+			meta = append(meta, inv.Duration.Round(time.Millisecond).String())
 			if c := packages.RegistryNote(a, now); c != "" {
 				meta = append(meta, c)
 			}

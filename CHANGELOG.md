@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `packages.system_managers` (`ask`, `always` or `never`, default `ask`) decides whether package scans include apt, snap and flatpak. Under `ask`, `audit packages`, `packages outdated`, `packages update` and `audit -r` ask before scanning in a terminal, and a dashboard rescan of packages asks with `y`, `n` or `esc`. Runs with no terminal, `-q` and `-j` skip them without asking, and `packages update -y` does too.
+- `--system`/`-S` on `audit packages`, `packages outdated` and `packages update` includes the system managers for one run; `--system=false` leaves them out.
+- A scan that skips the system managers keeps their last results, marked `not rescanned; checked 3 days ago`, and their tasks stay open. Kept packages are never updated from. Under `never` they are dropped and their tasks resolved.
+- `audit packages update` runs Go updates through `gup update` and cargo updates through `cargo install-update --locked` when those tools are on PATH, and falls back to `go install` and `cargo install --locked` otherwise.
+
+### Changed
+
+- apt, snap and flatpak left the default `packages.managers`; `packages.system_managers` governs them even where `packages.managers` lists them.
+
+### Fixed
+
+- A narrowed scan such as `audit packages -M apt -r` no longer replaces the results that `audit packages -l`, the dashboard and exports read; those now always use the latest full run. This applies to `audit system --only` too.
+- The LATEST column shows the available version of apt, snap and flatpak packages instead of staying blank.
+
 ## [0.26.0] - 2026-10-27
 
 ### Added

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -94,5 +95,48 @@ func TestSettings(t *testing.T) {
 	}
 	if v, _ := s.Setting(ctx, "github_user"); v != "b" {
 		t.Errorf("got %q", v)
+	}
+}
+
+func TestLatestInventories(t *testing.T) {
+	s := open(t)
+	save := func(at time.Time, scope string, invs ...packages.Inventory) {
+		t.Helper()
+		data, err := json.Marshal(packages.Data{Inventories: invs})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := sampleRun("packages", at)
+		r.Scope, r.Data = scope, data
+		if err := s.SaveRun(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	day := func(n int) time.Time { return time.Date(2026, 3, n, 12, 0, 0, 0, time.UTC) }
+	apt := func(name string) packages.Inventory {
+		return packages.Inventory{Manager: "apt", Available: true, Packages: []packages.Package{{Manager: "apt", Name: name}}}
+	}
+	save(day(1), "", apt("old"), packages.Inventory{Manager: "snap", Available: true})
+	save(day(2), "apt", apt("new"))
+	carried := apt("new")
+	carried.CarriedFrom = day(2)
+	save(day(3), "", packages.Inventory{Manager: "uv", Available: true}, carried,
+		packages.Inventory{Manager: "flatpak", Available: false})
+
+	got, err := s.LatestInventories(ctx, []string{"apt", "snap", "flatpak"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Manager != "apt" || got[1].Manager != "snap" {
+		t.Fatalf("got %+v", got)
+	}
+	if got[0].Packages[0].Name != "new" || !got[0].CarriedFrom.Equal(day(2)) {
+		t.Errorf("apt keeps the date it was really scanned: %+v", got[0])
+	}
+	if !got[1].CarriedFrom.Equal(day(1)) {
+		t.Errorf("snap dated by its run: %v", got[1].CarriedFrom)
+	}
+	if none, err := s.LatestInventories(ctx, []string{"gem"}); err != nil || len(none) != 0 {
+		t.Errorf("no saved inventory: %v %v", none, err)
 	}
 }

@@ -10,7 +10,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/core"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/todo"
@@ -68,6 +70,18 @@ func (b tuiBackend) Rescan(ctx context.Context, command string) (int, error) {
 	}
 	return res.TaskChanges, nil
 }
+
+// RescanQuestion implements tui.Backend: packages asks about the system
+// managers before each scan under packages.system_managers: ask.
+func (b tuiBackend) RescanQuestion(command string) string {
+	if command == packages.Command && b.a.cfg.Packages.SystemManagers == config.SystemAsk {
+		return systemQuestion
+	}
+	return ""
+}
+
+// AnswerRescan implements tui.Backend.
+func (b tuiBackend) AnswerRescan(_ string, yes bool) { b.a.setSystemAnswer(yes) }
 
 func (b tuiBackend) Todos(ctx context.Context) ([]todo.Todo, error) {
 	return b.a.store.Todos(ctx, "")

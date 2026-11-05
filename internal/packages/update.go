@@ -56,6 +56,31 @@ func UpdateCommand(p Package) []string {
 	return nil
 }
 
+// UpdateTools are the dedicated updaters found on PATH. Audit prefers them to
+// the manager's own install command, since they apply their own settings
+// (gup's update channels, cargo-update's per-crate configuration).
+type UpdateTools struct {
+	Gup         bool
+	CargoUpdate bool
+}
+
+// DetectUpdateTools looks for the updaters on env's PATH.
+func DetectUpdateTools(env *exec.Env) UpdateTools {
+	return UpdateTools{Gup: env.Which("gup") != "", CargoUpdate: env.Which("cargo-install-update") != ""}
+}
+
+// Command is the argv that updates p, through a dedicated updater when there
+// is one. A package at a time, like UpdateCommand.
+func (t UpdateTools) Command(p Package) []string {
+	switch {
+	case p.Manager == "go" && t.Gup:
+		return []string{"gup", "update", p.Name}
+	case p.Manager == "cargo" && t.CargoUpdate:
+		return []string{"cargo", "install-update", "--locked", p.Name}
+	}
+	return UpdateCommand(p)
+}
+
 // Matches reports whether r names p, by name or id.
 func (r Ref) Matches(p Package) bool {
 	return (r.Manager == "" || r.Manager == p.Manager) && (p.Name == r.Name || p.ID() == r.Name)
@@ -63,6 +88,8 @@ func (r Ref) Matches(p Package) bool {
 
 // PlanOptions select what an update plan covers.
 type PlanOptions struct {
+	// Tools are the dedicated updaters to use where available.
+	Tools UpdateTools
 	// Refs names the packages to update; empty means every outdated one.
 	Refs []Ref
 	// Major allows updates across a major version.
@@ -121,7 +148,7 @@ func PlanUpdates(invs []Inventory, metas map[string]Meta, o PlanOptions) Plan {
 	matched := make([]bool, len(o.Refs))
 	seen := map[string]bool{}
 	for _, inv := range invs {
-		if !inv.Available {
+		if !inv.Available || !inv.CarriedFrom.IsZero() {
 			continue
 		}
 		for _, p := range inv.Packages {
@@ -136,7 +163,7 @@ func PlanUpdates(invs []Inventory, metas map[string]Meta, o PlanOptions) Plan {
 					continue
 				}
 			}
-			cmd := UpdateCommand(p)
+			cmd := o.Tools.Command(p)
 			if seen[strings.Join(cmd, " ")] {
 				continue
 			}

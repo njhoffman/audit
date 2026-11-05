@@ -124,11 +124,11 @@ func TestPackagesUpdateConfirm(t *testing.T) {
 	if r.e == nil || !strings.Contains(r.e.Error(), "refusing to update without --yes") {
 		t.Errorf("no terminal: %v", r.e)
 	}
-	r = runUpdate(t, gh, true, "n\n", "packages", "update")
+	r = runUpdate(t, gh, true, "n\nn\n", "packages", "update")
 	if r.e != nil || !strings.Contains(r.err, "Update 3 package(s)? [y/N]") || len(gh.upgrades) != 0 {
 		t.Errorf("declined: %v %v %q", r.e, gh.upgrades, r.err)
 	}
-	r = runUpdate(t, gh, true, "y\n", "packages", "update", "ok")
+	r = runUpdate(t, gh, true, "n\ny\n", "packages", "update", "ok")
 	if r.e != nil || len(gh.upgrades) != 1 || !strings.Contains(r.out, "1 updated, 0 failed, 0 skipped") {
 		t.Errorf("accepted: %v %v\n%s", r.e, gh.upgrades, r.out)
 	}

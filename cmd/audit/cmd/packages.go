@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/packages"
@@ -26,9 +28,18 @@ const settingGitHubUser = "github_user"
 // aiTagBatch is how many packages one tagging prompt covers.
 const aiTagBatch = 50
 
+// systemQuestion asks whether a package scan includes the system managers.
+const systemQuestion = "Include apt, snap and flatpak in this scan?"
+
+// systemNoteHint says how to scan the managers a run left out.
+const systemNoteHint = "add --system to a rescan to include them."
+
 func newPackagesCmd(a *app) *cobra.Command {
 	var managers []string
 	var q packages.Query
+	var system bool
+	var sf *scanFlags
+	var cmd *cobra.Command
 	c, f := scanCommand(a, "packages", "Inventory user package managers and check their installs",
 		`Inventory packages installed by user-level package managers (`+strings.Join(packages.Names(), ", ")+`)
 and check for broken or shadowed executables, runtime drift, stale runtime
@@ -39,7 +50,20 @@ Registry data (latest versions, descriptions, deprecations) is cached by
 audit packages registry; this command only reads the cache and shows how
 old it is. --tag, --find and --outdated filter the inventory and imply
 --list.`,
-		func() (core.Scanner, error) { return a.packagesScanner(splitList(managers)) },
+		func() (core.Scanner, error) {
+			if len(splitList(managers)) == 0 && !a.systemFlag(cmd, system) {
+				scans, err := a.scanNeeded(context.Background(), packages.Command, sf)
+				if err != nil {
+					return nil, err
+				}
+				if scans {
+					if err := a.askSystem(sf.json); err != nil {
+						return nil, err
+					}
+				}
+			}
+			return a.packagesScanner(splitList(managers))
+		},
 		func(ctx context.Context, p *render.Printer, r *run.Run) {
 			as, err := a.annotated(ctx, r, q)
 			if err != nil {
@@ -48,11 +72,14 @@ old it is. --tag, --find and --outdated filter the inventory and imply
 			}
 			if len(as) == 0 && !q.Empty() {
 				sayln(a.out, "No packages match the filter.")
-				return
+			} else {
+				p.Packages(as)
 			}
-			p.Packages(as)
+			a.printSystemNote(r)
 		})
+	sf, cmd = f, c
 	fl := c.Flags()
+	fl.BoolVarP(&system, "system", "S", false, "include apt, snap and flatpak in this scan (--system=false leaves them out; default packages.system_managers)")
 	fl.StringSliceVarP(&managers, "manager", "M", nil, "inventory only these managers: "+strings.Join(packages.Names(), ", "))
 	fl.StringSliceVarP(&q.Tags, "tag", "t", nil, "list only packages with all of these tags (repeatable; implies --list)")
 	fl.StringVarP(&q.Find, "find", "f", "", "list only packages whose name, description or executables contain this text (implies --list)")
@@ -65,11 +92,12 @@ old it is. --tag, --find and --outdated filter the inventory and imply
 
 // packagesScanner builds the packages scanner over the registry cache.
 func (a *app) packagesScanner(managers []string) (*core.PackagesScanner, error) {
-	s, err := core.NewPackages(a.cfg, a.env, managers)
+	s, err := core.NewPackages(a.cfg, a.env, managers, a.systemIncluded())
 	if err != nil {
 		return nil, err
 	}
 	s.Meta, s.Updates, s.Runtimes, s.Now = a.store, a.store, a.store, timeNow()
+	s.Carried = a.store
 	for i, m := range s.Managers {
 		if b, ok := m.(packages.Bins); ok {
 			b.Tracked = func() (map[string]packages.TrackedBin, error) { return a.store.TrackedBins(context.Background()) }
@@ -77,6 +105,63 @@ func (a *app) packagesScanner(managers []string) (*core.PackagesScanner, error) 
 		}
 	}
 	return s, nil
+}
+
+// systemIncluded says whether a package scan of every manager includes the
+// system ones: the answer settled for this run, else the configured default.
+func (a *app) systemIncluded() bool {
+	if a.systemAnswer != nil {
+		return *a.systemAnswer
+	}
+	return a.cfg.Packages.SystemManagers == config.SystemAlways
+}
+
+// setSystemAnswer settles systemIncluded for the rest of this run.
+func (a *app) setSystemAnswer(include bool) { a.systemAnswer = &include }
+
+// systemFlag applies --system to this run and reports whether it was given.
+func (a *app) systemFlag(c *cobra.Command, include bool) bool {
+	if !c.Flags().Changed("system") {
+		return false
+	}
+	a.setSystemAnswer(include)
+	return true
+}
+
+// askSystem prompts for the system managers when packages.system_managers is
+// ask and nothing has settled it. It stays silent for scripts: quiet runs,
+// no terminal, or noPrompt, which all leave them out.
+func (a *app) askSystem(noPrompt bool) error {
+	if a.systemAnswer != nil || a.cfg.Packages.SystemManagers != config.SystemAsk ||
+		noPrompt || a.flags.quiet || !a.interactive() {
+		return nil
+	}
+	ok, err := a.askYesNo(systemQuestion)
+	if err != nil {
+		return err
+	}
+	a.setSystemAnswer(ok)
+	return nil
+}
+
+// printSystemNote says which system managers r did not scan.
+func (a *app) printSystemNote(r *run.Run) {
+	var d packages.Data
+	if len(r.Data) == 0 || json.Unmarshal(r.Data, &d) != nil {
+		return
+	}
+	var names []string
+	for _, m := range packages.SystemNames() {
+		carried := slices.ContainsFunc(d.Inventories, func(inv packages.Inventory) bool {
+			return inv.Manager == m && !inv.CarriedFrom.IsZero()
+		})
+		if carried || slices.Contains(d.Skipped, m) {
+			names = append(names, m)
+		}
+	}
+	if len(names) > 0 {
+		sayln(a.out, "Not scanned in this run: "+strings.Join(names, ", ")+"; "+systemNoteHint)
+	}
 }
 
 // registryRefresh is the configured registry lookup, limited to refs when

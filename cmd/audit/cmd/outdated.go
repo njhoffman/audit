@@ -14,7 +14,7 @@ import (
 
 func newPackagesOutdatedCmd(a *app) *cobra.Command {
 	var managers []string
-	var force bool
+	var force, system bool
 	q := packages.Query{Outdated: true}
 	f := &scanFlags{}
 	c := &cobra.Command{
@@ -35,17 +35,22 @@ displayed packages and preserve --manager. Major releases need --major.`,
 			if err := a.load(); err != nil {
 				return err
 			}
-			s, err := a.packagesScanner(splitList(managers))
-			if err != nil {
-				return err
-			}
-			s.Refresh = a.registryRefresh(nil, force)
 			if !f.report && !f.summary && !f.list && !f.json {
 				f.list, f.rescan = true, true
 			}
 			if force {
 				f.rescan = true
 			}
+			if len(splitList(managers)) == 0 && !a.systemFlag(c, system) && f.rescan {
+				if err := a.askSystem(f.json); err != nil {
+					return err
+				}
+			}
+			s, err := a.packagesScanner(splitList(managers))
+			if err != nil {
+				return err
+			}
+			s.Refresh = a.registryRefresh(nil, force)
 			f.jsonExtra = func(ctx context.Context, r *run.Run) (any, error) { return a.annotated(ctx, r, q) }
 			return a.runScan(c.Context(), s, f, func(ctx context.Context, p *render.Printer, r *run.Run) {
 				as, err := a.annotated(ctx, r, q)
@@ -55,16 +60,19 @@ displayed packages and preserve --manager. Major releases need --major.`,
 				}
 				if len(as) == 0 {
 					sayln(a.out, "No known outdated packages. Use --force to recheck registry versions.")
+					a.printSystemNote(r)
 					return
 				}
 				p.Packages(as)
 				args := outdatedUpdateArgs(as, splitList(managers))
 				sayln(a.out, "Preview updates: "+outdatedUpdateHint(append([]string{"--dry-run"}, args...))+"\nUpdate: "+outdatedUpdateHint(args)+" (add --major before -- for major releases)")
+				a.printSystemNote(r)
 			})
 		},
 	}
 	f.register(c)
 	c.Flags().StringSliceVarP(&managers, "manager", "M", nil, "check only these managers: "+strings.Join(packages.Names(), ", "))
+	c.Flags().BoolVarP(&system, "system", "S", false, "include apt, snap and flatpak (--system=false leaves them out; default packages.system_managers)")
 	c.Flags().BoolVarP(&force, "force", "F", false, "rescan and refresh registry versions regardless of cache age")
 	c.Flags().StringVarP(&q.Find, "find", "f", "", "filter by package name, description or executable")
 	return c

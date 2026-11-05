@@ -49,7 +49,10 @@ func TestRunRoundTrip(t *testing.T) {
 	if r.ID == 0 {
 		t.Fatal("ID not set")
 	}
-	got, err := s.LatestRun(ctx, "packages", "")
+	if full, err := s.LatestRun(ctx, "packages", ""); full != nil || err != nil {
+		t.Errorf("a scoped run is not a full run: %v %v", full, err)
+	}
+	got, err := s.LatestRun(ctx, "packages", "all")
 	if err != nil || got == nil {
 		t.Fatalf("LatestRun: %v %v", got, err)
 	}

@@ -45,6 +45,10 @@ type Inventory struct {
 	BinDirs        []string      `json:"bin_dirs,omitempty"`
 	Error          string        `json:"error,omitempty"`
 	Duration       time.Duration `json:"duration"`
+	// CarriedFrom is when this inventory was really scanned, set when a scan
+	// that skipped its manager kept the earlier result. Such an inventory is
+	// reported but never updated from.
+	CarriedFrom time.Time `json:"carried_from,omitzero"`
 }
 
 // Data is what a packages run stores in run.Run.Data.
@@ -55,4 +59,7 @@ type Data struct {
 	// NodeMajor is the node major the pnpm globals were last installed
 	// under.
 	NodeMajor string `json:"node_major,omitempty"`
+	// Skipped names the managers this scan left out that have no earlier
+	// result to keep.
+	Skipped []string `json:"skipped,omitempty"`
 }

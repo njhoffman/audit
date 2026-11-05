@@ -56,7 +56,7 @@ func TestLoadDefaults(t *testing.T) {
 	if got := cfg.ExportDir(); got != filepath.Join(home, "dash", "audit") {
 		t.Errorf("export dir with ~: %q", got)
 	}
-	if len(cfg.Packages.Managers) != 10 || cfg.Environment.StartupTimeout != 15*time.Second {
+	if len(cfg.Packages.Managers) != 7 || cfg.Environment.StartupTimeout != 15*time.Second {
 		t.Errorf("command defaults: %+v %+v", cfg.Packages, cfg.Environment)
 	}
 }
@@ -217,5 +217,19 @@ func TestEnsureDefaultUnwritable(t *testing.T) {
 	}
 	if _, _, err := EnsureDefault(); err == nil {
 		t.Error("unwritable config dir must error")
+	}
+}
+
+func TestValidateSystemManagers(t *testing.T) {
+	cfg, _, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Packages.SystemManagers != SystemAsk {
+		t.Errorf("default = %q", cfg.Packages.SystemManagers)
+	}
+	cfg.Packages.SystemManagers = "sometimes"
+	if err := cfg.validate(); err == nil || !strings.Contains(err.Error(), "packages.system_managers") {
+		t.Errorf("err = %v", err)
 	}
 }

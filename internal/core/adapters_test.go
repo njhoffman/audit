@@ -102,17 +102,17 @@ func TestNewPackagesScope(t *testing.T) {
 	env := &exec.Env{Vars: map[string]string{}, Home: t.TempDir()}
 	all := slices.Clone(cfg.Packages.Managers)
 	slices.Reverse(all)
-	s, err := NewPackages(cfg, env, all)
+	s, err := NewPackages(cfg, env, all, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if s.Command() != "packages" || s.Scope() != "" {
 		t.Errorf("naming every manager, in any order, is unscoped: %q", s.Scope())
 	}
-	if s, _ = NewPackages(cfg, env, []string{"uv", "cargo"}); s.Scope() != "uv,cargo" || len(s.Managers) != 2 {
+	if s, _ = NewPackages(cfg, env, []string{"uv", "cargo"}, true); s.Scope() != "uv,cargo" || len(s.Managers) != 2 {
 		t.Errorf("a subset is the scope: %q %d", s.Scope(), len(s.Managers))
 	}
-	if _, err := NewPackages(cfg, env, []string{"bogus"}); err == nil {
+	if _, err := NewPackages(cfg, env, []string{"bogus"}, true); err == nil {
 		t.Error("an unknown manager is an error")
 	}
 }
@@ -413,5 +413,58 @@ func TestEngineStoreFailures(t *testing.T) {
 	}
 	if _, err := e.Execute(context.Background(), s, nil); err == nil || !strings.Contains(err.Error(), "save run") {
 		t.Errorf("execute with an unwritable store: %v", err)
+	}
+}
+
+func TestNewPackagesSystemManagers(t *testing.T) {
+	env := &exec.Env{Vars: map[string]string{}, Home: t.TempDir()}
+	names := func(s *PackagesScanner) []string {
+		out := make([]string, len(s.Managers))
+		for i, m := range s.Managers {
+			out[i] = m.Name()
+		}
+		return out
+	}
+	system := []string{"apt", "snap", "flatpak"}
+	cases := []struct {
+		name     string
+		mode     string
+		only     []string
+		include  bool
+		wantSys  bool
+		wantSkip []string
+		scope    string
+	}{
+		{name: "included", mode: config.SystemAsk, include: true, wantSys: true},
+		{name: "left out", mode: config.SystemAsk, wantSkip: system},
+		{name: "left out under never", mode: config.SystemNever},
+		{name: "user managers named", mode: config.SystemAsk, only: []string{"uv", "cargo"}, wantSkip: system},
+		{name: "every manager named", mode: config.SystemAsk, only: []string{"uv", "cargo", "apt", "snap", "flatpak"}, wantSys: true},
+		{name: "a subset", mode: config.SystemAsk, only: []string{"apt"}, scope: "apt", wantSys: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := defaultConfig(t)
+			cfg.Packages.Managers, cfg.Packages.SystemManagers = []string{"uv", "apt", "cargo"}, c.mode
+			s, err := NewPackages(cfg, env, c.only, c.include)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := slices.Contains(names(s), "apt"); got != c.wantSys {
+				t.Errorf("apt scanned = %v: %v", got, names(s))
+			}
+			if !slices.Equal(s.SkipSystem, c.wantSkip) || s.Scope() != c.scope {
+				t.Errorf("skip %v scope %q", s.SkipSystem, s.Scope())
+			}
+		})
+	}
+}
+
+func TestNewPackagesOnlySystemConfigured(t *testing.T) {
+	cfg := defaultConfig(t)
+	cfg.Packages.Managers = []string{"apt"}
+	s, err := NewPackages(cfg, &exec.Env{Vars: map[string]string{}, Home: t.TempDir()}, nil, false)
+	if err != nil || len(s.Managers) != 0 {
+		t.Errorf("no managers left, not every manager: %v %d", err, len(s.Managers))
 	}
 }

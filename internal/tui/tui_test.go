@@ -26,6 +26,8 @@ type fake struct {
 	rows     []render.CommandStatus
 	tasks    []todo.Todo
 	rescans  []string
+	askFor   string
+	answers  []string
 	reports  []string
 	setCalls []todo.Status
 	notes    []string
@@ -68,6 +70,17 @@ func (f *fake) Report(_ context.Context, c string, _ int, expanded bool) (string
 		return f.report, true, nil
 	}
 	return "report of " + c, true, nil
+}
+
+func (f *fake) RescanQuestion(c string) string {
+	if c == f.askFor {
+		return "Include more?"
+	}
+	return ""
+}
+
+func (f *fake) AnswerRescan(c string, yes bool) {
+	f.answers = append(f.answers, fmt.Sprintf("%s=%t", c, yes))
 }
 
 func (f *fake) Rescan(_ context.Context, c string) (int, error) {
@@ -641,5 +654,33 @@ func TestFixTask(t *testing.T) {
 	key(t, m, "F")
 	if !m.statusErr || !strings.Contains(m.status, "is resolved") && !strings.Contains(m.status, "is done") {
 		t.Errorf("a closed task is refused: %q", m.status)
+	}
+}
+
+func TestRescanQuestion(t *testing.T) {
+	f := newFake()
+	f.askFor = "system"
+	m := start(t, f)
+	key(t, m, "r")
+	if len(f.rescans) != 0 || !strings.Contains(m.View(), "Include more? [y/n, esc cancels]") {
+		t.Fatalf("waits for an answer: %v\n%s", f.rescans, m.View())
+	}
+	key(t, m, "j")
+	if len(f.rescans) != 0 || m.cursor != 0 {
+		t.Errorf("other keys wait: %v %d", f.rescans, m.cursor)
+	}
+	key(t, m, "esc")
+	if len(f.rescans) != 0 || len(f.answers) != 0 || strings.Contains(m.View(), "Include more?") {
+		t.Errorf("esc cancels: %v %v\n%s", f.rescans, f.answers, m.View())
+	}
+	key(t, m, "r")
+	key(t, m, "n")
+	if !reflect.DeepEqual(f.answers, []string{"system=false"}) || len(f.rescans) != 1 {
+		t.Errorf("no still scans: %v %v", f.answers, f.rescans)
+	}
+	key(t, m, "r")
+	key(t, m, "y")
+	if !reflect.DeepEqual(f.answers, []string{"system=false", "system=true"}) || len(f.rescans) != 2 {
+		t.Errorf("yes: %v %v", f.answers, f.rescans)
 	}
 }

@@ -266,15 +266,27 @@ const (
 	EnvProcess = "process"
 )
 
+// Values of packages.system_managers.
+const (
+	SystemAsk    = "ask"
+	SystemAlways = "always"
+	SystemNever  = "never"
+)
+
 // PackagesConfig configures `audit packages`.
 type PackagesConfig struct {
 	// Env is where the scan's PATH and variables come from: "login" (a fresh
 	// login shell, the first of environment.shells) or "process" (audit's own).
-	Env      string         `mapstructure:"env" yaml:"env"`
-	Managers []string       `mapstructure:"managers" yaml:"managers"`
-	ScanDirs []string       `mapstructure:"scan_dirs" yaml:"scan_dirs"`
-	Registry RegistryConfig `mapstructure:"registry" yaml:"registry"`
-	Update   UpdateConfig   `mapstructure:"update" yaml:"update"`
+	Env string `mapstructure:"env" yaml:"env"`
+	// Managers lists the user-level managers. apt, snap and flatpak are
+	// governed by SystemManagers wherever they are listed.
+	Managers []string `mapstructure:"managers" yaml:"managers"`
+	// SystemManagers says whether scans include apt, snap and flatpak:
+	// SystemAsk, SystemAlways or SystemNever.
+	SystemManagers string         `mapstructure:"system_managers" yaml:"system_managers"`
+	ScanDirs       []string       `mapstructure:"scan_dirs" yaml:"scan_dirs"`
+	Registry       RegistryConfig `mapstructure:"registry" yaml:"registry"`
+	Update         UpdateConfig   `mapstructure:"update" yaml:"update"`
 	// Tags is the vocabulary AI tagging chooses from.
 	Tags []string `mapstructure:"tags" yaml:"tags"`
 }
@@ -329,7 +341,7 @@ const (
 var (
 	DefaultLogs     = []string{"boot", "dmesg", "journal"}
 	DefaultPrograms = []string{"sshd", "nginx", "postgres", "apache", "docker", "cron"}
-	DefaultManagers = []string{"uv", "pnpm", "cargo", "go", "gem", "gh", "apt", "snap", "flatpak", "bins"}
+	DefaultManagers = []string{"uv", "pnpm", "cargo", "go", "gem", "gh", "bins"}
 	DefaultScanDirs = []string{"~/.local/bin"}
 	// DefaultReposExclude skips checkouts other tools manage and dependency
 	// trees.
@@ -401,6 +413,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("system.keep_kernels", 3)
 	v.SetDefault("packages.env", EnvLogin)
 	v.SetDefault("packages.managers", DefaultManagers)
+	v.SetDefault("packages.system_managers", SystemAsk)
 	v.SetDefault("packages.scan_dirs", DefaultScanDirs)
 	v.SetDefault("packages.registry.max_age", 24*time.Hour)
 	v.SetDefault("packages.registry.metadata_max_age", 7*24*time.Hour)
@@ -574,6 +587,11 @@ func (c *Config) validate() error {
 		if t == "" || strings.Join(strings.Fields(strings.ToLower(t)), "-") != t {
 			return fmt.Errorf("packages.tags: %q must be lowercase words joined by dashes", t)
 		}
+	}
+	switch c.Packages.SystemManagers {
+	case SystemAsk, SystemAlways, SystemNever:
+	default:
+		return fmt.Errorf("packages.system_managers: %q is not %s, %s or %s", c.Packages.SystemManagers, SystemAsk, SystemAlways, SystemNever)
 	}
 	if c.Packages.Env != EnvLogin && c.Packages.Env != EnvProcess {
 		return fmt.Errorf("packages.env: %q is not %s or %s", c.Packages.Env, EnvLogin, EnvProcess)
@@ -824,7 +842,12 @@ packages:
   # the first of environment.shells, so a stale terminal session does not
   # cause false findings) or process (the environment audit was started in).
   env: login
-  managers: [uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak, bins]
+  managers: [uv, pnpm, cargo, go, gem, gh, bins]
+  # Whether package scans include apt, snap and flatpak: ask (before each scan
+  # in a terminal; skipped otherwise, keeping their last results marked with
+  # their age), always, or never (their results and tasks are dropped).
+  # --system / --system=false overrides this for one run.
+  system_managers: ask
   # Directories of loose executables: checked for broken interpreters, and
   # their regular files (not symlinks) are the bins manager's inventory.
   scan_dirs: [~/.local/bin]

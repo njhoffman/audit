@@ -11,6 +11,8 @@ Refreshed 2026-10-22 against the current working tree. Checked items may be
 implemented but not released yet. Issues below are based on source review;
 suggestions describe proposed behavior rather than existing guarantees.
 
+Reviewed: 2026-11-05
+
 ## 1. Rescan everything and run unattended
 
 `audit -r` rescans every stale command, but only when started by hand, and
@@ -152,6 +154,11 @@ coverage run.
   repos,scripts,taskserver}` and `internal/scan/{resources,security,storage,
   updates}`.
 
+- [ ] **Bring CLAUDE.md and the TODO intro up to date.** (p3) [docs] CLAUDE.md's overview
+  and architecture tree omit the `history` scanner and internal/history, though
+  core.Commands includes it, and its "untagged is p2" (also in this file's intro)
+  contradicts the rule that every open item has an explicit priority.
+
 ## 8. Package management integration
 
 The Python `pkgm` prototype is integrated into `audit packages`, starting in
@@ -191,6 +198,57 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   groups, manager self-updates and install/update recipes against audit's
   managers and tracked binaries; document remaining gaps before retiring
   the prototype. The original prototype was not found in this checkout.
+
+- [ ] **Show the package inventory and outdated list in the dashboard.** (p2) [feature]
+  tuiBackend.Report (cmd/audit/cmd/tui.go) renders findings only, and internal/tui
+  has no inventory view, so installed versions and available updates cannot be
+  reached from bare `audit`. Add a packages screen: per manager, name, installed,
+  latest, gap; filter to outdated; preview and run updates from it (overlaps
+  "Preview package updates" in section 10).
+- [ ] **Show the package table without a wall of findings.** (p2) [feature] Bare
+  `audit packages` and `-R` print no version table at all, `-l` puts it after every
+  finding, and `outdated` prints 225 finding rows before its first package. Make
+  `outdated` lead with (or print only) the table, and have the default view say how
+  many packages are behind and which command lists them.
+- [ ] **Say how far behind a package is in text.** (p2) [feature] The gap
+  (patch/minor/major) is only the color of LATEST (gapStyle in internal/render/views.go),
+  so it disappears with `-n` or in a pipe. RELEASED is the age of the latest release,
+  not how long the install has trailed it. Add a gap column, the age of the installed
+  version where the registry gives it, and per-manager behind counts in the summary.
+- [ ] **Refresh registry data on a normal packages rescan.** (p2) [bug] Only `outdated`,
+  `update`, `registry` and `bins` set Scanner.Refresh. `audit packages -r` and the
+  dashboard rescan only read the cache, so a machine that never ran those shows
+  `unchecked` in LATEST with no `registry.*` findings (seen on the 2026-10-30 run:
+  "registry never checked"). Refresh when the cache is past `registry.max_age`, or
+  have the dashboard prompt for it.
+- [ ] **Do not offer prereleases as the latest version.** (p2) [bug] `pnpm:node` shows
+  `24.22.0 -> 27.0.0-alpha.0.0.0` with a `registry.major_behind` notice, because the
+  npm lookup trusts the `latest` dist-tag (internal/registry/registry.go:378). Only
+  the crates lookup filters prereleases (latestCrate). Apply one rule to every registry
+  when the install is stable, and check what `packages update --major` plans here.
+- [x] **Say when configured managers leave out system packages.** (p3) [feature] With
+  `packages.managers` limited to user managers, `outdated` prints nothing about apt,
+  snap or flatpak, while those had 1, 3 and 4 updates pending on 2026-11-05. An empty or
+  partial list reads as complete. Name the managers not checked, with the flag to include them.
+- [x] **Keep a narrowed scan from replacing the saved package results.** (p2) [bug]
+  `audit packages -M apt,snap,flatpak -r` becomes the run that `audit packages -l` reads
+  (scope `apt,snap,flatpak`), hiding the other managers until the next full scan, which
+  then resolves the narrowed run's tasks (reproduced 2026-11-05: runs 69 and 70). Export
+  already uses the latest full run. Default the saved views to that too, and keep tasks of
+  explicitly requested managers open. Check whether `outdated -M` does the same.
+
+- [ ] **Update git-installed crates through cargo-update.** (p3) [feature] `packages update`
+  skips 31 packages installed from git or a path because they have no registry
+  version. `cargo install-update -g` can update git crates, but audit has no latest
+  version to compare or verify against, so decide how such a package counts as updated.
+- [ ] **Check system packages when a rescan follows a fix.** (p3) [bug] Under
+  `packages.system_managers: ask`, the rescan after `audit todo fix` and fzf's rescan
+  (defaultScanner) skip apt, snap and flatpak without asking. A fixed system-package
+  task stays open until a scan that includes them. Include them when the task is theirs.
+- [ ] **Refresh the saved view after a narrowed update.** (p3) [bug] `audit packages
+  update -M uv` rescans only uv, and that scoped run no longer reaches `audit packages -l`,
+  which keeps showing the updated packages as behind until the next full scan.
+  Merge a scoped run's inventories into the full view, or rescan fully after an update.
 
 ## 9. Shell history follow-ups
 
@@ -263,3 +321,50 @@ whether format detection should refuse pruning ambiguous histories.
 Decisions to make: whether tips become tasks at all or only show in reports;
 whether they come from static checks, the AI review, or both; how to keep
 them from being noise (one per check, dismissable like ignore rules).
+
+## 12. AI review and fix workflow
+
+- [ ] **Commit AI fixes made inside a git repo.** (p2) [feature] After `audit todo fix`
+  (fixTask in cmd/audit/cmd/ai.go) succeeds and the rescan closes the task, check
+  whether the files it changed are in a git work tree. If they are, offer a
+  commit of only those files with a message naming the task (`audit: fix #ID
+  <title>`). Today the change is left uncommitted, so it is easy to lose or to
+  mix into unrelated work.
+  Decisions: commit on its own or after a prompt (config `ai.commit_fixes`);
+  how to find the changed files (diff `git status` before and after, or ask the
+  session to report them); refuse when the tree was already dirty.
+- [ ] **Pass the task's explanation to AI fix.** (p2) [feature] `audit todo explain`
+  answers are kept only in `llm_cache` under a prompt hash, and FixTaskPrompt
+  (internal/llm/prompts.go) sends just the task and its findings. Look up the
+  cached explanation for the task (or save explanations against the task id) and
+  add it to the fix prompt as context, marked as an earlier AI answer and not as
+  instructions.
+- [ ] **AI review as part of scanning, with suggestions as findings.** (p2) [feature]
+  `--ai`/`-a` already adds a review to a scan (Engine.Analyze), but only when
+  given, and the review is prose in `run.Analysis`, so its points never become
+  tasks. Add config `ai.review_on_scan` (off by default) and ask for structured
+  output (JSON list of issues/suggestions) that turns into findings of a
+  dedicated `ai-review` check, deduped against the existing findings.
+  Decisions: which commands it applies to; cost limit per scan; whether
+  AI-sourced findings get a lower default priority.
+- [ ] **Show remaining AI usage on the dashboard.** (p3) [feature] Before an AI
+  review or fix, show how much of the provider's usage window is left, and skip
+  automatic reviews (above) when it is under a threshold. Needs research first:
+  `claude` and `codex` report usage differently (rate-limit info in session
+  output, cost per call in our cache); the cost summed from `llm_cache` is a
+  fallback that only counts audit's own calls.
+
+## 13. Dashboard readability
+
+- [ ] **Describe the selected command under the list.** (p3) [feature] As the cursor
+  moves over the top-level rows (system, packages, repos, ...), show one line
+  below the table on what that command scans for, taken from each cobra
+  command's Short so the two cannot drift.
+- [ ] **Make finding and task count columns distinguishable.** (p2) [bug] The
+  dashboard rows read `● 21 ▲ 138 ◆ 95 ○ 116 | ● 4 ◐ 1 ○ 96 ◇ 12`, and the
+  styles in FindingCounts/TaskCounts (internal/render/summary.go) do not line up:
+  `◆ 95` (suggestion) and `○ 96` (low priority) share a color with different
+  icons, while `○ 116` (info) and `◇ 12` reuse the same shapes with other
+  colors. Pick one mapping (shared shape and color where a severity maps to a
+  priority, distinct otherwise), add a vertical separator between the findings
+  and the open tasks columns, and keep the header legend matching.

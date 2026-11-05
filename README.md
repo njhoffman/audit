@@ -146,6 +146,10 @@ Package management from the Python `pkgm` prototype is integrated into `audit pa
 
 `audit packages outdated` refreshes the inventory and registry data subject to cache age; `-F` forces registry lookups. `-M gh,uv` limits managers and `-f TEXT` filters the displayed packages. Printed preview and update commands name only the displayed packages and preserve manager filters. `-l`, `-R`, `-s` and `-j` use saved results unless `-r` or `-F` is also supplied. System-manager checks use their existing package lists; `audit packages update` refreshes apt lists before applying updates. Preview with `audit packages update -N`, then run `audit packages update` (all eligible packages) or `audit packages update manager:name` (selected packages). Updates require confirmation or `-y`, and major versions require `-m`.
 
+apt, snap and flatpak are optional in every package scan. `packages.system_managers: ask` (the default) asks before each scan in a terminal, and skips them without a terminal; `always` and `never` stop the question, and `-S`/`--system=false` decide for one run. Skipped managers keep their last results, marked with their age, and their tasks stay open; under `never` both are dropped. Naming a package (`audit packages update apt:vim`) or managers (`-M apt`) needs no question.
+
+`audit packages update` uses `gup update` for Go binaries and `cargo install-update --locked` for crates when those tools are on PATH, so their own settings apply, and otherwise `go install` and `cargo install --locked`.
+
 ## Development
 
 ```sh

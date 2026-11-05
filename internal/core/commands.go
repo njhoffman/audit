@@ -186,10 +186,20 @@ type PackagesScanner struct {
 	Now time.Time
 	// AptStamp overrides apt's last-update stamp file (tests).
 	AptStamp string
+	// SkipSystem names the system managers this run leaves out but still
+	// reports; Carried supplies their last results. Without an earlier result
+	// they are listed in Data.Skipped.
+	SkipSystem []string
+	Carried    InventoryStore
 	// ScanEnv is the environment the last Scan ran in, so follow-up commands
 	// (audit packages update) run against the same PATH.
 	ScanEnv *exec.Env
 	scope   string
+}
+
+// InventoryStore supplies saved inventories (implemented by *store.Store).
+type InventoryStore interface {
+	LatestInventories(ctx context.Context, managers []string) ([]packages.Inventory, error)
 }
 
 // UpdateStore holds package update runs (implemented by *store.Store).
@@ -254,19 +264,40 @@ type ShellCapturer interface {
 const CheckLoginEnv = "packages.login_env"
 
 // NewPackages builds the packages scanner. only restricts it to some of the
-// configured managers.
-func NewPackages(cfg *config.Config, env *exec.Env, only []string) (*PackagesScanner, error) {
-	names := cfg.Packages.Managers
-	scope := ""
-	if len(only) > 0 {
-		if !sameSet(only, names) {
-			scope = strings.Join(only, ",")
-		}
-		names = only
+// configured managers; includeSystem adds apt, snap and flatpak to a scan of
+// all of them. A run covering the user managers without the system ones is
+// still a full run: it keeps their last results unless
+// packages.system_managers is never.
+func NewPackages(cfg *config.Config, env *exec.Env, only []string, includeSystem bool) (*PackagesScanner, error) {
+	configured := cfg.Packages.Managers
+	if len(configured) == 0 {
+		configured = packages.Names()
 	}
-	ms, err := packages.Resolve(names)
-	if err != nil {
-		return nil, err
+	user := slices.DeleteFunc(slices.Clone(configured), packages.IsSystem)
+	all := append(slices.Clone(user), packages.SystemNames()...)
+	names, scope, skip := user, "", packages.SystemNames()
+	if includeSystem {
+		names, skip = all, nil
+	}
+	if len(only) > 0 {
+		switch {
+		case sameSet(only, all):
+			names, skip = only, nil
+		case sameSet(only, user):
+			names, skip = user, packages.SystemNames()
+		default:
+			names, scope, skip = only, strings.Join(only, ","), nil
+		}
+	}
+	if cfg.Packages.SystemManagers == config.SystemNever {
+		skip = nil
+	}
+	var ms []packages.Manager
+	if len(names) > 0 {
+		var err error
+		if ms, err = packages.Resolve(names); err != nil {
+			return nil, err
+		}
 	}
 	dirs := make([]string, len(cfg.Packages.ScanDirs))
 	for i, d := range cfg.Packages.ScanDirs {
@@ -278,7 +309,7 @@ func NewPackages(cfg *config.Config, env *exec.Env, only []string) (*PackagesSca
 			ms[i] = b
 		}
 	}
-	s := &PackagesScanner{Env: env, Managers: ms, ScanDirs: dirs, scope: scope, UnmaintainedAfter: cfg.Packages.Registry.UnmaintainedAfter}
+	s := &PackagesScanner{Env: env, Managers: ms, ScanDirs: dirs, scope: scope, SkipSystem: skip, UnmaintainedAfter: cfg.Packages.Registry.UnmaintainedAfter}
 	if cfg.Packages.Env == config.EnvLogin && len(cfg.Environment.Shells) > 0 {
 		s.LoginShell = cfg.Environment.Shells[0]
 		s.Capturer = &environment.OSCapturer{Env: env, Timeout: cfg.Environment.StartupTimeout}
@@ -330,6 +361,10 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 	rep.Phase("collecting packages", len(s.Managers))
 	invs := packages.CollectAll(ctx, env, s.Managers, func(inv packages.Inventory) { rep.Step(inv.Manager) })
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	invs, skipped, err := s.withCarried(ctx, invs)
+	if err != nil {
 		return nil, err
 	}
 	now := s.Now
@@ -388,13 +423,35 @@ func (s *PackagesScanner) Scan(ctx context.Context, rep progress.Reporter) (*Out
 		fs = append(fs, *envFinding)
 		finding.Sort(fs)
 	}
-	data, err := json.Marshal(packages.Data{Inventories: invs, Runtimes: runtimes, NodeMajor: nodeMajor})
+	data, err := json.Marshal(packages.Data{Inventories: invs, Runtimes: runtimes, NodeMajor: nodeMajor, Skipped: skipped})
 	if err != nil {
 		return nil, err
 	}
-	stats := append([]run.Stat{{Name: "environment", Value: source}}, packageStats(invs)...)
+	stats := append([]run.Stat{{Name: "environment", Value: source}}, packageStats(invs, skipped)...)
 	stats = append(stats, regStats...)
 	return &Outcome{Findings: fs, Stats: stats, Data: data, Errors: errs}, nil
+}
+
+// withCarried adds the last results of the skipped system managers to invs,
+// so their findings and tasks stay. It also returns the managers with none.
+func (s *PackagesScanner) withCarried(ctx context.Context, invs []packages.Inventory) ([]packages.Inventory, []string, error) {
+	if len(s.SkipSystem) == 0 {
+		return invs, nil, nil
+	}
+	var carried []packages.Inventory
+	if s.Carried != nil {
+		var err error
+		if carried, err = s.Carried.LatestInventories(ctx, s.SkipSystem); err != nil {
+			return nil, nil, fmt.Errorf("load saved system packages: %w", err)
+		}
+	}
+	var skipped []string
+	for _, m := range s.SkipSystem {
+		if !slices.ContainsFunc(carried, func(inv packages.Inventory) bool { return inv.Manager == m }) {
+			skipped = append(skipped, m)
+		}
+	}
+	return append(invs, carried...), skipped, nil
 }
 
 // refresh looks the inventory up in the registries, saves what changed and
@@ -558,7 +615,7 @@ func loginEnv(ctx context.Context, env *exec.Env, c ShellCapturer, shell string)
 	return env.WithVars(vars), nil
 }
 
-func packageStats(invs []packages.Inventory) []run.Stat {
+func packageStats(invs []packages.Inventory, skipped []string) []run.Stat {
 	var out []run.Stat
 	total := 0
 	for _, inv := range invs {
@@ -570,7 +627,14 @@ func packageStats(invs []packages.Inventory) []run.Stat {
 			v = fmt.Sprint(len(inv.Packages))
 			total += len(inv.Packages)
 		}
-		out = append(out, run.Stat{Group: "managers", Name: inv.Manager, Value: v})
+		st := run.Stat{Group: "managers", Name: inv.Manager, Value: v}
+		if !inv.CarriedFrom.IsZero() {
+			st.Note = "not rescanned; checked " + inv.CarriedFrom.Local().Format("2006-01-02 15:04")
+		}
+		out = append(out, st)
+	}
+	for _, m := range skipped {
+		out = append(out, run.Stat{Group: "managers", Name: m, Value: "not scanned"})
 	}
 	return append([]run.Stat{{Name: "packages", Value: fmt.Sprint(total)}}, out...)
 }

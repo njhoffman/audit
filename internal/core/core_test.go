@@ -434,7 +434,7 @@ func TestNewPackagesEnvSource(t *testing.T) {
 	}
 	env := &exec.Env{Vars: map[string]string{}, Home: t.TempDir()}
 	cfg.Environment.Shells = []string{"bash", "zsh"}
-	s, err := NewPackages(cfg, env, nil)
+	s, err := NewPackages(cfg, env, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,11 +442,11 @@ func TestNewPackagesEnvSource(t *testing.T) {
 		t.Errorf("default should start the first configured shell, got %q", s.LoginShell)
 	}
 	cfg.Packages.Env = config.EnvProcess
-	if s, _ = NewPackages(cfg, env, nil); s.LoginShell != "" {
+	if s, _ = NewPackages(cfg, env, nil, true); s.LoginShell != "" {
 		t.Errorf("env: process should not start a shell, got %q", s.LoginShell)
 	}
 	cfg.Packages.Env, cfg.Environment.Shells = config.EnvLogin, nil
-	if s, _ = NewPackages(cfg, env, nil); s.LoginShell != "" {
+	if s, _ = NewPackages(cfg, env, nil, true); s.LoginShell != "" {
 		t.Errorf("no shells configured should fall back to the process, got %q", s.LoginShell)
 	}
 }

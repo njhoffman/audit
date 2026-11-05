@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,6 +20,7 @@ import (
 
 type updateFlags struct {
 	managers    []string
+	system      bool
 	dryRun      bool
 	yes         bool
 	major       bool
@@ -63,11 +63,18 @@ tasks follow, and a failed attempt is noted on the package's outdated task.`,
 				}
 				return a.lastUpdate(c.Context(), f.json, f.explain, packages.KindPackage)
 			}
-			return a.update(c.Context(), parseRefs(args), f)
+			refs := parseRefs(args)
+			if len(splitList(f.managers)) == 0 && !a.systemFlag(c, f.system) {
+				if err := a.settleSystemForUpdate(refs, f); err != nil {
+					return err
+				}
+			}
+			return a.update(c.Context(), refs, f)
 		},
 	}
 	fl := c.Flags()
 	fl.StringSliceVarP(&f.managers, "manager", "M", nil, "update only these managers: "+strings.Join(packages.Names(), ", "))
+	fl.BoolVarP(&f.system, "system", "S", false, "include apt, snap and flatpak (--system=false leaves them out; default packages.system_managers)")
 	fl.BoolVarP(&f.dryRun, "dry-run", "N", false, "print the plan and the commands it would run, then stop")
 	fl.BoolVarP(&f.yes, "yes", "y", false, "update without asking")
 	fl.BoolVarP(&f.major, "major", "m", false, "also update across major releases")
@@ -77,6 +84,25 @@ tasks follow, and a failed attempt is noted on the package's outdated task.`,
 	fl.BoolVarP(&f.explain, "explain", "e", false, "ask the AI why the failed updates failed (with --last, the last update's)")
 	c.MarkFlagsMutuallyExclusive("explain", "json")
 	return c
+}
+
+// settleSystemForUpdate decides on the system managers from the packages
+// named: naming one of theirs includes them, naming only other managers' needs
+// no question, and anything else asks.
+func (a *app) settleSystemForUpdate(refs []packages.Ref, f updateFlags) error {
+	qualified := len(refs) > 0
+	for _, r := range refs {
+		if packages.IsSystem(r.Manager) {
+			a.setSystemAnswer(true)
+			return nil
+		}
+		qualified = qualified && r.Manager != ""
+	}
+	if qualified {
+		a.setSystemAnswer(false)
+		return nil
+	}
+	return a.askSystem(f.json || f.yes)
 }
 
 func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) error {
@@ -114,7 +140,8 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 	}
 	metas = packages.LocalMeta(d.Inventories, metas, timeNow())
 	plan := packages.PlanUpdates(d.Inventories, metas, packages.PlanOptions{
-		Refs: refs, Major: f.major, Exclude: parseRefs(a.cfg.Packages.Update.Exclude)})
+		Tools: packages.DetectUpdateTools(s.ScanEnv),
+		Refs:  refs, Major: f.major, Exclude: parseRefs(a.cfg.Packages.Update.Exclude)})
 	if len(plan.Unmatched) > 0 {
 		return fmt.Errorf("no installed package matches %s", strings.Join(plan.Unmatched, ", "))
 	}
@@ -298,13 +325,32 @@ func (a *app) confirm(question string) (bool, error) {
 	if !a.interactive() {
 		return false, errors.New("refusing to update without --yes: not running in a terminal")
 	}
+	return a.askYesNo(question)
+}
+
+// askYesNo prompts on the terminal; anything but yes, or end of input, is no.
+// It reads one line at a time, so later prompts see the rest of the input.
+func (a *app) askYesNo(question string) (bool, error) {
 	say(a.errOut, "%s [y/N] ", question)
-	line, err := bufio.NewReader(a.in).ReadString('\n')
-	if err != nil && line == "" {
-		sayln(a.errOut)
-		return false, nil
+	var line strings.Builder
+	buf := make([]byte, 1)
+	for {
+		n, err := a.in.Read(buf)
+		if n > 0 && buf[0] != '\n' {
+			line.WriteByte(buf[0])
+		}
+		if n > 0 && buf[0] == '\n' {
+			break
+		}
+		if err != nil {
+			if line.Len() == 0 {
+				sayln(a.errOut)
+				return false, nil
+			}
+			break
+		}
 	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
+	switch strings.ToLower(strings.TrimSpace(line.String())) {
 	case "y", "yes":
 		return true, nil
 	}

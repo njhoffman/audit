@@ -130,6 +130,11 @@ func (a *app) rescanAll(ctx context.Context, f rescanFlags) error {
 		}
 		return nil
 	}
+	if slices.Contains(cmds, packages.Command) {
+		if err := a.askSystem(false); err != nil {
+			return err
+		}
+	}
 	d := a.newScanDisplay(cmds)
 	var (
 		mu     sync.Mutex

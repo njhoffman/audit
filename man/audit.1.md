@@ -15,13 +15,13 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **environment** [_scan options_]
 
-**audit** **packages** [_scan options_] [**-M** _managers_] [**-t** _tag_]... [**-f** _text_] [**-u**]
+**audit** **packages** [_scan options_] [**-M** _managers_] [**-S**] [**-t** _tag_]... [**-f** _text_] [**-u**]
 
 **audit** **packages** **registry** [**-M** _managers_] [**-F**] [**-a**|**-A**] [**-j**|**-l**] [_package_...]
 
-**audit** **packages** **outdated** [_scan options_] [**-M** _managers_] [**-F**] [**-f** _text_]
+**audit** **packages** **outdated** [_scan options_] [**-M** _managers_] [**-S**] [**-F**] [**-f** _text_]
 
-**audit** **packages** **update** [**-M** _managers_] [**-N**] [**-y**] [**-m**] [**-x**] [**-j**] [_package_...]
+**audit** **packages** **update** [**-M** _managers_] [**-S**] [**-N**] [**-y**] [**-m**] [**-x**] [**-j**] [_package_...]
 
 **audit** **packages** **update** **-L** [**-j**|**-e**]
 
@@ -106,6 +106,8 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 **packages**
 :   Inventories uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak and loose binaries (**bins**), and checks for broken or shadowed executables, runtime drift, stale runtime directories and misplaced installs. By default it runs against the environment of a fresh login shell (the first of **environment.shells**), so a terminal opened before a PATH change does not report stale problems; if that shell cannot start, it falls back to its own environment and reports **packages.login_env**.
 
+    apt, snap and flatpak are optional, under **packages.system_managers**: **ask** (default) asks before a scan in a terminal, and leaves them out without one, with **-q** or with **-j**; **always** and **never** do not ask. **-S**/**\-\-system** includes them for one run and **\-\-system=false** leaves them out. A scan that leaves them out keeps their last results, marked **not rescanned; checked** _age_ **ago**, and their tasks stay open; these packages are never updated from. Under **never** the results are dropped and the tasks resolved. Saved results, shown by **-l**, **-R**, **-s** and **-j**, always come from the latest full run; a narrowed **-M** run is only read back with the same **-M**.
+
     System packages come from the managers themselves and never need sudo to scan: apt lists manually installed packages plus any package with an upgrade pending, from **dpkg-query**, **apt-mark** and **apt list \-\-upgradable** over apt's cached lists; snap lists installed snaps with **snap refresh \-\-list**; flatpak lists apps and runtimes of the system and user installations with **flatpak remote-ls \-\-updates**. Their pending updates count as **registry.outdated** (never **registry.major_behind**: distribution upgrades are not releases to review), with the gap **update** when the versions do not tell how far (a new flatpak build, a snap revision). **apt.stale_lists** (notice) says when apt's lists were last refreshed more than a week ago; **apt.held** (info) lists held packages with upgrades waiting.
 
     Loose binaries are the regular executable files in **packages.scan_dirs** (symlinks belong to the managers that made them), with their kind (**elf** or **script**, also an automatic tag). A binary tracked with **packages bins track** carries its GitHub repo and installed release, so the registry lookup finds its latest release and **packages update** plans it like any package. **bins.untracked** (info, one task) lists compiled binaries with no recorded origin.
@@ -122,6 +124,8 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **packages update** [_package_...]
 :   Updates packages behind their latest release, one at a time, with each manager's own command: **uv tool upgrade**, **pnpm add -g** _name_**@latest**, **cargo install \-\-locked**, **go install** _package_**@latest** (each Go binary by its own package path), **gem update \-\-user-install**, **gh extension upgrade**, and for system packages one command per manager: **sudo -n apt-get install -y \-\-only-upgrade** (non-interactive, keeping changed config files) for every selected apt package, **sudo -n snap refresh**, **sudo -n flatpak update \-\-system** and **flatpak update \-\-user**; each package is still verified on its own. Held apt packages are skipped. When apt is among the managers and no package is named (or one is named **apt:**_name_), apt's lists are refreshed first with **sudo apt-get update**. Sudo is authenticated once with **sudo -v**, asking for the password on the terminal, and kept fresh until the update ends; without a terminal it needs cached credentials or a NOPASSWD rule, and otherwise the items that need it are skipped with the reason. A dry run never uses sudo. The inventory is scanned and the registry cache refreshed first, then the plan is printed and confirmed with **[y/N]**; without a terminal, **-y** is required. Without packages, every outdated package is planned except major releases (**-m** includes them), **packages.update.exclude** entries and packages installed from git or a path. Named packages are always listed, with the reason when one is skipped; a name that matches nothing is an error.
+
+    When **gup** is on PATH, Go binaries update with **gup update** _name_; when **cargo-install-update** is, crates update with **cargo install-update \-\-locked** _name_, so those tools' own settings apply. Naming a system package includes the system managers; naming only other managers' packages (_manager:name_) or giving **-y** does not ask, and anything else asks under **packages.system_managers: ask**.
 
     Each update prints a status line under the progress bar. A command that exits 0 counts as updated only when a fresh inventory shows a new version; one that leaves the version unchanged, or removes the package, is a failure. Commands are stopped after **packages.update.timeout**. Failures are itemized with the command and the tail of its output, and saved with the update; the exit status is 1 when any failed. The inventory is rescanned afterwards so tasks follow, a failed attempt is noted on the package's **registry.outdated** item until its version changes, and the **packages** report shows the last update's counts. **-L** shows the last update again.
 
@@ -314,6 +318,9 @@ These apply to **system**, **environment** and **packages**. Without an output o
 **-O**, **\-\-only** _parts_ (system)
 :   Scan only these parts: **procs**, **services**, **users**, **logs**, **programs**, **storage**, **resources**, **updates**, **security**.
 
+**-S**, **\-\-system** (packages, packages outdated)
+:   Include apt, snap and flatpak in this run; **\-\-system=false** leaves them out. Overrides **packages.system_managers**.
+
 **-M**, **\-\-manager** _names_ (packages, packages registry)
 :   Inventory only these managers.
 
@@ -348,6 +355,9 @@ With **\-\-json**, **packages** adds the inventory joined with the registry cach
 
 **-M**, **\-\-manager** _names_
 :   Update only these managers.
+
+**-S**, **\-\-system**
+:   Include apt, snap and flatpak in this run; **\-\-system=false** leaves them out. Overrides **packages.system_managers**.
 
 **-N**, **\-\-dry-run**
 :   Print the plan with the command each package would run, then stop.
@@ -548,7 +558,8 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       keep_kernels: 3
     packages:
       env: login               # login (fresh login shell) or process
-      managers: [uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak, bins]
+      managers: [uv, pnpm, cargo, go, gem, gh, bins]
+      system_managers: ask   # apt, snap, flatpak: ask, always or never
       scan_dirs: [~/.local/bin]
       registry:
         max_age: 24h           # reuse cached versions younger than this

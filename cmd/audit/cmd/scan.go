@@ -80,6 +80,27 @@ func (f *scanFlags) filter() (finding.Filter, error) {
 	return flt, nil
 }
 
+// scanNeeded reports whether runScan with f would scan command rather than
+// show its saved full run.
+func (a *app) scanNeeded(ctx context.Context, command string, f *scanFlags) (bool, error) {
+	list := f.list || (f.impliesList != nil && f.impliesList())
+	switch {
+	case f.rescan:
+		return true, nil
+	case f.report || list || f.summary || f.json:
+		return false, nil
+	}
+	r, err := a.engine.Saved(ctx, command, "")
+	if err != nil {
+		return false, err
+	}
+	if r == nil {
+		return true, nil
+	}
+	th := a.cfg.Stale.For(command)
+	return run.FreshnessOf(r.Age(timeNow()), th.Warn, th.Old) != run.Fresh, nil
+}
+
 // scanCommand builds one scanning subcommand. build turns the parsed flags
 // into a scanner; view prints the command-specific inventory for --list.
 func scanCommand(a *app, use, short, long string, build func() (core.Scanner, error),

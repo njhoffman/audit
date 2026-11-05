@@ -227,7 +227,9 @@ func packageTables(as []packages.Annotated, now time.Time) []Table {
 			note = append(note, "error: "+inv.Error)
 		default:
 			note = append(note, fmt.Sprintf("%d package(s)", len(inv.Packages)))
-			if c := packages.RegistryNote(a, now); c != "" {
+			if !inv.CarriedFrom.IsZero() {
+				note = append(note, "not rescanned; checked "+packages.Age(now.Sub(inv.CarriedFrom))+" ago")
+			} else if c := packages.RegistryNote(a, now); c != "" {
 				note = append(note, c)
 			}
 		}

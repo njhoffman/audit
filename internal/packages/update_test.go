@@ -230,3 +230,42 @@ func TestOutdatedNotesFailedUpdate(t *testing.T) {
 		t.Errorf("a failure on another installed version is stale: %q", got)
 	}
 }
+
+func TestUpdateToolsCommand(t *testing.T) {
+	goPkg := Package{Manager: "go", Name: "crush", Source: "github.com/charmbracelet/crush"}
+	crate := Package{Manager: "cargo", Name: "broot"}
+	tool := Package{Manager: "uv", Name: "ruff"}
+	cases := []struct {
+		tools UpdateTools
+		p     Package
+		want  string
+	}{
+		{UpdateTools{Gup: true, CargoUpdate: true}, goPkg, "gup update crush"},
+		{UpdateTools{Gup: true, CargoUpdate: true}, crate, "cargo install-update --locked broot"},
+		{UpdateTools{Gup: true, CargoUpdate: true}, tool, "uv tool upgrade ruff"},
+		{UpdateTools{}, goPkg, "go install github.com/charmbracelet/crush@latest"},
+		{UpdateTools{}, crate, "cargo install --locked broot"},
+	}
+	for _, c := range cases {
+		if got := strings.Join(c.tools.Command(c.p), " "); got != c.want {
+			t.Errorf("%+v %s: got %q, want %q", c.tools, c.p.Name, got, c.want)
+		}
+	}
+}
+
+func TestPlanUpdatesUsesToolsAndSkipsCarried(t *testing.T) {
+	crate := Package{Manager: "cargo", Name: "broot", Version: "1.0.0", Source: "crates.io"}
+	stale := Package{Manager: "apt", Name: "vim", Version: "1.0", Available: "2.0"}
+	invs := []Inventory{
+		{Manager: "cargo", Available: true, Packages: []Package{crate}},
+		{Manager: "apt", Available: true, CarriedFrom: time.Now(), Packages: []Package{stale}},
+	}
+	metas := LocalMeta(invs, map[string]Meta{crate.Key(): {Latest: "1.1.0"}}, time.Now())
+	plan := PlanUpdates(invs, metas, PlanOptions{Tools: UpdateTools{CargoUpdate: true}})
+	if len(plan.Items) != 1 || plan.Items[0].Name != "broot" {
+		t.Fatalf("a carried inventory is never planned: %+v", plan.Items)
+	}
+	if got := strings.Join(plan.Items[0].Command, " "); got != "cargo install-update --locked broot" {
+		t.Errorf("command = %q", got)
+	}
+}

@@ -356,7 +356,7 @@ func (r Ref) Find(invs []Inventory) []Package {
 func LatestCells(it Item, now time.Time) (latest, released string) {
 	m := it.Meta
 	switch {
-	case it.Registry() == "":
+	case it.Registry() == "" && (m == nil || !m.Local):
 		return "", ""
 	case m == nil || m.CheckedAt.IsZero():
 		return "unchecked", ""

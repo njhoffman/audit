@@ -479,3 +479,16 @@ func TestFixOutcome(t *testing.T) {
 		}
 	}
 }
+
+func TestPackagesCarriedHeader(t *testing.T) {
+	p, b := printer(140)
+	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
+	p.Now = func() time.Time { return now }
+	invs := []packages.Inventory{{Manager: "apt", Available: true, CarriedFrom: now.Add(-72 * time.Hour),
+		Duration: time.Second, Packages: []packages.Package{{Manager: "apt", Name: "vim", Version: "1.0"}}}}
+	p.Packages(packages.Annotate(invs, packages.LocalMeta(invs, nil, now), nil, ""))
+	out := b.String()
+	if !strings.Contains(out, "not rescanned; checked 3 days ago") || strings.Contains(out, "registry checked") {
+		t.Errorf("carried header:\n%s", out)
+	}
+}

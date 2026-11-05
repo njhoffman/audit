@@ -393,17 +393,11 @@ func (s *Store) loadFindings(ctx context.Context, r *run.Run) error {
 	return rows.Err()
 }
 
-// LatestRun returns the newest run of command, optionally restricted to a
-// scope. It returns nil, nil when there is none.
+// LatestRun returns the newest run of command with exactly this scope; ""
+// means a full run. It returns nil, nil when there is none.
 func (s *Store) LatestRun(ctx context.Context, command, scope string) (*run.Run, error) {
-	q := `SELECT ` + runCols + ` FROM runs WHERE command=?`
-	args := []any{command}
-	if scope != "" {
-		q += ` AND scope=?`
-		args = append(args, scope)
-	}
-	q += ` ORDER BY finished_at DESC, id DESC LIMIT 1`
-	r, err := scanRun(s.db.QueryRowContext(ctx, q, args...))
+	q := `SELECT ` + runCols + ` FROM runs WHERE command=? AND scope=? ORDER BY finished_at DESC, id DESC LIMIT 1`
+	r, err := scanRun(s.db.QueryRowContext(ctx, q, command, scope))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
