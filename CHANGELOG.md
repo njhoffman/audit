@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-05
+
 ### Added
 
 - `packages.system_managers` (`ask`, `always` or `never`, default `ask`) decides whether package scans include apt, snap and flatpak. Under `ask`, `audit packages`, `packages outdated`, `packages update` and `audit -r` ask before scanning in a terminal, and a dashboard rescan of packages asks with `y`, `n` or `esc`. Runs with no terminal, `-q` and `-j` skip them without asking, and `packages update -y` does too.
