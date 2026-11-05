@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-11-05
+
 ### Fixed
 
 - CI lint passes again: it uses the same golangci-lint version (v2.15.0) as the documented install command, and two file-descriptor conversions in `audit history prune` are annotated, so CI reaches its test and build steps.
