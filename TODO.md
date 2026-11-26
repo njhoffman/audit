@@ -295,7 +295,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   independently implement duplicate/multiline/pattern selection, and prune
   reconstructs byte ranges from line numbers. Have one parser expose raw
   ranges and one classifier select records so reporting and deletion agree.
-- [ ] **Test concurrent writers and replacement durability.** [test] (p1) The
+- [x] **Test concurrent writers and replacement durability.** [test] (p1) Done: flock alone was ignored by zsh 5.9 in both modes (measured); prune now also takes $HISTFILE.LOCK and an OFD fcntl lock, salvages appends to the old inode, and fsyncs the directory, tested against a real zsh in both locking modes. The
   advisory lock belongs to the old inode, and a writer ignoring it can append
   between the final comparison and rename. Test that interval, investigate
   shell-compatible locking, and state the limits precisely. Sync the parent
