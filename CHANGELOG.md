@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-26
+
 ### Added
 
 - Unknown config keys are reported instead of silently ignored: every command warns about them (the fzf callbacks excepted), and `audit config` exits 1 after printing the configuration. Keys earlier versions used say where the setting lives now: `ai.command` and `ai.model` are `ai.claude.command` and `ai.claude.model`.
