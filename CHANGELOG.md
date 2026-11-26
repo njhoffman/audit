@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-26
+
 ### Changed
 
 - `audit todo` and the fzf task list mark each priority (`● high`, `◇ suggestion`) and, with `display.nerd_fonts`, show the command's icon, as the task editor does.
