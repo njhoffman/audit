@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-11-26
+
 ### Fixed
 
 - `audit files clean` checks each target of the saved scan again before acting: duplicates and the copy that stays are re-hashed, so an edited or deleted kept copy never leaves the others trashed; a build directory changed since the scan (a new install) is skipped; and a target reached through a symlinked directory outside `files.roots` is refused. Planning from a scan older than `stale.warn` prints a warning.
