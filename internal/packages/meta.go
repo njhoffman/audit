@@ -401,3 +401,45 @@ func RegistryNote(a Annotated, now time.Time) string {
 	}
 	return s
 }
+
+// Coverage says how complete an outdated view is: of the packages it
+// covers, how many have a known position against their latest release, how
+// many have a registry but were never looked up, and how many lookups
+// failed. An empty outdated list only means "all current" when Unchecked
+// and Failed are zero.
+type Coverage struct {
+	Packages  int
+	Known     int
+	Unchecked int
+	Failed    int
+	// Unknown have data whose versions do not compare (a commit, a local
+	// build) or no registry at all.
+	Unknown int
+	// OldestCheck is the oldest registry lookup among the checked packages.
+	OldestCheck time.Time
+}
+
+// CoverageOf counts as over every item.
+func CoverageOf(as []Annotated) Coverage {
+	var c Coverage
+	for _, a := range as {
+		for _, it := range a.Items {
+			c.Packages++
+			reg := it.Registry() != ""
+			switch {
+			case it.Meta != nil && it.Meta.Error != "":
+				c.Failed++
+			case reg && (it.Meta == nil || it.Meta.CheckedAt.IsZero()):
+				c.Unchecked++
+			case it.Gap == GapUnknown:
+				c.Unknown++
+			default:
+				c.Known++
+			}
+			if reg && it.Meta != nil && !it.Meta.CheckedAt.IsZero() && (c.OldestCheck.IsZero() || it.Meta.CheckedAt.Before(c.OldestCheck)) {
+				c.OldestCheck = it.Meta.CheckedAt
+			}
+		}
+	}
+	return c
+}

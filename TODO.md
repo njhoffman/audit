@@ -185,7 +185,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   after `-M` or `-f` narrows the list. Following that hint plans packages
   outside the view. Carry manager filters forward, and generate explicit
   package refs or clearly identify that an update covers all managers.
-- [ ] **Distinguish current packages from unchecked ones.** (p2) [bug] An empty
+- [x] **Distinguish current packages from unchecked ones.** (p2) [bug] An empty
   outdated view says "No known outdated packages" even when lookups failed
   or versions are unknown. Show checked/unchecked/failed counts and cache
   age, including the age of system package lists. Offer the appropriate

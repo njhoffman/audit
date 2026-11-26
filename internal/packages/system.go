@@ -417,3 +417,15 @@ func aptHeld(s *State) []finding.Finding {
 		Hint:    "audit never upgrades held packages; `sudo apt-mark unhold NAME` releases one.",
 	}}
 }
+
+// AptListsAge is how long ago apt's package lists were refreshed, whether
+// that is past the point apt.stale_lists reports, and whether the stamp
+// exists at all.
+func AptListsAge(now time.Time) (time.Duration, bool, bool) {
+	st, err := os.Stat(AptListsStamp)
+	if err != nil {
+		return 0, false, false
+	}
+	age := now.Sub(st.ModTime())
+	return age, age >= aptStaleAfter, true
+}

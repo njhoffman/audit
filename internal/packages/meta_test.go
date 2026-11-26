@@ -345,3 +345,20 @@ func TestLatestCellsAndRegistryNote(t *testing.T) {
 		t.Errorf("no registry packages: %q", got)
 	}
 }
+
+func TestCoverageOf(t *testing.T) {
+	now := time.Date(2026, 11, 26, 0, 0, 0, 0, time.UTC)
+	reg := func(name string) Package { return Package{Manager: "uv", Name: name, Source: "pypi"} }
+	as := []Annotated{{Items: []Item{
+		{Package: reg("current"), Meta: &Meta{CheckedAt: now.Add(-time.Hour)}, Gap: GapCurrent},
+		{Package: reg("behind"), Meta: &Meta{CheckedAt: now.Add(-48 * time.Hour)}, Gap: GapMinor},
+		{Package: reg("never")},
+		{Package: reg("failed"), Meta: &Meta{CheckedAt: now, Error: "timeout"}},
+		{Package: Package{Manager: "uv", Name: "local", Source: "path:/src"}},
+	}}}
+	got := CoverageOf(as)
+	want := Coverage{Packages: 5, Known: 2, Unchecked: 1, Failed: 1, Unknown: 1, OldestCheck: now.Add(-48 * time.Hour)}
+	if got != want {
+		t.Errorf("got %+v\nwant %+v", got, want)
+	}
+}

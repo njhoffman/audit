@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/njhoffman/audit/internal/packages"
 )
@@ -200,5 +201,20 @@ func TestPackagesRescanRefreshesStaleRegistry(t *testing.T) {
 	t.Setenv("AUDIT_PACKAGES_REGISTRY_REFRESH_ON_SCAN", "false")
 	if r := runArgsWith(t, func(a *app) { a.runner, a.looker = gh2, off }, "packages", "-r"); r.e != nil || off.calls.Load() != 0 {
 		t.Errorf("refresh_on_scan false keeps scans offline: calls %d err %v", off.calls.Load(), r.e)
+	}
+}
+
+func TestCoverageLine(t *testing.T) {
+	now := time.Date(2026, 11, 26, 0, 0, 0, 0, time.UTC)
+	full := packages.Coverage{Packages: 3, Known: 3, OldestCheck: now.Add(-2 * time.Hour)}
+	if got := coverageLine(full, now); got != "Checked 3 of 3 packages; registry data up to 2 hours old." {
+		t.Errorf("complete: %q", got)
+	}
+	partial := packages.Coverage{Packages: 10, Known: 6, Unchecked: 2, Failed: 1, Unknown: 1}
+	got := coverageLine(partial, now)
+	for _, want := range []string{"Checked 6 of 10", "2 never looked up", "1 failed lookups", "1 without comparable versions", "outdated -F"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("partial %q lacks %q", got, want)
+		}
 	}
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -58,14 +60,28 @@ displayed packages and preserve --manager. Major releases need --major.`,
 				if err != nil {
 					return fmt.Errorf("load outdated packages: %w", err)
 				}
-				if len(as) == 0 {
-					sayln(a.out, "No known outdated packages. Use --force to recheck registry versions.")
-					a.printSystemNote(r)
-					return nil
+				all, err := a.annotated(ctx, r, packages.Query{Find: q.Find})
+				if err != nil {
+					return fmt.Errorf("load packages: %w", err)
 				}
-				p.Packages(as)
-				args := outdatedUpdateArgs(as, splitList(managers))
-				sayln(a.out, "Preview updates: "+outdatedUpdateHint(append([]string{"--dry-run"}, args...))+"\nUpdate: "+outdatedUpdateHint(args)+" (add --major before -- for major releases)")
+				cov := packages.CoverageOf(all)
+				if len(as) == 0 {
+					if cov.Unchecked+cov.Failed > 0 {
+						say(a.out, "No outdated packages among the %d checked; the rest are not known to be current.\n", cov.Known)
+					} else {
+						sayln(a.out, "No outdated packages.")
+					}
+				} else {
+					p.Packages(as)
+					args := outdatedUpdateArgs(as, splitList(managers))
+					sayln(a.out, "Preview updates: "+outdatedUpdateHint(append([]string{"--dry-run"}, args...))+"\nUpdate: "+outdatedUpdateHint(args)+" (add --major before -- for major releases)")
+				}
+				sayln(a.out, coverageLine(cov, timeNow()))
+				if slices.ContainsFunc(all, func(x packages.Annotated) bool { return x.Manager == "apt" && x.Available }) {
+					if age, stale, ok := packages.AptListsAge(timeNow()); ok && stale {
+						say(a.out, "apt's package lists are %s old, so its updates may be missing; --force does not refresh them, `audit packages update -M apt` does (with sudo).\n", packages.Age(age))
+					}
+				}
 				a.printSystemNote(r)
 				return nil
 			})
@@ -77,6 +93,33 @@ displayed packages and preserve --manager. Major releases need --major.`,
 	c.Flags().BoolVarP(&force, "force", "F", false, "rescan and refresh registry versions regardless of cache age")
 	c.Flags().StringVarP(&q.Find, "find", "f", "", "filter by package name, description or executable")
 	return c
+}
+
+// coverageLine says how many packages the outdated view could place and
+// how old the registry data is, with the command that looks up the rest.
+func coverageLine(c packages.Coverage, now time.Time) string {
+	line := fmt.Sprintf("Checked %d of %d packages", c.Known, c.Packages)
+	if !c.OldestCheck.IsZero() {
+		line += fmt.Sprintf("; registry data up to %s old", packages.Age(now.Sub(c.OldestCheck)))
+	}
+	var gaps []string
+	if c.Unchecked > 0 {
+		gaps = append(gaps, fmt.Sprintf("%d never looked up", c.Unchecked))
+	}
+	if c.Failed > 0 {
+		gaps = append(gaps, fmt.Sprintf("%d failed lookups", c.Failed))
+	}
+	if c.Unknown > 0 {
+		gaps = append(gaps, fmt.Sprintf("%d without comparable versions", c.Unknown))
+	}
+	if len(gaps) > 0 {
+		line += " (" + strings.Join(gaps, ", ") + ")"
+	}
+	line += "."
+	if c.Unchecked+c.Failed > 0 {
+		line += " `audit packages outdated -F` looks them up again."
+	}
+	return line
 }
 
 // outdatedUpdateArgs selects the displayed items by name: registry IDs can
