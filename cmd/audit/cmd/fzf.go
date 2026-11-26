@@ -161,6 +161,13 @@ func (a *app) fzfInteractive(ctx context.Context, op string, args []string) erro
 		}
 		return page(text)
 	case op == "rescan" && len(args) == 1:
+		// Runs in fzf's execute, on the terminal, so it can ask as a
+		// packages scan from the command line does.
+		if args[0] == packages.Command {
+			if err := a.askSystem(false); err != nil {
+				return err
+			}
+		}
 		s, err := a.defaultScanner(args[0])
 		if err != nil {
 			return err

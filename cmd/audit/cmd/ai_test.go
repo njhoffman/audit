@@ -289,3 +289,24 @@ func TestFixUsesCachedExplanation(t *testing.T) {
 		t.Errorf("an explanation of other findings is not reused: %q", got)
 	}
 }
+
+func TestTouchesSystemManager(t *testing.T) {
+	pk := todo.Todo{Command: "packages"}
+	for _, tc := range []struct {
+		t    todo.Todo
+		fs   []finding.Finding
+		want bool
+	}{
+		{pk, []finding.Finding{{Subject: "apt:curl"}}, true},
+		{pk, []finding.Finding{{Subject: "apt"}}, true},
+		{pk, []finding.Finding{{Subject: "x", Group: &finding.Group{ID: "flatpak"}}}, true},
+		{pk, []finding.Finding{{Subject: "uv:ruff"}, {Subject: "snap:core22"}}, true},
+		{pk, []finding.Finding{{Subject: "uv:ruff", Group: &finding.Group{ID: "uv"}}}, false},
+		{pk, nil, false},
+		{todo.Todo{Command: "system"}, []finding.Finding{{Subject: "apt"}}, false},
+	} {
+		if got := touchesSystemManager(tc.t, tc.fs); got != tc.want {
+			t.Errorf("%s %+v: %v, want %v", tc.t.Command, tc.fs, got, tc.want)
+		}
+	}
+}

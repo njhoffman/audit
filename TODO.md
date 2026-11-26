@@ -266,7 +266,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   skips 31 packages installed from git or a path because they have no registry
   version. `cargo install-update -g` can update git crates, but audit has no latest
   version to compare or verify against, so decide how such a package counts as updated.
-- [ ] **Check system packages when a rescan follows a fix.** (p3) [bug] Under
+- [x] **Check system packages when a rescan follows a fix.** (p3) [bug] Under
   `packages.system_managers: ask`, the rescan after `audit todo fix` and fzf's rescan
   (defaultScanner) skip apt, snap and flatpak without asking. A fixed system-package
   task stays open until a scan that includes them. Include them when the task is theirs.

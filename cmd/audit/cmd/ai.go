@@ -322,6 +322,11 @@ func (a *app) fixTask(ctx context.Context, id int64) error {
 		return err
 	}
 	if t.Source.Scanned() {
+		// A fixed apt, snap or flatpak task only closes on a scan that
+		// includes its manager, whatever packages.system_managers says.
+		if _, fs, err := a.taskFindings(ctx, id); err == nil && touchesSystemManager(t, fs) {
+			a.setSystemAnswer(true)
+		}
 		s, err := a.defaultScanner(t.Command)
 		if err != nil {
 			return err
@@ -335,6 +340,22 @@ func (a *app) fixTask(ctx context.Context, id int64) error {
 	}
 	sayln(a.errOut, render.FixOutcome(t))
 	return nil
+}
+
+// touchesSystemManager reports whether a packages task is about apt, snap
+// or flatpak: its findings' subjects are "manager:id" or the bare manager,
+// and grouped ones are grouped by manager.
+func touchesSystemManager(t todo.Todo, fs []finding.Finding) bool {
+	if t.Command != packages.Command {
+		return false
+	}
+	for _, f := range fs {
+		m, _, _ := strings.Cut(f.Subject, ":")
+		if f.Group != nil && slices.Contains(packages.SystemNames(), f.Group.ID) || slices.Contains(packages.SystemNames(), m) {
+			return true
+		}
+	}
+	return false
 }
 
 // fixSession is the interactive AI session that fixes task id. Closed
