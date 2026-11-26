@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.1] - 2026-11-26
+
 ### Fixed
 
 - After `audit todo fix` on an apt, snap or flatpak task, the rescan includes the system managers even under `packages.system_managers: ask`, so a fixed task closes. The fzf interface's packages rescan asks whether to include them, as a packages scan on the command line does, instead of leaving them out.
