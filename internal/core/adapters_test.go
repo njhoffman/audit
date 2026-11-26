@@ -306,6 +306,28 @@ func TestReposScanFetches(t *testing.T) {
 		t.Errorf("after a fetch the clone is 1 behind: %v %+v; errors %q", err, d.Repos, out.Errors)
 	}
 
+	// The cache is read, and with Lookup the (here empty) GitHub answers are
+	// saved; a cache that cannot be read or written fails the scan.
+	ms := &memRepoMeta{m: map[string]repos.Meta{}}
+	s.Fetch, s.Meta, s.Lookup = false, ms, true
+	if _, err := s.Scan(context.Background(), progress.Nop); err != nil || ms.saves != 1 {
+		t.Errorf("lookup saves the cache once: %v, %d saves", err, ms.saves)
+	}
+	ms.saveErr = errors.New("disk full")
+	if _, err := s.Scan(context.Background(), progress.Nop); err == nil || !strings.Contains(err.Error(), "save repo cache") {
+		t.Errorf("save failure: %v", err)
+	}
+	ms.loadErr = errors.New("locked")
+	if _, err := s.Scan(context.Background(), progress.Nop); err == nil || !strings.Contains(err.Error(), "load repo cache") {
+		t.Errorf("load failure: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s.Meta = nil
+	if _, err := s.Scan(ctx, progress.Nop); !errors.Is(err, context.Canceled) {
+		t.Errorf("canceled: %v", err)
+	}
+
 	errs := FetchAll(context.Background(), env, []string{filepath.Join(root, "repo"), home}, 2, 10*time.Second, nil)
 	if len(errs) != 1 || !strings.HasPrefix(errs[0], "fetch "+home+": ") {
 		t.Errorf("a failed fetch is one error line: %q", errs)
@@ -467,4 +489,25 @@ func TestNewPackagesOnlySystemConfigured(t *testing.T) {
 	if err != nil || len(s.Managers) != 0 {
 		t.Errorf("no managers left, not every manager: %v %d", err, len(s.Managers))
 	}
+}
+
+type memRepoMeta struct {
+	m                map[string]repos.Meta
+	saves            int
+	loadErr, saveErr error
+}
+
+func (m *memRepoMeta) RepoMeta(context.Context) (map[string]repos.Meta, error) {
+	return maps.Clone(m.m), m.loadErr
+}
+
+func (m *memRepoMeta) SaveRepoMeta(_ context.Context, ms []repos.Meta) error {
+	if m.saveErr != nil {
+		return m.saveErr
+	}
+	m.saves++
+	for _, x := range ms {
+		m.m[x.Key] = x
+	}
+	return nil
 }
