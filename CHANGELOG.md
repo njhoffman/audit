@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-11-26
+
 ### Added
 
 - Done and resolved tasks are deleted at startup once they have been closed longer than `todo.closed_max_age` (default 90 days; 0 keeps them all), so `tasks.html` and `tasks.json` stop growing. Won't-do tasks are always kept, since they stop a dismissed finding from coming back. A task whose finding reappears is created again, as it would have reopened anyway; an AI suggestion marked done can likewise return if `analyze -t` suggests it again.
