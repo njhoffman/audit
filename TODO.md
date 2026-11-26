@@ -221,6 +221,15 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   so it disappears with `-n` or in a pipe. RELEASED is the age of the latest release,
   not how long the install has trailed it. Add a gap column, the age of the installed
   version where the registry gives it, and per-manager behind counts in the summary.
+- [ ] **Per-manager package counts in the export's summary.json.** (p2) [feature]
+  shdash's Packages panel wants, per manager, the installed count and how many
+  can be updated (by gap: patch, minor, major, update; plus ahead and
+  unchecked), and when they were checked. Today that means parsing
+  `packages.json` (1.9 MB, every item with its registry metadata) for numbers
+  audit already has. Add a `packages` block to `summary.json`:
+  `{"<manager>": {"available", "installed", "outdated", "gaps": {...},
+  "unchecked", "checked_at"}}`, with `schema_version` bumped, so other programs
+  read a few hundred bytes instead.
 - [ ] **Refresh registry data on a normal packages rescan.** (p2) [bug] Only `outdated`,
   `update`, `registry` and `bins` set Scanner.Refresh. `audit packages -r` and the
   dashboard rescan only read the cache, so a machine that never ran those shows
