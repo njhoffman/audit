@@ -41,6 +41,9 @@ func (p *Printer) Packages(as []packages.Annotated) {
 				break
 			}
 			meta = append(meta, inv.Duration.Round(time.Millisecond).String())
+			if n := behind(a.Items); n > 0 {
+				meta = append(meta, fmt.Sprintf("%d behind", n))
+			}
 			if c := packages.RegistryNote(a, now); c != "" {
 				meta = append(meta, c)
 			}
@@ -49,7 +52,7 @@ func (p *Printer) Packages(as []packages.Annotated) {
 		if len(a.Items) == 0 {
 			continue
 		}
-		cols := []column{{title: "NAME"}, {title: "VERSION"}, {title: "LATEST"}, {title: "RELEASED"}, {title: "RUNTIME"},
+		cols := []column{{title: "NAME"}, {title: "VERSION"}, {title: "LATEST"}, {title: "GAP"}, {title: "RELEASED"}, {title: "RUNTIME"},
 			{title: "TAGS", flex: !p.Verbose}}
 		if p.Verbose {
 			cols = append(cols, column{title: "SOURCE"}, column{title: "EXECUTABLES", flex: true})
@@ -57,7 +60,7 @@ func (p *Printer) Packages(as []packages.Annotated) {
 		rows := make([][]string, len(a.Items))
 		for j, it := range a.Items {
 			latest, released := packages.LatestCells(it, now)
-			rows[j] = []string{it.Name, it.Version, latest, released, it.RuntimeVersion, strings.Join(it.Tags, " ")}
+			rows[j] = []string{it.Name, it.Version, latest, gapText(it.Gap), released, it.RuntimeVersion, strings.Join(it.Tags, " ")}
 			if p.Verbose {
 				rows[j] = append(rows[j], it.Source, strings.Join(it.Executables, " "))
 			}
@@ -68,12 +71,32 @@ func (p *Printer) Packages(as []packages.Annotated) {
 				return p.bold()
 			case 1:
 				return p.style()
-			case 2:
+			case 2, 3:
 				return p.gapStyle(a.Items[row])
 			}
 			return p.faint()
 		})
 	}
+}
+
+// gapText names how far a package trails its latest release, so the gap
+// reads without color too; blank when current or unknown.
+func gapText(g packages.Gap) string {
+	switch g {
+	case packages.GapCurrent, packages.GapUnknown:
+		return ""
+	}
+	return string(g)
+}
+
+func behind(items []packages.Item) int {
+	n := 0
+	for _, it := range items {
+		if it.Gap.Behind() {
+			n++
+		}
+	}
+	return n
 }
 
 // gapStyle colors a latest version by how far behind the install is.

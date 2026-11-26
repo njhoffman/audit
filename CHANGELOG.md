@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Package tables have a GAP column (patch, minor, major, update or ahead), so how far behind a package is reads without color, with `-n` or in a pipe; each manager's header counts the packages behind.
+
 ## [0.35.2] - 2026-11-26
 
 ### Fixed

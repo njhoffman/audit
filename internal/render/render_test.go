@@ -251,7 +251,7 @@ func TestPackages(t *testing.T) {
 	out := b.String()
 	for _, w := range []string{"cargo  1.90  rust 1.90  3 package(s)", "registry checked 3 hours ago (1 unchecked)",
 		"ripgrep", "14.1.0", "15.0.0 (archived)", "3 days ago", "cargo search", "crates.io", "rg", "unchecked",
-		"EXECUTABLES", "gh  not installed", "uv  error: boom"} {
+		"EXECUTABLES", "gh  not installed", "uv  error: boom", "GAP", "major", "1 behind"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("packages missing %q:\n%s", w, out)
 		}

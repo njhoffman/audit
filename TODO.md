@@ -216,11 +216,17 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   finding, and `outdated` prints 225 finding rows before its first package. Make
   `outdated` lead with (or print only) the table, and have the default view say how
   many packages are behind and which command lists them.
-- [ ] **Say how far behind a package is in text.** (p2) [feature] The gap
+- [x] **Say how far behind a package is in text.** (p2) [feature] The gap
   (patch/minor/major) is only the color of LATEST (gapStyle in internal/render/views.go),
   so it disappears with `-n` or in a pipe. RELEASED is the age of the latest release,
   not how long the install has trailed it. Add a gap column, the age of the installed
   version where the registry gives it, and per-manager behind counts in the summary.
+  Done 2026-11-26: GAP column and "N behind" per manager. The installed version's age
+  is split out below.
+- [ ] **Show how long ago the installed version was released.** (p3) [feature] RELEASED is
+  the latest release's age. The registries give every version's date (npm's `time`,
+  PyPI's `releases`, crates.io's versions) but the cache keeps only the latest's; store
+  the installed version's date in packages.Meta and show it (or "behind for N days").
 - [x] **Per-manager package counts in the export's summary.json.** (added without a schema_version bump: the contract bumps only on renames or removals) (p2) [feature]
   shdash's Packages panel wants, per manager, the installed count and how many
   can be updated (by gap: patch, minor, major, update; plus ahead and
