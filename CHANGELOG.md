@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-11-26
+
 ### Added
 
 - `--diff`/`-w` on every scanning command shows the findings added, resolved and changed in severity since the previous saved run of the same command and scope (keyed by command, check and subject, like ignore rules and tasks). It reads saved runs only, unless `-r` is given to scan first; `-m` and `-k` filter both runs; `-j` prints it as JSON.
