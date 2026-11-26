@@ -108,6 +108,28 @@ func TestLoadEnvOverride(t *testing.T) {
 	}
 }
 
+func TestLoadDataDirExpanded(t *testing.T) {
+	dir := isolate(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip(err)
+	}
+	t.Setenv("AUDITTEST_ROOT", dir)
+	path := filepath.Join(dir, "c.yaml")
+	for body, want := range map[string]string{
+		"data_dir: ~/audit-data":               filepath.Join(home, "audit-data"),
+		"data_dir: $AUDITTEST_ROOT/db":         filepath.Join(dir, "db"),
+		"data_dir: ${AUDITTEST_ROOT}/db":       filepath.Join(dir, "db"),
+		"data_dir: " + filepath.Join(dir, "x"): filepath.Join(dir, "x"),
+	} {
+		write(t, path, body)
+		cfg, _, err := Load(path)
+		if err != nil || cfg.DataDir != want {
+			t.Errorf("%q: %q %v, want %q", body, cfg.DataDir, err, want)
+		}
+	}
+}
+
 func TestLoadErrors(t *testing.T) {
 	dir := isolate(t)
 	if _, _, err := Load(filepath.Join(dir, "missing.yaml")); err == nil {
@@ -129,6 +151,7 @@ func TestLoadErrors(t *testing.T) {
 		"packages: {registry: {unmaintained_after: -1h}}", "packages: {tags: [Has Space]}", "packages: {tags: [UPPER]}",
 		"packages: {update: {timeout: 0s}}", `packages: {update: {exclude: [""]}}`,
 		"tui: {keys: {qiut: [x]}}", "tui: {keys: {rescan: [ctrl+c]}}", "tui: {keys: {quit: [d]}}",
+		"data_dir: relative/audit",
 		"tui: {interface: dmenu}", "tui: {fzf_keys: {status_done: [d]}}", "tui: {fzf_keys: {up: [alt-k]}}",
 	} {
 		write(t, bad, body)

@@ -505,6 +505,10 @@ func Load(explicit string) (*Config, string, error) {
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, "", fmt.Errorf("parse config %s: %w", path, err)
 	}
+	// ~ and $VARS are expanded like a shell would; a relative path is
+	// rejected by validate, since it would name a different database in
+	// each working directory.
+	cfg.DataDir = expandHome(os.ExpandEnv(cfg.DataDir))
 	if err := cfg.validate(); err != nil {
 		return nil, "", fmt.Errorf("config %s: %w", path, err)
 	}
@@ -515,6 +519,9 @@ func Load(explicit string) (*Config, string, error) {
 }
 
 func (c *Config) validate() error {
+	if c.DataDir != "" && !filepath.IsAbs(c.DataDir) {
+		return fmt.Errorf("data_dir must be an absolute path (or start with ~/), not %q", c.DataDir)
+	}
 	if c.ShellHistory.MaxMB > 1024 {
 		return errors.New("shell_history.max_mb must be at most 1024")
 	}
@@ -696,8 +703,8 @@ const Template = `# audit configuration. Every value shown is the default; edit 
 # key. Keys can also be set as AUDIT_<KEY> environment variables, with dots
 # as underscores (AUDIT_STALE_WARN=12h).
 
-# Where the results database and HTML reports live. Empty means
-# $XDG_DATA_HOME/audit (~/.local/share/audit).
+# Where the results database and HTML reports live: an absolute path, ~/ and
+# $VARS expanded. Empty means $XDG_DATA_HOME/audit (~/.local/share/audit).
 data_dir: ""
 
 # Saved runs kept per command.

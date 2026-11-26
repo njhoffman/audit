@@ -514,7 +514,7 @@ _command_**.json**
 
 The first run creates **~/.config/audit.yaml** with every key set to its default and commented; edit or delete any key. **audit config \-\-init \-\-force** restores it. The defaults:
 
-    data_dir: ""               # empty: $XDG_DATA_HOME/audit
+    data_dir: ""               # empty: $XDG_DATA_HOME/audit; absolute, ~ and $VARS expanded
     github_user: ""            # empty: detected with gh api user on the first registry run
     history: 20                # saved runs kept per command
     shell_history:

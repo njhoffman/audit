@@ -405,7 +405,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
   backup path, and finds the target by `zsh` in the basename. Refuse on an empty or
   smaller histdb without `--force`, reuse prune's lock/recheck, keep the new mtime,
   metafy (with a round-trip test), print the backup, accept an explicit target.
-- [ ] **Expand and validate `data_dir`.** (p2) [bug] `export.dir` goes through
+- [x] **Expand and validate `data_dir`.** (p2) [bug] `export.dir` goes through
   expandHome, `data_dir` does not (internal/config/config.go:511), so `~/...` or a
   relative path creates a separate database under the working directory. Expand `~`
   and `$VAR`, reject relative paths in validate(), test it.
