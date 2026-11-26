@@ -155,7 +155,7 @@ func parse(body, format string) []entry {
 	timed := false
 	if format == "bash" {
 		for _, line := range lines {
-			if timestamp.MatchString(line) {
+			if timestamp.MatchString(strings.TrimSuffix(line, "\r")) {
 				timed = true
 				break
 			}
@@ -172,6 +172,10 @@ func parse(body, format string) []entry {
 		start = 0
 	}
 	continuation := false
+	// afterStamp is set on the line after a bash timestamp: that line starts
+	// the record even when it is blank, so the record's first line and its
+	// line count include it.
+	afterStamp := false
 	for i, line := range lines {
 		line = strings.TrimSuffix(line, "\r")
 		if format == "fish" {
@@ -199,6 +203,13 @@ func parse(body, format string) []entry {
 		}
 		if timed && timestamp.MatchString(line) {
 			flush()
+			afterStamp = true
+			continue
+		}
+		if afterStamp {
+			afterStamp = false
+			start = i + 1
+			current.WriteString(line)
 			continue
 		}
 		if timed && start != 0 {

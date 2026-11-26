@@ -286,7 +286,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   from filenames and content; a plain zsh history at a custom path is treated
   as bash, losing multiline boundaries. Allow a per-source format and show
   what was detected. Never infer multiline bash boundaries without timestamps.
-- [ ] **Handle CRLF timestamps and leading blank lines consistently.** (p2) [bug] Bash
+- [x] **Handle CRLF timestamps and leading blank lines consistently.** (p2) [bug] Bash
   timestamp detection runs before CR stripping, so CRLF files are treated as
   untimestamped. Leading blank command lines are dropped during parsing.
   Normalize format detection and preserve logical line counts and raw record

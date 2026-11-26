@@ -90,7 +90,7 @@ func PlanPrune(ctx context.Context, o Options, categories, ignore []string) ([]P
 				for candidate > 0 && strings.TrimSuffix(strings.TrimSuffix(lines[candidate-1], "\n"), "\r") == "" {
 					candidate--
 				}
-				if candidate > 0 && timestamp.MatchString(strings.TrimSuffix(lines[candidate-1], "\n")) {
+				if candidate > 0 && timestamp.MatchString(strings.TrimSuffix(strings.TrimSuffix(lines[candidate-1], "\n"), "\r")) {
 					line = candidate - 1
 				}
 			}

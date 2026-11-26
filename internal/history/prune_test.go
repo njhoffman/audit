@@ -154,3 +154,48 @@ func TestPruneBashTimestampWithLeadingBlankLine(t *testing.T) {
 		t.Fatalf("orphaned timestamp: %q %v", body, err)
 	}
 }
+
+func TestParseBashCRLFAndBlankFirstLines(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       []entry
+	}{
+		// CRLF: timestamps are still recognized, so records keep their
+		// multiline boundaries.
+		{"crlf", "#100\r\necho one\r\necho two\r\n#200\r\nls\r\n", []entry{{"echo one\necho two", 2}, {"ls", 5}}},
+		// A blank first command line starts the record: its line is the one
+		// after the timestamp and the blank counts as a logical line.
+		{"blank first", "#100\n\nremove\n#200\nkeep\n", []entry{{"\nremove", 2}, {"keep", 5}}},
+		{"blank crlf", "#100\r\n\r\nx\r\n", []entry{{"\nx", 2}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parse(tc.body, "bash")
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("entry %d: %+v, want %+v", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestPruneCRLFBashKeepsBytes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".bash_history")
+	body := "#100\r\necho a\r\necho b\r\n#200\r\nls\r\n#300\r\necho a\r\necho b\r\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plans, err := PlanPrune(context.Background(), Options{Files: []string{path}, MaxBytes: 1 << 20, MaxLines: 10}, []string{"duplicates"}, nil)
+	if err != nil || len(plans) != 1 || plans[0].Remove != 1 || plans[0].Lines[0] != 7 {
+		t.Fatalf("the CRLF multiline duplicate is one record at line 7: %+v %v", plans, err)
+	}
+	if _, err := ApplyPrune(context.Background(), plans[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "#100\r\necho a\r\necho b\r\n#200\r\nls\r\n" {
+		t.Fatalf("the whole record goes with its timestamp, CRLF kept: %q", got)
+	}
+}
