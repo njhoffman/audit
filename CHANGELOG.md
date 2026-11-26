@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.1] - 2026-11-26
+
 ### Changed
 
 - Internal: planning and verifying the stale-runtime cleanup of `audit packages update` and `runtimes migrate`, and the rule for remembering the node major, moved from the command layer into `internal/packages` with their own tests. No user-visible change.
