@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-11-26
+
 ### Fixed
 
 - `audit history` and `history prune` read zsh histories as zsh writes them (metafied), so a `shell_history.patterns` entry with non-ASCII text such as `→` matches, and duplicates compare the commands as typed.
