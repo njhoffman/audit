@@ -4,7 +4,8 @@ project_name: audit
 
 before:
   hooks:
-    - go mod tidy
+    # Fail on an untidy go.mod/go.sum instead of changing the tree mid-release.
+    - go mod tidy -diff
     # Render the manpage so it can be packaged into the archive. Uses the
     # same go-md2man path as `just manpage`.
     - go run github.com/cpuguy83/go-md2man/v2@v2.0.4 -in man/audit.1.md -out man/audit.1
@@ -67,6 +68,6 @@ release:
   header: |
     ## audit {{ .Tag }}
 
-    Linux audit tool that scans processes, services, users/groups, logs, and per-program configuration; runs the digest through Claude for analysis; and writes a colorful or Markdown report.
+    `audit` scans a Linux workstation and keeps the results: system health, the shell environment and its startup scripts, packages, git repos, disk usage, configs, scripts, shell history and AI tooling. Every issue and suggestion becomes a prioritized task you can track from the command line or an interactive dashboard, and every command can write a self-contained HTML report.
 
     See [CHANGELOG.md](https://github.com/njhoffman/audit/blob/{{ .Tag }}/CHANGELOG.md) for full notes.

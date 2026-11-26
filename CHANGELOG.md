@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- GitHub releases are published only after the tagged tree passes `go vet` and the race tests, and the release fails on an untidy `go.mod` instead of tidying it mid-release. The release notes' header describes the current tool.
+
 ## [0.31.0] - 2026-11-26
 
 ### Added
