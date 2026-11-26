@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	osexec "os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -77,15 +78,17 @@ func (c *OSCapturer) Capture(ctx context.Context, shell, mode string) Capture {
 		res.Code, res.Err = exec.ExitNotFound, shell+" is not installed"
 		return res
 	}
-	envFile, err := os.CreateTemp("", "audit-env-*")
+	// The shell writes the env dump and its side files (.t, .s) by
+	// redirection, so they go in a private directory: in shared /tmp their
+	// names would be guessable and open to a planted symlink.
+	dir, err := os.MkdirTemp("", "audit-env-*")
 	if err != nil {
 		res.Err = err.Error()
 		return res
 	}
-	envPath := envFile.Name()
-	_ = envFile.Close()
+	defer func() { _ = os.RemoveAll(dir) }()
+	envPath := filepath.Join(dir, "env")
 	stampPath, statsPath := envPath+".t", envPath+".s"
-	defer func() { _ = os.Remove(envPath); _ = os.Remove(stampPath); _ = os.Remove(statsPath) }()
 
 	timeout := c.Timeout
 	if timeout <= 0 {

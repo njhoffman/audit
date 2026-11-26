@@ -99,6 +99,31 @@ func TestCaptureRealBash(t *testing.T) {
 	}
 }
 
+func TestCaptureFilesArePrivate(t *testing.T) {
+	bash, err := osexec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not installed")
+	}
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".bash_profile"),
+		`export AUDIT_TEST_DIRMODE=$(stat -c %a "${AUDIT_ENV_OUT%/*}") AUDIT_TEST_DIR=${AUDIT_ENV_OUT%/*}`+"\n")
+	env := &exec.Env{Vars: map[string]string{"HOME": home, "PATH": filepath.Dir(bash) + ":/usr/bin:/bin"}, Home: home}
+	env.Runner = exec.NewOSRunner(env)
+	got := (&OSCapturer{Env: env, Timeout: 10 * time.Second}).Capture(ctx, "bash", ModeNoTTY)
+	if got.Code != 0 || got.Err != "" {
+		t.Fatalf("capture failed: %+v", got)
+	}
+	if got.Env["AUDIT_TEST_DIRMODE"] != "700" || filepath.Dir(got.Env["AUDIT_TEST_DIR"]) != tmp {
+		t.Errorf("the shell writes into a private directory under TMPDIR: mode %q dir %q",
+			got.Env["AUDIT_TEST_DIRMODE"], got.Env["AUDIT_TEST_DIR"])
+	}
+	if left, _ := os.ReadDir(tmp); len(left) != 0 {
+		t.Errorf("capture files left behind: %v", left)
+	}
+}
+
 // A background job started at startup keeps stdout open after the shell
 // exits. Start-up time must stop at the stamp, not when the output closes,
 // and the lingering job is not a failure.

@@ -424,7 +424,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
   maps any negative exit code (SIGSEGV, OOM kill, Ctrl-C) to ExitTimeout, so update
   results and explain prompts say "timed out" for crashes. Check ctx.Err() and
   WaitStatus.Signaled(); add ExitSignal/ExitCanceled.
-- [ ] **Create the environment capture's side files in a private directory.** (p3) [bug]
+- [x] **Create the environment capture's side files in a private directory.** (p3) [bug]
   internal/environment/capture.go creates `$AUDIT_ENV_OUT.t` and `.s` by shell
   redirection in shared /tmp with guessable names. Use os.MkdirTemp (0700) for all three.
 - [ ] **Gate the release workflow and refresh its metadata.** (p3) [chore]
