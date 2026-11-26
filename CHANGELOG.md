@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.2] - 2026-11-26
+
 ### Changed
 
 - Internal: tests for the history and system scan adapters, the carried-over apt/snap/flatpak results and the repos cache bring `internal/core` coverage from 79.6% to 89.5%. No user-visible change.
