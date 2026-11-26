@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-26
+
 ### Added
 
 - `ai.cache_max_age` (default `2160h`, 90 days; `0` keeps everything): cached AI answers older than this are deleted when audit starts. Each changed set of findings added an entry that was never read again, so the cache only grew.
