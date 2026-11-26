@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-11-26
+
 ### Added
 
 - `shell_history.patterns` entries may be named: `{name: aws-key, match: AKIA}` gives findings, tasks and ignore rules the subject `PATH:aws-key`, which stays the same when the list is reordered or grows. Plain strings work as before and keep their positional `PATH:pattern-N`. Names are letters, digits, `.`, `_` and `-`, unique, and may not start with `pattern-`.
