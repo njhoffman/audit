@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -198,26 +199,45 @@ func checkVersion(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	if v == "1" {
-		if err := migrateV2(db); err != nil {
-			return fmt.Errorf("upgrade database schema to version 2: %w", err)
-		}
-		v = "2"
-	}
-	if v != fmt.Sprint(schemaVersion) {
+	from, err := strconv.Atoi(v)
+	if err != nil || from < 1 || from > schemaVersion {
 		return fmt.Errorf("database schema version %s is not supported (want %d)", v, schemaVersion)
+	}
+	return migrate(db, from, migrations)
+}
+
+// migrations[i] upgrades a database from schema version i+1 to i+2. Each
+// runs in its own transaction, which also records the new version, so an
+// interrupted upgrade resumes at the step that failed. Steps must tolerate a
+// table the current schema already created with the new shape.
+var migrations = []func(*sql.Tx) error{
+	migrateV2,
+}
+
+func migrate(db *sql.DB, from int, steps []func(*sql.Tx) error) error {
+	for v := from; v <= len(steps); v++ {
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		if err := steps[v-1](tx); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("upgrade database schema to version %d: %w", v+1, err)
+		}
+		if _, err := tx.Exec(`UPDATE meta SET value=? WHERE key='schema_version'`, fmt.Sprint(v+1)); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // migrateV2 adds update_items.kind. A version 1 database whose update_items
 // table was created by this binary's schema already has the column.
-func migrateV2(db *sql.DB) error {
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
+func migrateV2(tx *sql.Tx) error {
 	var n int
 	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('update_items') WHERE name='kind'`).Scan(&n); err != nil {
 		return err
@@ -227,10 +247,7 @@ func migrateV2(db *sql.DB) error {
 			return err
 		}
 	}
-	if _, err := tx.Exec(`UPDATE meta SET value='2' WHERE key='schema_version'`); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return nil
 }
 
 // Changes counts the rows this store has written since it was opened. The

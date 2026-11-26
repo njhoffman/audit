@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -339,5 +341,50 @@ func TestPruneCache(t *testing.T) {
 		if c, err := s.CacheGet(ctx, hash); err != nil || (c != nil) != kept {
 			t.Errorf("%s: %+v %v, kept should be %v", hash, c, err, kept)
 		}
+	}
+}
+
+func TestMigrationLadder(t *testing.T) {
+	if schemaVersion != len(migrations)+1 {
+		t.Fatalf("schemaVersion %d needs %d migrations, have %d", schemaVersion, schemaVersion-1, len(migrations))
+	}
+	s := open(t)
+	version := func() string {
+		var v string
+		if err := s.db.QueryRow(`SELECT value FROM meta WHERE key='schema_version'`).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	if _, err := s.db.Exec(`UPDATE meta SET value='1' WHERE key='schema_version'`); err != nil {
+		t.Fatal(err)
+	}
+	var ran []int
+	step := func(n int) func(*sql.Tx) error {
+		return func(tx *sql.Tx) error {
+			ran = append(ran, n)
+			_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS ladder (n INTEGER)`)
+			return err
+		}
+	}
+	boom := func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`CREATE TABLE half_done (n INTEGER)`); err != nil {
+			return err
+		}
+		return errors.New("boom")
+	}
+	if err := migrate(s.db, 1, []func(*sql.Tx) error{step(2), boom}); err == nil || !strings.Contains(err.Error(), "version 3: boom") {
+		t.Fatalf("failing step: %v", err)
+	}
+	if version() != "2" {
+		t.Errorf("the step before the failure stays applied: version %s", version())
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='half_done'`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("a failed step is rolled back: %d %v", n, err)
+	}
+	ran = nil
+	if err := migrate(s.db, 2, []func(*sql.Tx) error{step(2), step(3)}); err != nil || version() != "3" || len(ran) != 1 || ran[0] != 3 {
+		t.Errorf("resuming at version 2 runs only the later step: %v ran %v version %s", err, ran, version())
 	}
 }

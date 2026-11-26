@@ -94,7 +94,7 @@ global limit; AI cache entries and closed tasks still have no age limit.
 - [ ] **Prune closed tasks.** [chore] (p3) Resolved and done tasks accumulate forever and
   feed `tasks.html` and `tasks.json`. Delete ones closed longer than a
   configured age; keep `wont-do`, since it suppresses re-creation.
-- [ ] **Migration ladder instead of `if v == "1"`.** [refactor] (p3) `checkVersion` handles
+- [x] **Migration ladder instead of `if v == "1"`.** [refactor] (p3) `checkVersion` handles
   one hard-coded upgrade. A slice of `func(*sql.Tx) error` indexed by
   version, each step in its own transaction, scales to the next schema change
   and makes each step testable on its own.
