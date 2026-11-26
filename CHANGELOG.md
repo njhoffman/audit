@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-11-26
+
 ### Added
 
 - `R` on the dashboard (`tui.keys.rescan_stale`) rescans every stale or never-run command, the ones `audit -r` would, one after another: the row being scanned shows the spinner, queued rows are marked, the status line counts them off, and a failed scan is reported at the end without stopping the rest. The packages question about apt, snap and flatpak is asked once for the whole sweep.
