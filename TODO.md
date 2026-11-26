@@ -211,7 +211,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   reached from bare `audit`. Add a packages screen: per manager, name, installed,
   latest, gap; filter to outdated; preview and run updates from it (overlaps
   "Preview package updates" in section 10).
-- [ ] **Show the package table without a wall of findings.** (p2) [feature] Bare
+- [x] **Show the package table without a wall of findings.** (p2) [feature] Bare
   `audit packages` and `-R` print no version table at all, `-l` puts it after every
   finding, and `outdated` prints 225 finding rows before its first package. Make
   `outdated` lead with (or print only) the table, and have the default view say how

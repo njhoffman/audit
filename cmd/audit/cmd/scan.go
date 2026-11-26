@@ -36,6 +36,13 @@ type scanFlags struct {
 	impliesList func() bool
 	// jsonExtra, when set, adds a command-specific value to --json output.
 	jsonExtra func(ctx context.Context, r *run.Run) (any, error)
+	// viewOnly makes --list print the view without the findings before
+	// it, counting them instead, unless a finding filter was given.
+	viewOnly bool
+	// listHint is the command that lists the findings viewOnly leaves out.
+	listHint string
+	// reportFooter, when set, adds a line under the default report.
+	reportFooter func(ctx context.Context, r *run.Run) (string, error)
 }
 
 // viewFunc prints a command's inventory for --list. An error (unreadable
@@ -201,15 +208,32 @@ func (a *app) runScan(ctx context.Context, s core.Scanner, f *scanFlags, view vi
 	case f.summary:
 		p.Brief(r, o)
 	case f.list:
-		p.List(r, o)
+		viewOnly := f.viewOnly && view != nil && len(r.Data) > 0 && f.minSeverity == "" && f.check == ""
+		if !viewOnly {
+			p.List(r, o)
+		}
 		if view != nil && len(r.Data) > 0 {
-			sayln(a.out)
+			if !viewOnly {
+				sayln(a.out)
+			}
 			if err := view(ctx, p, r); err != nil {
 				return err
 			}
 		}
+		if viewOnly && len(r.Findings) > 0 {
+			say(a.out, "%d finding(s) in this run; `%s` lists them.\n", len(r.Findings), f.listHint)
+		}
 	default:
 		p.Report(r, o)
+		if f.reportFooter != nil && len(r.Data) > 0 {
+			line, err := f.reportFooter(ctx, r)
+			if err != nil {
+				return err
+			}
+			if line != "" {
+				sayln(a.out, line)
+			}
+		}
 	}
 	return nil
 }

@@ -55,6 +55,7 @@ displayed packages and preserve --manager. Major releases need --major.`,
 			}
 			s.Refresh = a.registryRefresh(nil, force)
 			f.jsonExtra = func(ctx context.Context, r *run.Run) (any, error) { return a.annotated(ctx, r, q) }
+			f.viewOnly, f.listHint = true, "audit packages -l"
 			return a.runScan(c.Context(), s, f, func(ctx context.Context, p *render.Printer, r *run.Run) error {
 				as, err := a.annotated(ctx, r, q)
 				if err != nil {

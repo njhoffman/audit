@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `audit packages outdated` leads with the package table instead of printing every finding first; a line counts the findings and names `audit packages -l` for them, and `-m` or `-k` still lists the filtered findings. The default `audit packages` report ends with how many packages are behind and the command that lists them.
+
 ## [0.41.2] - 2026-11-26
 
 ### Fixed

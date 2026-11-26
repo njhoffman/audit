@@ -87,6 +87,20 @@ keep scans offline); the saved views only read the cache and show its age. --tag
 	fl.BoolVarP(&q.Outdated, "outdated", "u", false, "list only packages behind their latest release (implies --list)")
 	f.impliesList = func() bool { return !q.Empty() }
 	f.jsonExtra = func(ctx context.Context, r *run.Run) (any, error) { return a.annotated(ctx, r, q) }
+	f.reportFooter = func(ctx context.Context, r *run.Run) (string, error) {
+		as, err := a.annotated(ctx, r, packages.Query{Outdated: true})
+		if err != nil {
+			return "", fmt.Errorf("load packages: %w", err)
+		}
+		n := 0
+		for _, x := range as {
+			n += len(x.Items)
+		}
+		if n == 0 {
+			return "", nil
+		}
+		return fmt.Sprintf("\n%d package(s) behind their latest release; `audit packages outdated -l` lists them with versions.", n), nil
+	}
 	c.AddCommand(newPackagesRegistryCmd(a), newPackagesOutdatedCmd(a), newPackagesUpdateCmd(a), newPackagesInfoCmd(a), newPackagesTagCmd(a), newRuntimesCmd(a), newBinsCmd(a))
 	return c
 }

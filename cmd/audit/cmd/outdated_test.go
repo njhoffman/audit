@@ -218,3 +218,26 @@ func TestCoverageLine(t *testing.T) {
 		}
 	}
 }
+
+// outdated leads with the table and counts the findings it leaves out; the
+// default packages report says how many are behind and where to see them.
+func TestOutdatedShowsTableNotFindings(t *testing.T) {
+	gh := updateEnv(t)
+	setup := func(a *app) { a.runner, a.looker = gh, latestLooker{} }
+	r := runArgsWith(t, setup, "packages", "outdated")
+	if r.e != nil {
+		t.Fatal(r.e)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(r.out), "gh") || !strings.Contains(r.out, "finding(s) in this run; `audit packages -l` lists them") {
+		t.Errorf("table first, findings counted:\n%s", r.out)
+	}
+	if strings.Contains(r.out, "registry.outdated") {
+		t.Errorf("no finding rows:\n%s", r.out)
+	}
+	if r := runArgsWith(t, setup, "packages", "outdated", "-l", "-k", "registry.outdated"); !strings.Contains(r.out, "registry.outdated") {
+		t.Errorf("a finding filter brings the findings back:\n%s", r.out)
+	}
+	if r := runArgsWith(t, setup, "packages"); r.e != nil || !strings.Contains(r.out, "package(s) behind their latest release; `audit packages outdated -l`") {
+		t.Errorf("the report counts the packages behind: %v\n%s", r.e, r.out)
+	}
+}
