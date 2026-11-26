@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.2] - 2026-11-26
+
 ### Fixed
 
 - Bash histories with CRLF line endings are read as timestamped, so multiline records keep their boundaries in `audit history` and `history prune`. A record whose first command line is blank now starts at that line, so its location and line count are right.
