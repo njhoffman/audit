@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.1] - 2026-11-26
+
 ### Fixed
 
 - `audit packages bins install` skips symlink members of a zip release instead of writing the link target out as a regular file, and removes its temporary file when copying the new binary fails. The download, checksum, unpack and replace steps moved from the command layer into `internal/packages`, where they are tested on their own.
