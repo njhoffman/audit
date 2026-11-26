@@ -447,3 +447,66 @@ func TestRuntimeChecks(t *testing.T) {
 		t.Error("ruby has no release data")
 	}
 }
+
+func TestCleanupPlan(t *testing.T) {
+	m := RuntimeMeta{Installs: []PythonInstall{{Version: "3.14.9", Managed: true}, {Version: "3.14.8", Managed: true}}}
+	uv := &Inventory{Manager: "uv", Available: true}
+	plan := CleanupPlan([]string{"/h/.nvm/versions/node/v20"}, true, m, uv)
+	if len(plan.Items) != 2 || plan.Items[0].Skip != "" || !reflect.DeepEqual(plan.Items[0].Command, []string{"gio", "trash", "/h/.nvm/versions/node/v20"}) ||
+		!reflect.DeepEqual(plan.Items[1].Command, []string{"uv", "python", "uninstall", "3.14.8"}) || plan.Items[1].Version != "3.14.8" {
+		t.Fatalf("plan: %+v", plan.Items)
+	}
+	plan = CleanupPlan([]string{"/x"}, false, m, nil)
+	if len(plan.Items) != 1 || plan.Items[0].Skip == "" || len(plan.Runnable()) != 0 {
+		t.Errorf("no gio and no uv: %+v", plan.Items)
+	}
+	if plan := CleanupPlan(nil, true, m, &Inventory{Manager: "uv"}); len(plan.Items) != 0 {
+		t.Errorf("an unavailable uv plans no uninstalls: %+v", plan.Items)
+	}
+}
+
+func TestVerifyCleanup(t *testing.T) {
+	rs := []UpdateResult{
+		{Manager: "trash", Name: "/gone", Status: UpdateOK},
+		{Manager: "trash", Name: "/kept", Status: UpdateOK},
+		{Manager: "uv", Name: "python3.14.8", From: "3.14.8", Status: UpdateOK},
+		{Manager: "uv", Name: "python3.14.7", From: "3.14.7", Status: UpdateOK},
+		{Manager: "uv", Name: "python3.13.1", From: "3.13.1", Status: UpdateFailed, Reason: "exit 1"},
+	}
+	calls := 0
+	VerifyCleanup(rs, func(p string) bool { return p == "/kept" }, func() map[string]bool {
+		calls++
+		return map[string]bool{"3.14.7": true, "3.13.1": true}
+	})
+	got := make([]string, len(rs))
+	for i, r := range rs {
+		got[i] = r.Status + " " + r.Reason
+	}
+	want := []string{UpdateOK + " ", UpdateFailed + " still there after gio trash", UpdateOK + " ",
+		UpdateFailed + " still installed after uv python uninstall", UpdateFailed + " exit 1"}
+	if !reflect.DeepEqual(got, want) || calls != 1 {
+		t.Errorf("got %q (lookups %d)", got, calls)
+	}
+}
+
+func TestNodeMajorAfter(t *testing.T) {
+	after := Data{Runtimes: []RuntimeStatus{{Name: RuntimeNode, Version: "26.1.0"}}}
+	mig := func(manager, s string) UpdateResult {
+		return UpdateResult{Kind: KindMigration, Manager: manager, Status: s}
+	}
+	for _, tc := range []struct {
+		items []UpdateResult
+		after Data
+		want  string
+		ok    bool
+	}{
+		{[]UpdateResult{mig("pnpm", UpdateOK), mig("pnpm", UpdateOK), mig("uv", UpdateFailed)}, after, "26", true},
+		{[]UpdateResult{mig("pnpm", UpdateOK), mig("pnpm", UpdateFailed)}, after, "", false},
+		{[]UpdateResult{{Kind: KindPackage, Manager: "pnpm", Status: UpdateOK}}, after, "", false},
+		{[]UpdateResult{mig("pnpm", UpdateOK)}, Data{}, "", false},
+	} {
+		if got, ok := NodeMajorAfter(&Update{Items: tc.items}, tc.after); got != tc.want || ok != tc.ok {
+			t.Errorf("%+v: %q %v", tc.items, got, ok)
+		}
+	}
+}

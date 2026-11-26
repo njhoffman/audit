@@ -117,6 +117,10 @@ global limit; AI cache entries and closed tasks still have no age limit.
   of non-test code; `update.go`, `runtimes.go` and `packages.go` carry
   planning and cleanup logic (`cleanupPlan`, `installedPythons`,
   `rememberNodeMajor`) that would sit better in core or packages.
+  Progress 2026-11-26: runtime cleanup planning, its verification and the
+  node-major rule are now packages.CleanupPlan, VerifyCleanup and
+  NodeMajorAfter; cmd keeps only the store and lookup calls. Bins install
+  moved earlier. update.go and packages.go remain.
 
 ## 6. Test coverage gaps
 

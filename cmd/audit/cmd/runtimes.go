@@ -322,24 +322,9 @@ func (a *app) planGate(plan packages.Plan, f runtimeFlags, question, nothing str
 // rememberNodeMajor records the current node major once every pnpm global
 // moved onto it.
 func (a *app) rememberNodeMajor(ctx context.Context, u *packages.Update, after packages.Data) {
-	moved := false
-	for _, it := range u.Items {
-		if it.Kind != packages.KindMigration || it.Manager != "pnpm" {
-			continue
-		}
-		if it.Status != packages.UpdateOK {
-			return
-		}
-		moved = true
-	}
-	if !moved {
-		return
-	}
-	for _, st := range after.Runtimes {
-		if st.Name == packages.RuntimeNode {
-			if err := a.store.SetSetting(ctx, core.NodeMajorSetting, packages.VersionLine(packages.RuntimeNode, st.Version)); err != nil {
-				a.log.Warn("remember the node major", "err", err)
-			}
+	if major, ok := packages.NodeMajorAfter(u, after); ok {
+		if err := a.store.SetSetting(ctx, core.NodeMajorSetting, major); err != nil {
+			a.log.Warn("remember the node major", "err", err)
 		}
 	}
 }
@@ -372,48 +357,27 @@ func (a *app) cleanup(ctx context.Context, s *core.PackagesScanner, d packages.D
 		}
 	}
 	rs := a.execPlan(ctx, s.ScanEnv, plan, "removing stale runtimes", f.stopOnError, !f.json, show)
-	var pythons map[string]bool
-	for i := range rs {
-		r := &rs[i]
-		if r.Status != packages.UpdateOK {
-			continue
-		}
-		if r.Manager == "trash" {
-			if _, err := os.Stat(r.Name); err == nil {
-				r.Status, r.Reason = packages.UpdateFailed, "still there after gio trash"
-			}
-			continue
-		}
-		if pythons == nil {
-			pythons = a.installedPythons(ctx, s)
-		}
-		if pythons[r.From] {
-			r.Status, r.Reason = packages.UpdateFailed, "still installed after uv python uninstall"
-		}
-	}
+	packages.VerifyCleanup(rs, func(p string) bool { _, err := os.Stat(p); return err == nil },
+		func() map[string]bool { return a.installedPythons(ctx, s) })
 	return rs
 }
 
+// cleanupPlan gathers what packages.CleanupPlan needs: the saved run's
+// stale runtime directories, gio, the python cache and uv's inventory.
 func (a *app) cleanupPlan(ctx context.Context, s *core.PackagesScanner, d packages.Data) packages.Plan {
-	var plan packages.Plan
-	trash := s.ScanEnv.Which("gio")
+	var dirs []string
 	if r, err := a.engine.Saved(ctx, packages.Command, ""); err == nil && r != nil {
 		for _, fd := range r.Findings {
-			if fd.Check != "runtime.stale_dirs" {
-				continue
+			if fd.Check == "runtime.stale_dirs" {
+				dirs = append(dirs, fd.Subject)
 			}
-			it := packages.Planned{Kind: packages.KindMigration, Package: packages.Package{Manager: "trash", Name: fd.Subject},
-				Command: []string{"gio", "trash", fd.Subject}}
-			if trash == "" {
-				it.Skip = "gio not found; delete it by hand"
-			}
-			plan.Items = append(plan.Items, it)
 		}
 	}
+	hasGio := s.ScanEnv.Which("gio") != ""
 	metas, err := a.store.RuntimeMeta(ctx)
 	if err != nil {
 		a.log.Warn("load runtime cache", "err", err)
-		return plan
+		return packages.CleanupPlan(dirs, hasGio, packages.RuntimeMeta{}, nil)
 	}
 	var uv *packages.Inventory
 	for i := range d.Inventories {
@@ -421,15 +385,7 @@ func (a *app) cleanupPlan(ctx context.Context, s *core.PackagesScanner, d packag
 			uv = &d.Inventories[i]
 		}
 	}
-	if uv == nil {
-		return plan
-	}
-	for _, v := range packages.SupersededPythons(metas[packages.RuntimePython], uv) {
-		plan.Items = append(plan.Items, packages.Planned{Kind: packages.KindMigration,
-			Package: packages.Package{Manager: "uv", Name: "python" + v, Version: v},
-			Command: []string{"uv", "python", "uninstall", v}})
-	}
-	return plan
+	return packages.CleanupPlan(dirs, hasGio, metas[packages.RuntimePython], uv)
 }
 
 func (a *app) installedPythons(ctx context.Context, s *core.PackagesScanner) map[string]bool {

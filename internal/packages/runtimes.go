@@ -783,3 +783,79 @@ func SupersededPythons(m RuntimeMeta, uvInv *Inventory) []string {
 	sort.Strings(out)
 	return out
 }
+
+// CleanupPlan plans removing stale runtime leftovers: each directory a
+// runtime.stale_dirs finding names goes to the trash with gio (skipped when
+// hasGio is false), and each python patch uv installed that a newer patch of
+// its line supersedes is uninstalled with uv. python is the cached python
+// runtime; uv is uv's inventory, nil when uv is unavailable.
+func CleanupPlan(staleDirs []string, hasGio bool, python RuntimeMeta, uv *Inventory) Plan {
+	var plan Plan
+	for _, dir := range staleDirs {
+		it := Planned{Kind: KindMigration, Package: Package{Manager: "trash", Name: dir},
+			Command: []string{"gio", "trash", dir}}
+		if !hasGio {
+			it.Skip = "gio not found; delete it by hand"
+		}
+		plan.Items = append(plan.Items, it)
+	}
+	if uv == nil || !uv.Available {
+		return plan
+	}
+	for _, v := range SupersededPythons(python, uv) {
+		plan.Items = append(plan.Items, Planned{Kind: KindMigration,
+			Package: Package{Manager: "uv", Name: "python" + v, Version: v},
+			Command: []string{"uv", "python", "uninstall", v}})
+	}
+	return plan
+}
+
+// VerifyCleanup marks a cleanup step failed when what it removed is still
+// there: a trashed path that exists, or a python patch still installed.
+// installed is called at most once, and only when a uv step succeeded.
+func VerifyCleanup(rs []UpdateResult, exists func(path string) bool, installed func() map[string]bool) {
+	var pythons map[string]bool
+	for i := range rs {
+		r := &rs[i]
+		if r.Status != UpdateOK {
+			continue
+		}
+		if r.Manager == "trash" {
+			if exists(r.Name) {
+				r.Status, r.Reason = UpdateFailed, "still there after gio trash"
+			}
+			continue
+		}
+		if pythons == nil {
+			pythons = installed()
+		}
+		if pythons[r.From] {
+			r.Status, r.Reason = UpdateFailed, "still installed after uv python uninstall"
+		}
+	}
+}
+
+// NodeMajorAfter is the node major to remember after update u: the line of
+// the node runtime in after, once every pnpm migration in u succeeded. ok
+// is false when u migrated nothing, a migration failed, or node is absent.
+func NodeMajorAfter(u *Update, after Data) (major string, ok bool) {
+	moved := false
+	for _, it := range u.Items {
+		if it.Kind != KindMigration || it.Manager != "pnpm" {
+			continue
+		}
+		if it.Status != UpdateOK {
+			return "", false
+		}
+		moved = true
+	}
+	if !moved {
+		return "", false
+	}
+	for _, st := range after.Runtimes {
+		if st.Name == RuntimeNode {
+			return VersionLine(RuntimeNode, st.Version), true
+		}
+	}
+	return "", false
+}
