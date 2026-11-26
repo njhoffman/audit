@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.6] - 2026-11-26
+
 ### Fixed
 
 - Saved action runs are kept per kind: `history` now bounds package updates, runtime updates, migrations, repo syncs and cleanups separately, so a run of frequent package updates no longer evicts the last sync or cleanup and leaves its `--last` empty.
