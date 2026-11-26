@@ -293,7 +293,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   `PATH:pattern-N`; reordering `shell_history.patterns` changes which pattern
   a saved task or ignore rule refers to. Support named pattern IDs without
   storing pattern values in findings, and test reorder/add/remove behavior.
-- [ ] **Make history formats explicit for custom paths.** (p2) [bug] `formatOf` guesses
+- [x] **Make history formats explicit for custom paths.** (p2) [bug] `formatOf` guesses
   from filenames and content; a plain zsh history at a custom path is treated
   as bash, losing multiline boundaries. Allow a per-source format and show
   what was detected. Never infer multiline bash boundaries without timestamps.

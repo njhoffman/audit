@@ -57,7 +57,7 @@ prune, after a private backup beside it whose path is printed.`,
 				target = abs
 			} else {
 				for _, p := range o.Files {
-					if f, err := history.FormatOf(p); err == nil && f == "zsh" {
+					if f, _, err := history.FormatOf(o, p); err == nil && f == "zsh" {
 						target = p
 						break
 					}

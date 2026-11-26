@@ -167,3 +167,31 @@ func TestSyncRoundTripsThroughZsh(t *testing.T) {
 		t.Errorf("zsh reads back %q (% x), want %q", got, got, want)
 	}
 }
+
+func TestConfiguredFormatOverridesDetection(t *testing.T) {
+	// Plain zsh history (no extended timestamps) at a name without "zsh":
+	// detected as bash, its multiline record splits into lines.
+	path := filepath.Join(t.TempDir(), ".histfile")
+	body := "echo one\\\necho two\nls\necho one\\\necho two\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	o := Options{Files: []string{path}, MaxBytes: 1 << 20, MaxLines: 10}
+	if f, configured, err := FormatOf(o, path); err != nil || f != "bash" || configured {
+		t.Fatalf("detected: %q %v %v", f, configured, err)
+	}
+	o.Formats = map[string]string{path: "zsh"}
+	if f, configured, _ := FormatOf(o, path); f != "zsh" || !configured {
+		t.Fatalf("configured: %q %v", f, configured)
+	}
+	plans, err := PlanPrune(context.Background(), o, []string{"duplicates"}, nil)
+	if err != nil || len(plans) != 1 || plans[0].Remove != 1 || plans[0].Lines[0] != 4 {
+		t.Fatalf("read as zsh, the two-line record is one duplicate at line 4: %+v %v", plans, err)
+	}
+	if _, err := ApplyPrune(context.Background(), plans[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "echo one\\\necho two\nls\n" {
+		t.Errorf("the whole record went: %q", got)
+	}
+}

@@ -524,6 +524,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       patterns: []             # case-sensitive literal substrings
       max_lines: 10            # report entries with at least this many lines
       max_mb: 32               # skip larger files (1..1024), with a scan error
+      formats: []              # [{path: ~/.histfile, format: zsh}]: zsh, bash or fish where detection fails
     no_color: false
     stale:
       warn: 24h

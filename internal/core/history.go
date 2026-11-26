@@ -26,7 +26,11 @@ func NewHistory(cfg *config.Config, env *exec.Env) *HistoryScanner {
 	for _, path := range h.Files {
 		paths = append(paths, historyPath(env, path))
 	}
-	return &HistoryScanner{Options: history.Options{Files: paths, HistDB: historyPath(env, h.HistDB), Session: sessionID(env), Patterns: h.Patterns, MaxLines: h.MaxLines, MaxBytes: h.MaxMB << 20}}
+	formats := map[string]string{}
+	for _, f := range h.Formats {
+		formats[historyPath(env, f.Path)] = f.Format
+	}
+	return &HistoryScanner{Options: history.Options{Files: paths, HistDB: historyPath(env, h.HistDB), Session: sessionID(env), Patterns: h.Patterns, MaxLines: h.MaxLines, MaxBytes: h.MaxMB << 20, Formats: formats}}
 }
 
 // historyPath makes a configured history path absolute: ~ and $VAR or
@@ -70,6 +74,18 @@ func (s *HistoryScanner) Scan(ctx context.Context, rep progress.Reporter) (*Outc
 	stats := []run.Stat{
 		{Group: "history", Name: "files", Value: fmt.Sprint(files)},
 		{Group: "history", Name: "entries", Value: fmt.Sprint(entries)},
+	}
+	// Which format each file was read as, so a misdetected one shows.
+	for _, path := range s.Options.Files {
+		f, configured, err := history.FormatOf(s.Options, path)
+		if err != nil {
+			continue
+		}
+		how := "detected"
+		if configured {
+			how = "shell_history.formats"
+		}
+		stats = append(stats, run.Stat{Group: "history", Name: "format " + path, Value: f, Note: how})
 	}
 	host := s.Options.Host
 	if host == "" {

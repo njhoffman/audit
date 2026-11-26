@@ -32,8 +32,12 @@ func TestHistoryPathsAreAbsolute(t *testing.T) {
 			t.Errorf("historyPath(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
-	cfg := &config.Config{ShellHistory: config.ShellHistoryConfig{Files: []string{"rel/h", "${XDG_DATA_HOME}/f"}, HistDB: "~/.histdb/z.db"}}
+	cfg := &config.Config{ShellHistory: config.ShellHistoryConfig{Files: []string{"rel/h", "${XDG_DATA_HOME}/f"}, HistDB: "~/.histdb/z.db",
+		Formats: []config.HistoryFormat{{Path: "~/rel/h", Format: "zsh"}}}}
 	o := NewHistory(cfg, unset).Options
+	if o.Formats["/home/u/rel/h"] != "zsh" {
+		t.Errorf("formats are keyed by the same absolute paths: %v", o.Formats)
+	}
 	if o.Files[0] != "/home/u/rel/h" || o.Files[1] != "/home/u/.local/share/f" || o.HistDB != "/home/u/.histdb/z.db" {
 		t.Errorf("NewHistory: %+v %q", o.Files, o.HistDB)
 	}

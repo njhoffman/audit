@@ -161,7 +161,8 @@ func TestHistoryHistDBStatsInFreshAndSavedReports(t *testing.T) {
 			}
 			stats[stat.Name] = stat.Value
 		}
-		want := map[string]string{"files": "1", "entries": "3", "histdb total entries": "3", "histdb this host": "2", "histdb this session": "1"}
+		want := map[string]string{"files": "1", "entries": "3", "histdb total entries": "3", "histdb this host": "2", "histdb this session": "1",
+			"format " + path: "zsh"}
 		if session == "" {
 			want["histdb this session"] = "unavailable (SESSION is not set)"
 		}

@@ -26,6 +26,17 @@ type Options struct {
 	Patterns []string
 	MaxLines int
 	MaxBytes int64
+	// Formats are configured formats by absolute path; other files are
+	// detected from their name and content.
+	Formats map[string]string
+}
+
+// format is the configured format of path, else the detected one.
+func (o Options) format(path string, body []byte) string {
+	if f := o.Formats[path]; f != "" {
+		return f
+	}
+	return formatOf(path, body)
 }
 
 // HistDBCounts reports entry totals without reading or returning command text.
@@ -214,7 +225,7 @@ func Scan(ctx context.Context, o Options) ([]finding.Finding, int, int, []string
 			errs = append(errs, fmt.Sprintf("%s: exceeds shell_history.max_mb", path))
 			continue
 		}
-		es := parse(string(body), formatOf(path, body))
+		es := parse(string(body), o.format(path, body))
 		files++
 		entries += len(es)
 		var large []int

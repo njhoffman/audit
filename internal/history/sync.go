@@ -131,9 +131,18 @@ func metafy(s string) string {
 	return b.String()
 }
 
-// FormatOf reads the start of the history at path and names its format:
-// zsh, bash or fish, as Scan and PlanPrune would read it.
-func FormatOf(path string) (string, error) {
+// FormatOf names the format Scan and PlanPrune read the history at path
+// in: the configured one, else the one detected from the start of the file.
+// configured says which.
+func FormatOf(o Options, path string) (format string, configured bool, err error) {
+	if f := o.Formats[path]; f != "" {
+		return f, true, nil
+	}
+	f, err := detectFormat(path)
+	return f, false, err
+}
+
+func detectFormat(path string) (string, error) {
 	f, err := os.Open(path) // #nosec G304 -- configured history path
 	if err != nil {
 		return "", err

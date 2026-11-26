@@ -73,7 +73,7 @@ func PlanPrune(ctx context.Context, o Options, categories, ignore []string) ([]P
 		if int64(len(body)) > o.MaxBytes {
 			return nil, fmt.Errorf("%s: exceeds shell_history.max_mb", path)
 		}
-		format := formatOf(path, body)
+		format := o.format(path, body)
 		es := parse(string(body), format)
 		// Map command locations back to byte ranges, including bash timestamps
 		// and fish metadata. Retained records are copied byte for byte.

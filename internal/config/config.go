@@ -54,7 +54,19 @@ type ShellHistoryConfig struct {
 	Patterns []string `mapstructure:"patterns" yaml:"patterns"`
 	MaxLines int      `mapstructure:"max_lines" yaml:"max_lines"`
 	MaxMB    int64    `mapstructure:"max_mb" yaml:"max_mb"`
+	// Formats name the format of files whose name and content do not tell
+	// (a plain zsh history at a custom path reads as bash).
+	Formats []HistoryFormat `mapstructure:"formats" yaml:"formats"`
 }
+
+// HistoryFormat says how one history file is written: zsh, bash or fish.
+type HistoryFormat struct {
+	Path   string `mapstructure:"path" yaml:"path"`
+	Format string `mapstructure:"format" yaml:"format"`
+}
+
+// HistoryFormats are the values shell_history.formats accepts.
+var HistoryFormats = []string{"zsh", "bash", "fish"}
 
 // ScriptsConfig configures the scripts scanner.
 type ScriptsConfig struct {
@@ -453,6 +465,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("shell_history.patterns", []string{})
 	v.SetDefault("shell_history.max_lines", 10)
 	v.SetDefault("shell_history.max_mb", 32)
+	v.SetDefault("shell_history.formats", []HistoryFormat{})
 	v.SetDefault("scripts.stale_after", 2*365*24*time.Hour)
 	v.SetDefault("configs.roots", []string{"~/.config"})
 	v.SetDefault("configs.max_depth", 4)
@@ -556,6 +569,11 @@ func (c *Config) validate() error {
 	}
 	if c.ShellHistory.MaxMB > 1024 {
 		return errors.New("shell_history.max_mb must be at most 1024")
+	}
+	for _, f := range c.ShellHistory.Formats {
+		if f.Path == "" || !slices.Contains(HistoryFormats, f.Format) {
+			return fmt.Errorf("shell_history.formats entries need a path and a format of %s, got %+v", strings.Join(HistoryFormats, ", "), f)
+		}
 	}
 	for _, pattern := range c.ShellHistory.Patterns {
 		if pattern == "" {
@@ -946,6 +964,9 @@ shell_history:
   patterns: []          # case-sensitive literal substrings; e.g. ["curl | sh"]
   max_lines: 10         # report entries with at least this many logical lines
   max_mb: 32            # skip larger history files, reporting an error
+  # The format of a file whose name and content do not tell (zsh, bash or
+  # fish); e.g. [{path: ~/.histfile, format: zsh}]. Others are detected.
+  formats: []
 
 scripts:
   # Script directories (globs expanded), walked max_depth levels deep.

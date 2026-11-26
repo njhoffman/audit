@@ -161,6 +161,20 @@ func TestLoadUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestLoadHistoryFormats(t *testing.T) {
+	dir := isolate(t)
+	path := filepath.Join(dir, "c.yaml")
+	write(t, path, "shell_history:\n  formats:\n    - {path: ~/.histfile, format: zsh}\n    - {path: /Logs/Bash.History, format: bash}\n")
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []HistoryFormat{{Path: "~/.histfile", Format: "zsh"}, {Path: "/Logs/Bash.History", Format: "bash"}}
+	if !reflect.DeepEqual(cfg.ShellHistory.Formats, want) || len(cfg.Unknown) != 0 {
+		t.Errorf("formats keep dotted, mixed-case paths intact: %+v unknown %v", cfg.ShellHistory.Formats, cfg.Unknown)
+	}
+}
+
 func TestLoadErrors(t *testing.T) {
 	dir := isolate(t)
 	if _, _, err := Load(filepath.Join(dir, "missing.yaml")); err == nil {
@@ -174,7 +188,7 @@ func TestLoadErrors(t *testing.T) {
 	for _, body := range []string{
 		"history: 0", "stale: {warn: 5h, old: 1h}", "environment: {shells: [fish]}", "ai: {provider: gemini}",
 		"display: {details: 0}", "ai: {max_details: -1}", "ai: {cache_max_age: -1h}", "system: {log_max_lines: 0}",
-		"shell_history: {max_lines: 0}", "shell_history: {max_mb: 0}", "shell_history: {max_mb: 1025}", `shell_history: {patterns: [""]}`,
+		"shell_history: {max_lines: 0}", "shell_history: {formats: [{path: x, format: tcsh}]}", "shell_history: {formats: [{format: zsh}]}", "shell_history: {max_mb: 0}", "shell_history: {max_mb: 1025}", `shell_history: {patterns: [""]}`,
 		"system: {procs: {high_cpu: 0}}", "system: {services: {high_restarts: -1}}",
 		"environment: {shellcheck: {severity: loud}}", "packages: {env: shell}",
 		"packages: {registry: {max_age: 0s}}", "packages: {registry: {metadata_max_age: -1h}}",
