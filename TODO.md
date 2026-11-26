@@ -3,7 +3,7 @@
 Roadmap features first, then issues found in the code. Everything here is a
 proposal to discuss, not a decision; items under "Decisions to make" need an
 answer before work starts.
-Tag an item `(p1)` (high) or `(p3)` (low); untagged items are `p2` (normal).
+Every open item carries a priority, `(p1)` (high), `(p2)` (normal) or `(p3)` (low), and a `[category]`.
 `(due YYYY-MM-DD)` adds a date and an OVERDUE flag. `~/.shell/scripts/todo-status`,
 `/todo` and `/todo-pop` (sorted by urgency) read both.
 
@@ -139,7 +139,7 @@ coverage run.
 
 ## 7. Housekeeping
 
-- [ ] **Refresh history-related documentation wording.** [docs] (p3) `CLAUDE.md`
+- [x] **Refresh history-related documentation wording.** [docs] (p3) `CLAUDE.md`
   omits the history scanner and prune action from its overview and tree.
   README's scanner paragraph says histories are never modified; qualify
   that as scanning behavior so it agrees with the prune workflow below it.
@@ -154,7 +154,7 @@ coverage run.
   repos,scripts,taskserver}` and `internal/scan/{resources,security,storage,
   updates}`.
 
-- [ ] **Bring CLAUDE.md and the TODO intro up to date.** (p3) [docs] CLAUDE.md's overview
+- [x] **Bring CLAUDE.md and the TODO intro up to date.** (p3) [docs] CLAUDE.md's overview
   and architecture tree omit the `history` scanner and internal/history, though
   core.Commands includes it, and its "untagged is p2" (also in this file's intro)
   contradicts the rule that every open item has an explicit priority.

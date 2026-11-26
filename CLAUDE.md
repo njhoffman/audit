@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`, `repos`, `files`, `configs`, `scripts`, `ai`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Some have action subcommands that change the machine (`packages update`, `repos sync`, `files clean`, `configs clean`): planned, confirmed, verified and saved. Bare `audit` is a Bubble Tea dashboard.
+`audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`, `repos`, `files`, `configs`, `scripts`, `ai`, `history`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Some have action subcommands that change the machine (`packages update`, `repos sync`, `files clean`, `configs clean`, `history prune`, `history sync`): planned, confirmed, verified and saved. Bare `audit` is a Bubble Tea dashboard.
 
-Roadmap, open issues and proposals live in `TODO.md`, tagged `(p1)`/`(p3)` (untagged is p2); the global `/todo` and `/todo-pop` commands and SessionStart hook from `~/.shell` read it.
+Roadmap, open issues and proposals live in `TODO.md`; every open item carries an explicit `(p1)`/`(p2)`/`(p3)` priority and a `[category]`; the global `/todo` and `/todo-pop` commands and SessionStart hook from `~/.shell` read it.
 
 ## Commands
 
@@ -37,6 +37,8 @@ internal/files/         disk usage walk, reclaimable space (caches, build dirs, 
 internal/configs/       config syntax, program validators, readable credentials, orphaned configs
 internal/scripts/       script inventory, header descriptions, static checks (shellcheck, syntax, interpreters, PATH)
 internal/ai/            AI CLIs, provider keys by name, ollama, MCP servers, Claude Code hooks/permissions, AI projects
+internal/history/       shell history scan (zsh, bash, fish), histdb stats and sync, prune (whole records, backups,
+                        zsh's .LOCK and fcntl locks)
 internal/finding/       Finding, Severity, filters, ignore rules
 internal/todo/          Priority, Status, Derive and Reconcile
 internal/run/           Run, Stat, freshness
