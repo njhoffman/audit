@@ -262,3 +262,28 @@ func TestUnpackers(t *testing.T) {
 		t.Errorf("a bare asset is the binary: %q %v", got, err)
 	}
 }
+
+func TestBinsInstallRefusesSymlink(t *testing.T) {
+	bin := binsEnv(t)
+	f := newFakeRelease(t, "\x7fELF new")
+	if r := runBins(t, f, "packages", "bins", "track", "tool", "o/tool"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	real := filepath.Join(t.TempDir(), "tool-real")
+	if err := os.Rename(filepath.Join(bin, "tool"), real); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(bin, "tool")); err != nil {
+		t.Fatal(err)
+	}
+	r := runBins(t, f, "packages", "bins", "install", "tool")
+	if r.e == nil || !strings.Contains(r.e.Error(), "is a symlink to "+real) {
+		t.Fatalf("a symlinked binary is refused: %v\n%s", r.e, r.out)
+	}
+	if st, err := os.Lstat(filepath.Join(bin, "tool")); err != nil || st.Mode()&os.ModeSymlink == 0 {
+		t.Error("the link is left in place")
+	}
+	if b, _ := os.ReadFile(real); string(b) != "\x7fELF old" { // #nosec G304 -- test file
+		t.Errorf("its target is untouched: %q", b)
+	}
+}

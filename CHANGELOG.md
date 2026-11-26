@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `audit packages bins install` refuses a tracked binary that is a symlink, naming its target, instead of installing a second copy or replacing the link with a file and leaving its target behind. After an install it notes when another copy of the binary comes first on PATH.
+
 ## [0.35.1] - 2026-11-26
 
 ### Fixed

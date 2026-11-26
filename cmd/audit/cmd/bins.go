@@ -246,6 +246,16 @@ func (a *app) installBin(ctx context.Context, name, tag string, skipChecksum, fo
 	}
 	dest := a.findBin(name)
 	if dest == "" {
+		// A link would be replaced by a file (or shadowed by a second copy)
+		// while its target stays behind; which file to update is the
+		// user's call.
+		for _, d := range a.scanDirs() {
+			p := filepath.Join(d, name)
+			if st, err := os.Lstat(p); err == nil && st.Mode()&os.ModeSymlink != 0 {
+				target, _ := os.Readlink(p)
+				return fmt.Errorf("%s is a symlink to %s; audit does not replace links: remove it, or install over the file it points to yourself", p, target)
+			}
+		}
 		dirs := a.scanDirs()
 		if len(dirs) == 0 {
 			return errors.New("packages.scan_dirs is empty; nowhere to install to")
@@ -309,6 +319,9 @@ func (a *app) installBin(ctx context.Context, name, tag string, skipChecksum, fo
 		verified = "no checksum published"
 	}
 	say(a.out, "Installed %s %s from %s (%s) at %s.\n", name, rel.Tag, asset.Name, verified, dest)
+	if w := a.env.Which(name); w != "" && w != dest {
+		say(a.out, "Note: %s runs %s first on PATH, not the one installed.\n", name, w)
+	}
 	return nil
 }
 

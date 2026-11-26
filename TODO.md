@@ -421,7 +421,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
 - [x] **Warn on unknown config keys.** (p2) [feature] `v.Unmarshal(cfg)` ignores typos
   such as `packages.registery.max_age`. Decode with ErrorUnused (or diff
   `v.AllKeys()` against the struct); warn on load, fail in `audit config`.
-- [ ] **Handle a symlinked binary in `bins install`.** (p3) [bug] findBin
+- [x] **Handle a symlinked binary in `bins install`.** (refused, not followed: which file a link should update is the user's call) (p3) [bug] findBin
   (cmd/audit/cmd/bins.go) uses Lstat + IsRegular, so a symlinked binary is "not found"
   and the install lands in `scan_dirs[0]`, replacing the link or leaving two copies.
   Resolve and replace the target (or refuse), then check `env.Which(name)` matches.
