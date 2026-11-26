@@ -15,7 +15,7 @@ import (
 	"github.com/njhoffman/audit/internal/scan"
 )
 
-const (
+var (
 	cronCrontab    = "/etc/crontab"
 	cronAnacrontab = "/etc/anacrontab"
 	cronDir        = "/etc/cron.d"

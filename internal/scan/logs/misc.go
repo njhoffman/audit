@@ -11,7 +11,7 @@ import (
 )
 
 // miscRoot is the directory walked by the misc source.
-const miscRoot = "/var/log"
+var miscRoot = "/var/log"
 
 // miscMaxFileBytes caps the per-file read so a single huge log can't blow
 // up the digest. Files larger than this are still touched (we read up to

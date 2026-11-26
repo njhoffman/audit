@@ -13,7 +13,7 @@ import (
 	"github.com/njhoffman/audit/internal/scan"
 )
 
-const nginxConfigPath = "/etc/nginx/nginx.conf"
+var nginxConfigPath = "/etc/nginx/nginx.conf"
 
 func analyzeNginx(ctx context.Context) ProgramResult {
 	out := ProgramResult{Program: ProgramNginx, Source: nginxConfigPath}

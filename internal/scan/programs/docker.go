@@ -12,7 +12,7 @@ import (
 	"github.com/njhoffman/audit/internal/scan"
 )
 
-const dockerDaemonJSON = "/etc/docker/daemon.json"
+var dockerDaemonJSON = "/etc/docker/daemon.json"
 
 // dockerDaemon mirrors the subset of fields we audit. Unknown fields are
 // preserved via the catch-all map so the rule engine can inspect them.

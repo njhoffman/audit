@@ -16,7 +16,7 @@ import (
 	"github.com/njhoffman/audit/internal/scan"
 )
 
-const (
+var (
 	sshdConfigPath = "/etc/ssh/sshd_config"
 	sshdConfigDir  = "/etc/ssh/sshd_config.d"
 )

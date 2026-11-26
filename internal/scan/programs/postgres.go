@@ -13,7 +13,7 @@ import (
 	"github.com/njhoffman/audit/internal/scan"
 )
 
-const postgresGlob = "/etc/postgresql/*/main/postgresql.conf"
+var postgresGlob = "/etc/postgresql/*/main/postgresql.conf"
 
 func analyzePostgres(_ context.Context) ProgramResult {
 	out := ProgramResult{Program: ProgramPostgres}

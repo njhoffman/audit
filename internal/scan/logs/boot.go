@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const bootLogPath = "/var/log/boot.log"
+var bootLogPath = "/var/log/boot.log"
 
 // scanBoot reads /var/log/boot.log if present and non-empty, otherwise
 // falls back to `journalctl -b -p err --no-pager` (boot-time errors only).

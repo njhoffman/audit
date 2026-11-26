@@ -129,7 +129,7 @@ coverage run.
   Prune and SaveTodos failure branches of Execute (testing them needs
   `Engine.Store` as an interface), the `time.Now` fallbacks, and the
   json.Marshal errors of the adapters.
-- [ ] **Legacy system scanners at 34-43%** (p2) [test] : `scan/procs`, `scan/services`,
+- [x] **Legacy system scanners at 34-43%** (2026-11-26: procs 97.5%, services 96.3%, logs 88.3%, programs 88.4%) (p2) [test] : `scan/procs`, `scan/services`,
   `scan/logs`, `scan/programs` (the sysaudit-era code). The newer
   `scan/resources`, `scan/updates`, `scan/security` are at 88-94%; bring the
   old ones up with the same fixture style.

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const kernLogPath = "/var/log/kern.log"
+var kernLogPath = "/var/log/kern.log"
 
 func scanKern(ctx context.Context, opts Options) (SourceResult, error) {
 	out := SourceResult{Source: SourceKern}

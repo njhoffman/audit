@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const dmesgFile = "/var/log/dmesg"
+var dmesgFile = "/var/log/dmesg"
 
 // scanDmesg prefers the kernel ring buffer via `dmesg`; falls back to
 // /var/log/dmesg when the buffer is restricted (kernel.dmesg_restrict=1

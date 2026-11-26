@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const authLogPath = "/var/log/auth.log"
+var authLogPath = "/var/log/auth.log"
 
 func scanAuth(ctx context.Context, opts Options) (SourceResult, error) {
 	out := SourceResult{Source: SourceAuth}

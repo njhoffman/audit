@@ -42,7 +42,7 @@ func Scan(ctx context.Context, opts Options) (*scan.Result, error) {
 
 	enriched := []EnrichedUnit{}
 	scopes := []Scope{ScopeSystem}
-	if !opts.SkipUserScope && userBusAvailable() {
+	if !opts.SkipUserScope && userBus() {
 		scopes = append(scopes, ScopeUser)
 	}
 
@@ -103,7 +103,7 @@ func listUnits(ctx context.Context, sc Scope) ([]Unit, error) {
 	if sc == ScopeUser {
 		args = append([]string{"--user"}, args...)
 	}
-	out, err := runSystemctl(ctx, args...)
+	out, err := systemctl(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -116,12 +116,19 @@ func showUnit(ctx context.Context, sc Scope, name string) (Properties, error) {
 	if sc == ScopeUser {
 		args = append([]string{"--user"}, args...)
 	}
-	out, err := runSystemctl(ctx, args...)
+	out, err := systemctl(ctx, args...)
 	if err != nil {
 		return Properties{}, err
 	}
 	return parseShow(out), nil
 }
+
+// systemctl and userBus are what Scan reads the machine through; tests
+// replace them.
+var (
+	systemctl = runSystemctl
+	userBus   = userBusAvailable
+)
 
 // runSystemctl invokes systemctl with a sanitized environment so the output
 // is colorless and locale-stable, regardless of the user's shell config.

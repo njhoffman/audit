@@ -52,21 +52,13 @@ func Scan(ctx context.Context, opts Options) (*scan.Result, error) {
 	}
 	started := time.Now()
 
-	procs, err := process.ProcessesWithContext(ctx)
+	collected, err := listProcesses(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list processes: %w", err)
+		return nil, err
 	}
-
-	collected := make([]Process, 0, len(procs))
 	byStatus := map[string]int{}
 	zombies := []Process{}
-
-	for _, p := range procs {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		flat := snapshot(ctx, p)
-		collected = append(collected, flat)
+	for _, flat := range collected {
 		for _, s := range flat.Status {
 			byStatus[s]++
 			if s == process.Zombie {
@@ -97,6 +89,22 @@ func Scan(ctx context.Context, opts Options) (*scan.Result, error) {
 		Findings: findings,
 	}
 	return res, nil
+}
+
+// listProcesses snapshots every process; tests replace it.
+var listProcesses = func(ctx context.Context) ([]Process, error) {
+	procs, err := process.ProcessesWithContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list processes: %w", err)
+	}
+	out := make([]Process, 0, len(procs))
+	for _, p := range procs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		out = append(out, snapshot(ctx, p))
+	}
+	return out, nil
 }
 
 func snapshot(ctx context.Context, p *process.Process) Process {
