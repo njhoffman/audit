@@ -322,3 +322,22 @@ func TestRepoMetaAndTags(t *testing.T) {
 		t.Errorf("tags: %v %v", tags, err)
 	}
 }
+
+func TestPruneCache(t *testing.T) {
+	s := open(t)
+	now := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+	for hash, age := range map[string]time.Duration{"old": 100 * 24 * time.Hour, "edge": 90*24*time.Hour + time.Minute, "new": time.Hour} {
+		if err := s.CachePut(ctx, hash, CachedResponse{Model: "m", Text: hash, CreatedAt: now.Add(-age)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, err := s.PruneCache(ctx, now.Add(-90*24*time.Hour))
+	if err != nil || n != 2 {
+		t.Fatalf("pruned %d %v, want 2", n, err)
+	}
+	for hash, kept := range map[string]bool{"old": false, "edge": false, "new": true} {
+		if c, err := s.CacheGet(ctx, hash); err != nil || (c != nil) != kept {
+			t.Errorf("%s: %+v %v, kept should be %v", hash, c, err, kept)
+		}
+	}
+}

@@ -80,7 +80,7 @@ Decisions to make: which of these is worth building at all; whether
 Runs are bounded per command. Update runs are also pruned, but share one
 global limit; AI cache entries and closed tasks still have no age limit.
 
-- [ ] **Prune `llm_cache`.** (p2) [chore] Entries are keyed by prompt hash, so every
+- [x] **Prune `llm_cache`.** (p2) [chore] Entries are keyed by prompt hash, so every
   changed result set adds a row that is never read again. Drop entries older
   than a configured age (`ai.cache_max_age`, default 90d) on open or after
   each AI call.

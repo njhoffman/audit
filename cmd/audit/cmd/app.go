@@ -123,6 +123,15 @@ func (a *app) load() error {
 		return err
 	}
 	a.store = st
+	// Before the change baseline, so pruning the cache alone does not count
+	// as a change to export.
+	if age := cfg.AI.CacheMaxAge; age > 0 {
+		if n, err := st.PruneCache(context.Background(), time.Now().Add(-age)); err != nil {
+			a.log.Warn("prune the AI cache", "err", err)
+		} else if n > 0 {
+			a.log.Debug("pruned AI cache", "entries", n, "older_than", age)
+		}
+	}
 	if a.changes, err = st.Changes(context.Background()); err != nil {
 		a.log.Warn("read the database change count", "err", err)
 	}

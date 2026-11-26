@@ -658,6 +658,17 @@ func (s *Store) CachePut(ctx context.Context, hash string, c CachedResponse) err
 	return err
 }
 
+// PruneCache deletes cached AI responses created before cutoff and reports
+// how many went. Entries are keyed by prompt hash, so one whose findings
+// changed is never read again.
+func (s *Store) PruneCache(ctx context.Context, cutoff time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM llm_cache WHERE created_at < ?`, fmtTime(cutoff))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // NextManualKey returns a unique key for a hand-written task.
 func NextManualKey(command string, now time.Time) string {
 	if command == "" {

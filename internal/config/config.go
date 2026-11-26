@@ -162,6 +162,8 @@ type AIConfig struct {
 	// InstructionLimitKB is the CLAUDE.md/AGENTS.md size `audit ai` reports
 	// as large.
 	InstructionLimitKB int64 `mapstructure:"instruction_limit_kb" yaml:"instruction_limit_kb"`
+	// CacheMaxAge is how long a cached AI answer is kept; 0 keeps them all.
+	CacheMaxAge time.Duration `mapstructure:"cache_max_age" yaml:"cache_max_age"`
 }
 
 // ProviderConfig is one AI CLI.
@@ -395,6 +397,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("ai.timeout", 5*time.Minute)
 	v.SetDefault("ai.max_details", 10)
 	v.SetDefault("ai.instruction_limit_kb", 40)
+	v.SetDefault("ai.cache_max_age", 90*24*time.Hour)
 	v.SetDefault("system.journal", DefaultJournalFlags)
 	v.SetDefault("system.logs", DefaultLogs)
 	v.SetDefault("system.log_max_lines", 5000)
@@ -581,6 +584,9 @@ func (c *Config) validate() error {
 	}
 	if c.System.Services.HighRestarts < 0 {
 		return fmt.Errorf("system.services.high_restarts must be 0 (off) or more, got %d", c.System.Services.HighRestarts)
+	}
+	if c.AI.CacheMaxAge < 0 {
+		return fmt.Errorf("ai.cache_max_age must be 0 (keep all) or more, got %s", c.AI.CacheMaxAge)
 	}
 	if c.Packages.Registry.UnmaintainedAfter < 0 {
 		return fmt.Errorf("packages.registry.unmaintained_after must be 0 (off) or more, got %s", c.Packages.Registry.UnmaintainedAfter)
@@ -818,6 +824,9 @@ ai:
   # audit ai reports CLAUDE.md/AGENTS.md files larger than this (they are
   # loaded into every session).
   instruction_limit_kb: 40
+  # Cached AI answers older than this are deleted when audit starts; each
+  # changed set of findings adds a new one. 0 keeps them all.
+  cache_max_age: 2160h       # 90 days
 
 system:
   # Extra journalctl flags for the journal source.

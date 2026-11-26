@@ -546,6 +546,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       timeout: 5m
       max_details: 10          # detail lines per finding in the prompt
       instruction_limit_kb: 40 # audit ai: CLAUDE.md/AGENTS.md size reported as large
+      cache_max_age: 2160h     # cached AI answers deleted after this (90 days) at startup; 0 keeps all
     system:
       journal: "-p 4 -b -n 500 --no-pager"
       logs: [boot, dmesg, journal]
