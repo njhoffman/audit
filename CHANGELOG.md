@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-26
+
 ### Added
 
 - The project is licensed under the MIT license (`LICENSE`), which release archives now include.
