@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -127,6 +128,10 @@ func (a *app) cleanFiles(ctx context.Context, paths []string, f cleanFlags) erro
 		CacheMinMB: a.cfg.Files.CacheMinMB})
 	if !f.json && !f.dryRun {
 		say(a.errOut, "Planning from the files scan of %s.\n", r.FinishedAt.Local().Format("2006-01-02 15:04"))
+	}
+	if age, warn := r.Age(timeNow()), a.cfg.Stale.For(files.Command).Warn; warn > 0 && age > warn && !f.json {
+		say(a.errOut, "The files scan is %s old; targets are re-checked, but run `audit files -r` first to plan from what is there now.\n",
+			age.Round(time.Hour))
 	}
 	var stopSudo func()
 	defer func() {

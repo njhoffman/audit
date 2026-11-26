@@ -1,11 +1,14 @@
 package files
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/njhoffman/audit/internal/packages"
 )
@@ -47,7 +50,9 @@ type CleanOptions struct {
 func (o CleanOptions) wants(cat string) bool { return slices.Contains(o.Categories, cat) }
 
 // Safe reports whether p may be deleted or trashed: it exists, lies inside a
-// root, and is neither a root nor home itself.
+// root once symlinks in its parent directories are resolved, and is neither
+// a root nor home itself. The target itself is not followed: removing a
+// symlink removes the link.
 func (o CleanOptions) Safe(p string) bool {
 	p = filepath.Clean(p)
 	if p == "/" || p == filepath.Clean(o.Home) {
@@ -56,13 +61,81 @@ func (o CleanOptions) Safe(p string) bool {
 	if _, err := os.Lstat(p); err != nil {
 		return false
 	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(p))
+	if err != nil {
+		return false
+	}
+	real := filepath.Join(parent, filepath.Base(p))
+	if home, err := filepath.EvalSymlinks(o.Home); err == nil && real == home {
+		return false
+	}
 	for _, r := range o.Roots {
 		r = filepath.Clean(r)
-		if p != r && strings.HasPrefix(p, r+string(filepath.Separator)) {
+		if rr, err := filepath.EvalSymlinks(r); err == nil {
+			r = rr
+		}
+		if real != r && strings.HasPrefix(real, r+string(filepath.Separator)) {
 			return true
 		}
 	}
 	return false
+}
+
+// changedSince reports why the directory at p no longer looks like the scan
+// saw it, "" when it does: a build directory whose mtime moved has had
+// entries added or removed (a new install or build) and is in use again.
+func changedSince(p string, scanned time.Time) string {
+	if scanned.IsZero() {
+		return ""
+	}
+	info, err := os.Lstat(p)
+	if err != nil {
+		return ""
+	}
+	if info.ModTime().After(scanned) {
+		return "changed since the scan (in use again); rescan to include it"
+	}
+	return ""
+}
+
+// dupMismatch reports why target is no longer a copy of keep with the
+// scanned size, "" when it still is. Both are hashed, so a kept copy that
+// was edited or removed since the scan never leaves the others trashed.
+func dupMismatch(keep, target string, size int64) string {
+	sum := func(p string) ([sha256.Size]byte, string) {
+		var zero [sha256.Size]byte
+		info, err := os.Lstat(p)
+		if err != nil || !info.Mode().IsRegular() {
+			return zero, "gone or no longer a regular file"
+		}
+		if info.Size() != size {
+			return zero, "size changed since the scan"
+		}
+		f, err := os.Open(p) // #nosec G304 -- a path from the user's own files scan
+		if err != nil {
+			return zero, "unreadable: " + err.Error()
+		}
+		defer func() { _ = f.Close() }()
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err != nil {
+			return zero, "unreadable: " + err.Error()
+		}
+		var out [sha256.Size]byte
+		copy(out[:], h.Sum(nil))
+		return out, ""
+	}
+	k, why := sum(keep)
+	if why != "" {
+		return "the kept copy " + keep + " is " + why
+	}
+	t, why := sum(target)
+	if why != "" {
+		return why
+	}
+	if k != t {
+		return "no longer identical to " + keep
+	}
+	return ""
 }
 
 func (o CleanOptions) named(p string) bool {
@@ -148,7 +221,11 @@ func PlanClean(d Data, o CleanOptions) packages.Plan {
 	}
 	if o.wants(CatBuild) {
 		for _, b := range d.Build {
+			n := len(plan.Items)
 			del(CatBuild, b.Path, b.Bytes)
+			if len(plan.Items) > n && plan.Items[n].Skip == "" {
+				plan.Items[n].Skip = changedSince(b.Path, b.ModTime)
+			}
 		}
 	}
 	if o.wants(CatCores) {
@@ -170,7 +247,11 @@ func PlanClean(d Data, o CleanOptions) packages.Plan {
 		for _, x := range d.Dups {
 			// The first copy (in sorted order) stays.
 			for _, p := range x.Paths[1:] {
+				n := len(plan.Items)
 				trash(CatDuplicates, p, x.Bytes)
+				if len(plan.Items) > n && plan.Items[n].Skip == "" {
+					plan.Items[n].Skip = dupMismatch(x.Paths[0], p, x.Bytes)
+				}
 			}
 		}
 	}

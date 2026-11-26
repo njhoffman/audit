@@ -97,4 +97,12 @@ func TestFilesClean(t *testing.T) {
 	if r := runArgs(t, "files", "clean", "-L"); r.e != nil || !strings.Contains(r.out, "1 updated") {
 		t.Errorf("--last: %v\n%s", r.e, r.out)
 	}
+	if r := runArgs(t, "files", "clean", "-N"); strings.Contains(r.err, "old; targets are re-checked") {
+		t.Errorf("a fresh scan gets no age warning: %s", r.err)
+	}
+	later := time.Now().Add(30 * 24 * time.Hour) // runs carry the engine's real clock
+	timeNow = func() time.Time { return later }
+	if r := runArgs(t, "files", "clean", "-y"); !strings.Contains(r.err, "old; targets are re-checked") {
+		t.Errorf("a stale scan is called out: %v %s", r.e, r.err)
+	}
 }

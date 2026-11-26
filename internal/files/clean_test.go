@@ -104,3 +104,68 @@ func TestVerifyCleanAndCategories(t *testing.T) {
 		t.Error("unknown category")
 	}
 }
+
+func TestPlanCleanRechecksSavedScan(t *testing.T) {
+	home := t.TempDir()
+	keep, same, edited := filepath.Join(home, "a.iso"), filepath.Join(home, "b.iso"), filepath.Join(home, "c.iso")
+	for _, p := range []string{keep, same, edited} {
+		put(t, p, 64, time.Time{})
+	}
+	if err := os.WriteFile(edited, []byte(strings.Repeat("z", 64)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	busy := filepath.Join(home, "busy/node_modules")
+	idle := filepath.Join(home, "idle/node_modules")
+	put(t, filepath.Join(busy, "x"), 1, time.Time{})
+	put(t, filepath.Join(idle, "x"), 1, time.Time{})
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(busy, past, past); err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(busy, "new"), 1, time.Time{}) // a new install since the scan
+	idleInfo, err := os.Stat(idle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := Data{
+		Dups:  []Dup{{Bytes: 64, Paths: []string{keep, same, edited}}},
+		Build: []BuildDir{{Path: busy, Bytes: 1, ModTime: past}, {Path: idle, Bytes: 1, ModTime: idleInfo.ModTime()}},
+	}
+	o := CleanOptions{Categories: []string{CatDuplicates, CatBuild}, Home: home, Roots: []string{home}}
+	skips := func() map[string]string {
+		out := map[string]string{}
+		for _, it := range PlanClean(d, o).Items {
+			out[it.Name] = it.Skip
+		}
+		return out
+	}
+	got := skips()
+	if got[same] != "" || !strings.Contains(got[edited], "no longer identical") {
+		t.Errorf("duplicates are re-hashed: %v", got)
+	}
+	if !strings.Contains(got[busy], "changed since the scan") || got[idle] != "" {
+		t.Errorf("a build dir used since the scan is skipped, an idle one kept: %v", got)
+	}
+	if err := os.Remove(keep); err != nil {
+		t.Fatal(err)
+	}
+	if got := skips(); !strings.Contains(got[same], "kept copy") {
+		t.Errorf("without the kept copy no other copy is trashed: %v", got)
+	}
+}
+
+func TestSafeResolvesSymlinkedParents(t *testing.T) {
+	home, outside := t.TempDir(), t.TempDir()
+	put(t, filepath.Join(outside, "victim"), 1, time.Time{})
+	put(t, filepath.Join(home, "proj/inside"), 1, time.Time{})
+	if err := os.Symlink(outside, filepath.Join(home, "proj/link")); err != nil {
+		t.Fatal(err)
+	}
+	o := CleanOptions{Home: home, Roots: []string{filepath.Join(home, "proj")}}
+	if o.Safe(filepath.Join(home, "proj/link/victim")) {
+		t.Error("a target reached through a symlink out of the roots is not safe")
+	}
+	if !o.Safe(filepath.Join(home, "proj/inside")) || !o.Safe(filepath.Join(home, "proj/link")) {
+		t.Error("a target inside the roots, or the link itself, is safe")
+	}
+}

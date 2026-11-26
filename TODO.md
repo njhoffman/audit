@@ -396,7 +396,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
   PlanClean (internal/files/clean.go) appended `gio trash --empty` after the orphaned,
   downloads and duplicates `gio trash` steps, and RunUpdates runs steps in order, so
   "move to the trash" was permanent. The empty step now runs first.
-- [ ] **Re-check targets before `files clean` acts on a saved scan.** (p2) [bug] The
+- [x] **Re-check targets before `files clean` acts on a saved scan.** (p2) [bug] The
   plan comes from the saved run (stale after 168h). Duplicates trash every copy but
   `Paths[0]` without checking the kept copy still exists with the same content; `Safe`
   only Lstats the target (no symlink resolution in the path); build dirs are not
