@@ -79,7 +79,11 @@ func parse(body, format string) []entry {
 	start := 0
 	flush := func() {
 		if start != 0 {
-			out = append(out, entry{current.String(), start})
+			text := current.String()
+			if format == "zsh" {
+				text = unmetafy(text)
+			}
+			out = append(out, entry{text, start})
 		}
 		current.Reset()
 		start = 0

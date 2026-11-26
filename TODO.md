@@ -278,7 +278,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   and file selection, previews, confirmation, ignore rules, private backups,
   whole-record preservation, changed-file and lock checks, and a rescan.
   Saved audit runs now live under `audit history runs`.
-- [ ] **Unmetafy zsh histories when scanning.** (p3) [bug] zsh stores bytes 0x83-0xa2
+- [x] **Unmetafy zsh histories when scanning.** (p3) [bug] zsh stores bytes 0x83-0xa2
   escaped as 0x83 plus the byte xor 0x20 (measured on zsh 5.9; history sync now writes
   that way). Scan and prune compare the escaped bytes, so a non-ASCII
   `shell_history.patterns` entry never matches a zsh record. Unmetafy zsh text in

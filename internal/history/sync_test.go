@@ -57,6 +57,30 @@ func TestMetafyMatchesZsh(t *testing.T) {
 	}
 }
 
+func TestUnmetafyAndPatternMatch(t *testing.T) {
+	for _, in := range []string{"echo → ă é", "plain", "\xc2\xa2"} {
+		if got := unmetafy(metafy(in)); got != in {
+			t.Errorf("round trip %q: %q", in, got)
+		}
+	}
+	// A zsh history as zsh writes it: a non-ASCII pattern matches its record.
+	path := filepath.Join(t.TempDir(), ".zsh_history")
+	body := ": 1:0;" + metafy("ssh → prod") + "\n: 2:0;ls\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plans, err := PlanPrune(context.Background(), Options{Files: []string{path}, Patterns: []string{"→ prod"}, MaxBytes: 1 << 20, MaxLines: 10}, []string{"patterns"}, nil)
+	if err != nil || len(plans) != 1 || plans[0].Remove != 1 {
+		t.Fatalf("the pattern matches the unescaped command: %+v %v", plans, err)
+	}
+	if _, err := ApplyPrune(context.Background(), plans[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != ": 2:0;ls\n" {
+		t.Errorf("the record's escaped bytes go with it: %q", got)
+	}
+}
+
 func TestSyncRefusalsAndForce(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), ".zsh_history")

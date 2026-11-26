@@ -146,3 +146,21 @@ func FormatOf(path string) (string, error) {
 	}
 	return formatOf(path, head[:n]), nil
 }
+
+// unmetafy undoes metafy: zsh's history holds commands escaped that way, and
+// patterns and duplicates are compared against the text the user typed.
+func unmetafy(s string) string {
+	if !strings.Contains(s, "\x83") {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0x83 && i+1 < len(s) {
+			i++
+			b.WriteByte(s[i] ^ 0x20)
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
