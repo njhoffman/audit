@@ -206,14 +206,18 @@ func (p *Printer) PackageInfo(it packages.Item, tags []packages.Tag) {
 			rows = append(rows, []string{k, v})
 		}
 	}
-	add("installed", it.Version)
+	installed := it.Version
+	if at := packages.InstalledReleased(it); !at.IsZero() {
+		installed += "; released " + packages.Age(now.Sub(at)) + " ago"
+	}
+	add("installed", installed)
 	m := it.Meta
-	latest, released := packages.LatestCells(it, now)
+	latest, _ := packages.LatestCells(it, now)
 	if it.Gap != packages.GapUnknown {
 		latest += "  " + string(it.Gap)
 	}
-	if released != "" {
-		latest += "; released " + released
+	if m := it.Meta; m != nil && !m.LatestAt.IsZero() {
+		latest += "; released " + packages.Age(now.Sub(m.LatestAt)) + " ago"
 	}
 	add("latest", latest)
 	if m != nil {

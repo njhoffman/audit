@@ -98,18 +98,18 @@ func TestLookup(t *testing.T) {
 	}{
 		{
 			packages.Package{Manager: "uv", Name: "ruff", Version: "0.9.0", Source: "pypi"},
-			packages.Meta{Latest: "0.9.2", LatestAt: ts("2026-09-01T10:00:00Z"), InstalledYanked: true,
+			packages.Meta{Latest: "0.9.2", LatestAt: ts("2026-09-01T10:00:00Z"), InstalledYanked: true, InstalledAt: ts("2026-08-01T10:00:00Z"),
 				Description: "An extremely fast Python linter.", Repo: "https://github.com/astral-sh/ruff",
 				Homepage: "https://docs.astral.sh/ruff", License: "MIT", Keywords: []string{"lint", "python"}},
 		},
 		{
 			packages.Package{Manager: "uv", Name: "old", Version: "1.0", Source: "pypi"},
-			packages.Meta{Latest: "1.0", LatestAt: ts("2020-01-01T00:00:00Z"), Description: "old thing",
+			packages.Meta{Latest: "1.0", LatestAt: ts("2020-01-01T00:00:00Z"), InstalledAt: ts("2020-01-01T00:00:00Z"), Description: "old thing",
 				Deprecated: `marked "Development Status :: 7 - Inactive" on PyPI`, Repo: "https://gitlab.com/o/old/-/issues"},
 		},
 		{
 			packages.Package{Manager: "pnpm", Name: "@biomejs/biome", Version: "2.0.0", Source: "npm"},
-			packages.Meta{Latest: "2.1.0", LatestAt: ts("2026-07-01T12:00:00Z"), Description: "Biome toolchain", Homepage: "https://biomejs.dev",
+			packages.Meta{Latest: "2.1.0", LatestAt: ts("2026-07-01T12:00:00Z"), InstalledAt: ts("2026-06-01T00:00:00Z"), Description: "Biome toolchain", Homepage: "https://biomejs.dev",
 				Repo: "https://github.com/biomejs/biome", License: "MIT OR Apache-2.0", Keywords: []string{"format", "lint"}},
 		},
 		{
@@ -153,7 +153,7 @@ func TestLookup(t *testing.T) {
 			if !described {
 				t.Error("described = false")
 			}
-			got.LatestAt = got.LatestAt.UTC()
+			got.LatestAt, got.InstalledAt = got.LatestAt.UTC(), got.InstalledAt.UTC()
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("\n got %+v\nwant %+v", got, tt.want)
 			}
@@ -213,7 +213,8 @@ func TestGoProxySelection(t *testing.T) {
 func TestCratesSkipsAPIWhenUnchanged(t *testing.T) {
 	c, _, hits := newClient(t)
 	p := packages.Package{Manager: "cargo", Name: "ripgrep", Version: "14.1.1", Source: "crates.io"}
-	prev := &packages.Meta{Latest: "14.1.1"}
+	dated := time.Date(2024, 9, 8, 0, 0, 0, 0, time.UTC)
+	prev := &packages.Meta{Latest: "14.1.1", Installed: "14.1.1", InstalledAt: dated}
 	m, described, err := c.Lookup(ctx, p, prev, false)
 	if err != nil || described || m.Latest != "14.1.1" || hits.Load() != 1 {
 		t.Errorf("index only: %+v described=%v err=%v hits=%d", m, described, err, hits.Load())
@@ -222,18 +223,28 @@ func TestCratesSkipsAPIWhenUnchanged(t *testing.T) {
 	if _, described, _ := c.Lookup(ctx, p, prev, false); !described || hits.Load() != 3 {
 		t.Errorf("a new release should ask the API: described=%v hits=%d", described, hits.Load())
 	}
+	prev.Latest, prev.Installed = "14.1.1", "14.1.0"
+	m, _, _ = c.Lookup(ctx, p, prev, false)
+	if hits.Load() != 5 || !m.InstalledAt.Equal(m.LatestAt) || m.InstalledAt.IsZero() {
+		t.Errorf("another installed version asks the API for its date: %+v hits=%d", m, hits.Load())
+	}
 }
 
 func TestNpmSkipsFullDocWhenDated(t *testing.T) {
 	c, _, hits := newClient(t)
 	p := packages.Package{Manager: "pnpm", Name: "@biomejs/biome", Version: "2.0.0", Source: "npm"}
-	prev := &packages.Meta{Latest: "2.1.0", LatestAt: time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)}
+	prev := &packages.Meta{Latest: "2.1.0", LatestAt: time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC),
+		Installed: "2.0.0", InstalledAt: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
 	if m, _, err := c.Lookup(ctx, p, prev, true); err != nil || !m.LatestAt.IsZero() || hits.Load() != 1 {
 		t.Errorf("dated and unchanged: %+v err=%v hits=%d", m, err, hits.Load())
 	}
 	prev.LatestAt = time.Time{}
 	if m, _, _ := c.Lookup(ctx, p, prev, true); m.LatestAt.IsZero() || hits.Load() != 3 {
 		t.Errorf("an undated entry should fetch the full document: %+v hits=%d", m, hits.Load())
+	}
+	prev.LatestAt, prev.InstalledAt = time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC), time.Time{}
+	if m, _, _ := c.Lookup(ctx, p, prev, true); m.InstalledAt.IsZero() || hits.Load() != 5 {
+		t.Errorf("an undated install should fetch the full document: %+v hits=%d", m, hits.Load())
 	}
 }
 

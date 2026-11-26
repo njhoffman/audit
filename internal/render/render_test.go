@@ -317,6 +317,7 @@ func TestPackageInfoAndTable(t *testing.T) {
 		Package: packages.Package{Manager: "cargo", Name: "ripgrep", Version: "14.1.0", Source: "crates.io",
 			Executables: []string{"rg"}},
 		Meta: &packages.Meta{Latest: "15.0.0", LatestAt: now.Add(-72 * time.Hour), CheckedAt: now.Add(-time.Hour),
+			Installed: "14.1.0", InstalledAt: now.Add(-400 * 24 * time.Hour),
 			Description: "line-oriented search", Repo: "https://github.com/BurntSushi/ripgrep", License: "MIT",
 			Keywords: []string{"grep", "regex"}, Archived: true, Error: "HTTP 502"},
 		Gap:  packages.GapMajor,
@@ -324,6 +325,9 @@ func TestPackageInfoAndTable(t *testing.T) {
 	}
 	p.PackageInfo(it, []packages.Tag{{Manager: "cargo", ID: "ripgrep", Tag: "search", Source: packages.TagAI}})
 	out := b.String()
+	if !strings.Contains(out, "14.1.0; released 1 year ago") || strings.Contains(out, "yours") {
+		t.Errorf("the installed version is dated once, on its own line:\n%s", out)
+	}
 	for _, w := range []string{"ripgrep", "14.1.0", "15.0.0", "major", "3 days ago", "1 hour ago", "line-oriented search",
 		"https://github.com/BurntSushi/ripgrep", "MIT", "grep, regex", "archived", "HTTP 502", "search (ai)", "cargo (auto)", "rg"} {
 		if !strings.Contains(out, w) {

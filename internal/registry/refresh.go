@@ -146,6 +146,9 @@ func merge(p packages.Package, prev *packages.Meta, m packages.Meta, described b
 		if m.LatestAt.IsZero() && m.Latest == prev.Latest {
 			m.LatestAt = prev.LatestAt
 		}
+		if m.InstalledAt.IsZero() && prev.Installed == p.Version {
+			m.InstalledAt = prev.InstalledAt
+		}
 		if m.Deprecated == "" && !described {
 			m.Deprecated = prev.Deprecated
 		}

@@ -22,7 +22,7 @@ import (
 )
 
 // schemaVersion 2 added update_items.kind.
-const schemaVersion = 2
+const schemaVersion = 3
 
 const schema = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS package_meta (
 	latest_at TEXT NOT NULL DEFAULT '',
 	installed TEXT NOT NULL DEFAULT '',
 	installed_yanked INTEGER NOT NULL DEFAULT 0,
+	installed_at TEXT NOT NULL DEFAULT '',
 	deprecated TEXT NOT NULL DEFAULT '',
 	archived INTEGER NOT NULL DEFAULT 0,
 	description TEXT NOT NULL DEFAULT '',
@@ -212,6 +213,7 @@ func checkVersion(db *sql.DB) error {
 // table the current schema already created with the new shape.
 var migrations = []func(*sql.Tx) error{
 	migrateV2,
+	migrateV3,
 }
 
 func migrate(db *sql.DB, from int, steps []func(*sql.Tx) error) error {
@@ -248,6 +250,26 @@ func migrateV2(tx *sql.Tx) error {
 		}
 	}
 	return nil
+}
+
+// migrateV3 adds package_meta.installed_at, the release date of the
+// installed version.
+func migrateV3(tx *sql.Tx) error {
+	return addColumn(tx, "package_meta", "installed_at", "TEXT NOT NULL DEFAULT ''")
+}
+
+// addColumn adds column to table unless the current schema already
+// created it.
+func addColumn(tx *sql.Tx, table, column, decl string) error {
+	var n int
+	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name=?`, table, column).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	_, err := tx.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + decl)
+	return err
 }
 
 // Changes counts the rows this store has written since it was opened. The

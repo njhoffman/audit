@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Package views date the installed version too: for a package behind its latest release, RELEASED reads e.g. "7 days ago (yours 1 month)", and `audit packages info` shows the installed version's release date. PyPI, npm and crates.io supply it on the next registry lookup (npm and crates.io fetch their full record once more per package to fill it in); the Go proxy, rubygems and GitHub releases stay undated. The database moves to schema version 3 (a column added to the registry cache), so an older audit binary refuses it afterwards.
+
 ## [0.44.0] - 2026-11-26
 
 ### Added

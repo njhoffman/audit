@@ -332,6 +332,13 @@ func TestLatestCellsAndRegistryNote(t *testing.T) {
 			Deprecated: "gone", LatestAt: now.Add(-400 * 24 * time.Hour)}}, "1.0 (deprecated, yanked)", "1 year ago"},
 		{Item{Package: pypi, Meta: &Meta{CheckedAt: now, Latest: "1.1", Installed: "0.9", InstalledYanked: true}}, "1.1", ""},
 		{Item{Package: pypi, Meta: &Meta{CheckedAt: now, Archived: true}}, "no releases (archived)", ""},
+		{Item{Package: pypi, Meta: &Meta{CheckedAt: now, Latest: "1.2", LatestAt: now.Add(-60 * 24 * time.Hour),
+			Installed: "1.0", InstalledAt: now.Add(-400 * 24 * time.Hour)}}, "1.2", "2 months ago (yours 1 year)"},
+		// A date of another installed version, or the latest itself, adds nothing.
+		{Item{Package: pypi, Meta: &Meta{CheckedAt: now, Latest: "1.2", LatestAt: now.Add(-60 * 24 * time.Hour),
+			Installed: "0.9", InstalledAt: now.Add(-400 * 24 * time.Hour)}}, "1.2", "2 months ago"},
+		{Item{Package: Package{Manager: "uv", Name: "x", Version: "1.2", Source: "pypi"}, Meta: &Meta{CheckedAt: now, Latest: "1.2",
+			LatestAt: now.Add(-60 * 24 * time.Hour), Installed: "1.2", InstalledAt: now.Add(-60 * 24 * time.Hour)}}, "1.2", "2 months ago"},
 	}
 	for _, c := range cases {
 		if l, r := LatestCells(c.it, now); l != c.latest || r != c.relAge {

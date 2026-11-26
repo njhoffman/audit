@@ -126,3 +126,17 @@ func TestRefreshCancelled(t *testing.T) {
 		t.Errorf("cancelled refresh should change nothing: %+v %+v", got, st)
 	}
 }
+
+func TestMergeKeepsInstalledDate(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	dated := now.Add(-1000 * time.Hour)
+	p := packages.Package{Manager: "cargo", Name: "rg", Version: "14.1.0", Source: "crates.io"}
+	prev := &packages.Meta{Latest: "14.1.0", Installed: "14.1.0", InstalledAt: dated}
+	if m := merge(p, prev, packages.Meta{Latest: "14.1.0"}, false, nil, now); !m.InstalledAt.Equal(dated) {
+		t.Errorf("an undated lookup of the same install keeps the date: %v", m.InstalledAt)
+	}
+	p.Version = "14.2.0"
+	if m := merge(p, prev, packages.Meta{Latest: "14.2.0"}, false, nil, now); !m.InstalledAt.IsZero() {
+		t.Errorf("another install does not inherit it: %v", m.InstalledAt)
+	}
+}

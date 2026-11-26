@@ -93,6 +93,9 @@ type Meta struct {
 	// InstalledYanked applies to it only.
 	Installed       string `json:"installed,omitempty"`
 	InstalledYanked bool   `json:"installed_yanked,omitempty"`
+	// InstalledAt is when the installed version was released, where the
+	// registry dates every version (PyPI, npm, crates.io).
+	InstalledAt time.Time `json:"installed_at,omitzero"`
 	// Deprecated holds the registry's deprecation message ("" when none).
 	Deprecated  string    `json:"deprecated,omitempty"`
 	Archived    bool      `json:"archived,omitempty"`
@@ -352,7 +355,9 @@ func (r Ref) Find(invs []Inventory) []Package {
 
 // LatestCells are the LATEST and RELEASED cells of an inventory row. A
 // package from a registry with no cached data shows "unchecked"; one whose
-// last lookup failed and has nothing cached shows "lookup failed".
+// last lookup failed and has nothing cached shows "lookup failed". RELEASED
+// is the latest release's age, followed by the installed version's when
+// that is another, dated version: "2 months ago (yours 1 year)".
 func LatestCells(it Item, now time.Time) (latest, released string) {
 	m := it.Meta
 	switch {
@@ -382,8 +387,20 @@ func LatestCells(it Item, now time.Time) (latest, released string) {
 	}
 	if !m.LatestAt.IsZero() {
 		released = Age(now.Sub(m.LatestAt)) + " ago"
+		if at := InstalledReleased(it); !at.IsZero() && it.Version != m.Latest {
+			released += " (yours " + Age(now.Sub(at)) + ")"
+		}
 	}
 	return latest, released
+}
+
+// InstalledReleased is when the installed version of it was released, or
+// zero when the cache does not date it or dates another version.
+func InstalledReleased(it Item) time.Time {
+	if m := it.Meta; m != nil && m.Installed == it.Version {
+		return m.InstalledAt
+	}
+	return time.Time{}
 }
 
 // RegistryNote says how old a manager's registry data is ("" when none of

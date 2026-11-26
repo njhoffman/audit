@@ -11,7 +11,7 @@ import (
 	"github.com/njhoffman/audit/internal/packages"
 )
 
-const metaCols = `manager, id, registry, latest, latest_at, installed, installed_yanked, deprecated, archived,
+const metaCols = `manager, id, registry, latest, latest_at, installed, installed_yanked, installed_at, deprecated, archived,
 	description, repo, homepage, license, keywords, checked_at, described_at, tagged_at, error`
 
 // PackageMeta returns every cached registry entry by packages.Meta.Key.
@@ -24,13 +24,14 @@ func (s *Store) PackageMeta(ctx context.Context) (map[string]packages.Meta, erro
 	out := map[string]packages.Meta{}
 	for rows.Next() {
 		var m packages.Meta
-		var latestAt, keywords, checked, described, tagged string
-		if err := rows.Scan(&m.Manager, &m.ID, &m.Registry, &m.Latest, &latestAt, &m.Installed, &m.InstalledYanked,
+		var latestAt, installedAt, keywords, checked, described, tagged string
+		if err := rows.Scan(&m.Manager, &m.ID, &m.Registry, &m.Latest, &latestAt, &m.Installed, &m.InstalledYanked, &installedAt,
 			&m.Deprecated, &m.Archived, &m.Description, &m.Repo, &m.Homepage, &m.License, &keywords,
 			&checked, &described, &tagged, &m.Error); err != nil {
 			return nil, err
 		}
 		m.LatestAt, m.CheckedAt, m.DescribedAt, m.TaggedAt = parseTS(latestAt), parseTS(checked), parseTS(described), parseTS(tagged)
+		m.InstalledAt = parseTS(installedAt)
 		_ = json.Unmarshal([]byte(keywords), &m.Keywords)
 		if len(m.Keywords) == 0 {
 			m.Keywords = nil
@@ -48,7 +49,7 @@ func (s *Store) SavePackageMeta(ctx context.Context, ms []packages.Meta) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO package_meta(`+metaCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -59,7 +60,7 @@ func (s *Store) SavePackageMeta(ctx context.Context, ms []packages.Meta) error {
 			kw = []string{}
 		}
 		if _, err := stmt.ExecContext(ctx, m.Manager, m.ID, m.Registry, m.Latest, fmtTime(m.LatestAt), m.Installed,
-			m.InstalledYanked, m.Deprecated, m.Archived, m.Description, m.Repo, m.Homepage, m.License, mustJSON(kw),
+			m.InstalledYanked, fmtTime(m.InstalledAt), m.Deprecated, m.Archived, m.Description, m.Repo, m.Homepage, m.License, mustJSON(kw),
 			fmtTime(m.CheckedAt), fmtTime(m.DescribedAt), fmtTime(m.TaggedAt), m.Error); err != nil {
 			return fmt.Errorf("save meta %s: %w", m.Key(), err)
 		}

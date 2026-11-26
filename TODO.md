@@ -223,7 +223,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   version where the registry gives it, and per-manager behind counts in the summary.
   Done 2026-11-26: GAP column and "N behind" per manager. The installed version's age
   is split out below.
-- [ ] **Show how long ago the installed version was released.** (p3) [feature] RELEASED is
+- [x] **Show how long ago the installed version was released.** (PyPI, npm and crates.io; the Go proxy, rubygems and GitHub would each need one more request per package and are left undated) (p3) [feature] RELEASED is
   the latest release's age. The registries give every version's date (npm's `time`,
   PyPI's `releases`, crates.io's versions) but the cache keeps only the latest's; store
   the installed version's date in packages.Meta and show it (or "behind for N days").

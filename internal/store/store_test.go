@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -263,7 +265,7 @@ func TestMigrateV1(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if v, _ := s.Setting(ctx, "schema_version"); v != "2" {
+		if v, _ := s.Setting(ctx, "schema_version"); v != strconv.Itoa(schemaVersion) {
 			t.Errorf("schema_version = %q", v)
 		}
 		u, err := s.LastUpdate(ctx)
@@ -274,9 +276,10 @@ func TestMigrateV1(t *testing.T) {
 	}
 
 	db, _ = sql.Open("sqlite", "file:"+path)
-	_, _ = db.Exec(`UPDATE meta SET value='3' WHERE key='schema_version'`)
+	newer := strconv.Itoa(schemaVersion + 1)
+	_, _ = db.Exec(`UPDATE meta SET value=? WHERE key='schema_version'`, newer)
 	_ = db.Close()
-	if _, err := Open(path); err == nil || err.Error() != "database schema version 3 is not supported (want 2)" {
+	if _, err := Open(path); err == nil || err.Error() != fmt.Sprintf("database schema version %s is not supported (want %d)", newer, schemaVersion) {
 		t.Errorf("a newer database is refused: %v", err)
 	}
 }
@@ -411,5 +414,48 @@ func TestPreviousRun(t *testing.T) {
 	}
 	if prev, err := s.PreviousRun(ctx, scoped); err != nil || prev != nil {
 		t.Errorf("a scoped run compares with its own scope only: %+v %v", prev, err)
+	}
+}
+
+func TestMigrateV2AddsInstalledAt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+		`INSERT INTO meta VALUES ('schema_version', '2')`,
+		`CREATE TABLE package_meta (manager TEXT NOT NULL, id TEXT NOT NULL, registry TEXT NOT NULL DEFAULT '',
+			latest TEXT NOT NULL DEFAULT '', latest_at TEXT NOT NULL DEFAULT '', installed TEXT NOT NULL DEFAULT '',
+			installed_yanked INTEGER NOT NULL DEFAULT 0, deprecated TEXT NOT NULL DEFAULT '', archived INTEGER NOT NULL DEFAULT 0,
+			description TEXT NOT NULL DEFAULT '', repo TEXT NOT NULL DEFAULT '', homepage TEXT NOT NULL DEFAULT '',
+			license TEXT NOT NULL DEFAULT '', keywords TEXT NOT NULL DEFAULT '[]', checked_at TEXT NOT NULL DEFAULT '',
+			described_at TEXT NOT NULL DEFAULT '', tagged_at TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '',
+			PRIMARY KEY (manager, id))`,
+		`INSERT INTO package_meta(manager, id, latest, installed) VALUES ('uv', 'ruff', '0.9.0', '0.8.0')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	_ = db.Close()
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	ms, err := s.PackageMeta(ctx)
+	if err != nil || ms["uv:ruff"].Latest != "0.9.0" || !ms["uv:ruff"].InstalledAt.IsZero() {
+		t.Fatalf("old rows read with no installed date: %+v %v", ms, err)
+	}
+	at := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	m := ms["uv:ruff"]
+	m.InstalledAt = at
+	if err := s.SavePackageMeta(ctx, []packages.Meta{m}); err != nil {
+		t.Fatal(err)
+	}
+	if ms, _ = s.PackageMeta(ctx); !ms["uv:ruff"].InstalledAt.Equal(at) {
+		t.Errorf("installed_at round trip: %v", ms["uv:ruff"].InstalledAt)
 	}
 }

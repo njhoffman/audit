@@ -333,6 +333,9 @@ func (c *Client) pypi(ctx context.Context, p packages.Package) (packages.Meta, e
 		m.InstalledYanked = true
 		for _, f := range files {
 			m.InstalledYanked = m.InstalledYanked && f.Yanked
+			if t := parseTime(f.UploadTime); !t.IsZero() && (m.InstalledAt.IsZero() || t.Before(m.InstalledAt)) {
+				m.InstalledAt = t
+			}
 		}
 	}
 	for _, cl := range i.Classifiers {
@@ -411,11 +414,13 @@ func (c *Client) npm(ctx context.Context, p packages.Package, prev *packages.Met
 	// The latest dist-tag can point at a prerelease (pnpm:node had
 	// 27.0.0-alpha). Picking a stable release instead needs the full
 	// document, as do release dates; that can be megabytes, so it is fetched
-	// once per new release, or on every lookup while the dist-tag is a
-	// prerelease. A failure leaves the date unknown (and the dist-tag's
-	// version in place) and it is tried again on the next lookup.
+	// once per new release or installed version, or on every lookup while
+	// the dist-tag is a prerelease. A failure leaves the dates unknown (and
+	// the dist-tag's version in place) and it is tried again on the next
+	// lookup.
 	stable := wantsStable(p.Version, m.Latest)
-	if stable || prev == nil || prev.Latest != m.Latest || prev.LatestAt.IsZero() {
+	if stable || prev == nil || prev.Latest != m.Latest || prev.LatestAt.IsZero() ||
+		prev.Installed != p.Version || prev.InstalledAt.IsZero() {
 		var doc struct {
 			Time     map[string]string `json:"time"`
 			Versions map[string]struct {
@@ -436,6 +441,7 @@ func (c *Client) npm(ctx context.Context, p packages.Package, prev *packages.Met
 				}
 			}
 			m.LatestAt = parseTime(doc.Time[m.Latest])
+			m.InstalledAt = parseTime(doc.Time[p.Version])
 		} else if ctx.Err() != nil {
 			return packages.Meta{}, ctx.Err()
 		}
@@ -540,8 +546,9 @@ func (c *Client) crates(ctx context.Context, p packages.Package, prev *packages.
 		}
 	}
 	// The index has no dates or descriptions; the API has both but is rate
-	// limited, so it is asked when the cache is old or a release appeared.
-	if !describe && prev != nil && prev.Latest == m.Latest {
+	// limited, so it is asked when the cache is old, a release appeared or
+	// another version was installed.
+	if !describe && prev != nil && prev.Latest == m.Latest && prev.Installed == p.Version && !prev.InstalledAt.IsZero() {
 		return m, false, nil
 	}
 	var r crateResp
@@ -553,6 +560,9 @@ func (c *Client) crates(ctx context.Context, p packages.Package, prev *packages.
 	for _, v := range r.Versions {
 		if v.Num == m.Latest {
 			m.LatestAt, m.License = parseTime(v.CreatedAt), v.License
+		}
+		if v.Num == p.Version {
+			m.InstalledAt = parseTime(v.CreatedAt)
 		}
 	}
 	return m, true, nil
