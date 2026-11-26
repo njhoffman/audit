@@ -282,3 +282,13 @@ func TestPlanUpdatesUsesToolsAndSkipsCarried(t *testing.T) {
 		t.Errorf("command = %q", got)
 	}
 }
+
+func TestFailReasonSignals(t *testing.T) {
+	for code, want := range map[int]string{
+		exec.ExitTimeout: "timed out after 1m0s", exec.ExitCanceled: "interrupted: boom", 139: "killed by SIGSEGV: boom", 2: "exit status 2: boom",
+	} {
+		if got := failReason(exec.Result{Code: code}, time.Minute, "boom\n"); got != want {
+			t.Errorf("failReason(%d) = %q, want %q", code, got, want)
+		}
+	}
+}

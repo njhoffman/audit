@@ -198,6 +198,12 @@ func (c *Client) runError(res exec.Result, hint string) error {
 	case exec.ExitTimeout:
 		return fmt.Errorf("%s timed out after %s (ai.timeout)", command, c.Timeout)
 	}
+	if d := exec.Describe(res.Code); d != "" {
+		if line := firstLine(strings.TrimSpace(res.Stderr)); line != "" {
+			d += ": " + line
+		}
+		return fmt.Errorf("%s %s", command, d)
+	}
 	return fmt.Errorf("%s exited %d: %s", command, res.Code, firstLine(strings.TrimSpace(res.Stderr)))
 }
 

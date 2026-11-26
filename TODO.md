@@ -420,7 +420,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
   --serve --open` passes `?token=` to xdg-open, readable in /proc/*/cmdline without
   hidepid, while internal/taskserver's doc says other local users cannot reach tasks.
   Swap a single-use URL token for an HttpOnly SameSite=Strict cookie, or fix the claim.
-- [ ] **Report signals and cancels apart from timeouts.** (p3) [bug] internal/exec/exec.go
+- [x] **Report signals and cancels apart from timeouts.** (p3) [bug] internal/exec/exec.go
   maps any negative exit code (SIGSEGV, OOM kill, Ctrl-C) to ExitTimeout, so update
   results and explain prompts say "timed out" for crashes. Check ctx.Err() and
   WaitStatus.Signaled(); add ExitSignal/ExitCanceled.

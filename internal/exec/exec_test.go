@@ -104,6 +104,31 @@ func TestOSRunnerNotFoundAndTimeout(t *testing.T) {
 	}
 }
 
+func TestOSRunnerSignalAndCancel(t *testing.T) {
+	dir := t.TempDir()
+	writeExe(t, filepath.Join(dir, "crash"), "#!/bin/sh\nkill -SEGV $$\n")
+	writeExe(t, filepath.Join(dir, "slow"), "#!/bin/sh\nexec sleep 5\n")
+	e := testEnv(t, dir, "/usr/bin", "/bin")
+	res := e.Run(context.Background(), "crash", nil, Options{})
+	if res.Code != 128+11 || Describe(res.Code) != "killed by SIGSEGV" {
+		t.Errorf("a signal death is not a timeout: code %d %q", res.Code, Describe(res.Code))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(100*time.Millisecond, cancel)
+	if res := e.Run(ctx, "slow", nil, Options{Timeout: 10 * time.Second}); res.Code != ExitCanceled || Describe(res.Code) != "interrupted" {
+		t.Errorf("a canceled run: code %d", res.Code)
+	}
+}
+
+func TestDescribe(t *testing.T) {
+	for code, want := range map[int]string{0: "", 1: "", 2: "", ExitTimeout: "timed out", ExitNotFound: "command not found",
+		ExitCanceled: "interrupted", 137: "killed by SIGKILL", 128 + 15: "killed by SIGTERM", 128 + 40: "killed by signal 40", 200: ""} {
+		if got := Describe(code); got != want {
+			t.Errorf("Describe(%d) = %q, want %q", code, got, want)
+		}
+	}
+}
+
 func TestOSRunnerStdinClosedByDefault(t *testing.T) {
 	dir := t.TempDir()
 	writeExe(t, filepath.Join(dir, "reader"), "#!/bin/sh\ncat\necho done\n")

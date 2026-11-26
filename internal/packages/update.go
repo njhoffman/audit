@@ -401,6 +401,9 @@ func failReason(res exec.Result, timeout time.Duration, output string) string {
 		return "command not found"
 	}
 	reason := fmt.Sprintf("exit status %d", res.Code)
+	if d := exec.Describe(res.Code); d != "" {
+		reason = d
+	}
 	if line := LastLine(output); line != "" {
 		reason += ": " + line
 	}

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A command that crashes or is killed (SIGSEGV, an OOM kill) is reported as "killed by SIGSEGV", and one stopped with Ctrl-C as "interrupted", in update, sync and clean results and AI errors, instead of "timed out".
+
 ## [0.27.6] - 2026-11-26
 
 ### Fixed

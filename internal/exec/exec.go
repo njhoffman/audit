@@ -6,19 +6,54 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
-// Exit codes reported when the command could not produce its own.
+// Exit codes reported when the command could not produce its own. A command
+// killed by a signal reports 128 plus the signal number, as shells do.
 const (
 	ExitNotFound = 127
 	ExitTimeout  = 124
+	// ExitCanceled is a command stopped because the caller's context was
+	// canceled (Ctrl-C), the shell's code for SIGINT.
+	ExitCanceled = 130
+	exitSignal   = 128
 )
+
+// Describe says in words why a command ended with code when the code is one
+// of the above or a signal death ("killed by SIGSEGV"), and "" for an
+// ordinary exit status.
+func Describe(code int) string {
+	switch {
+	case code == ExitTimeout:
+		return "timed out"
+	case code == ExitNotFound:
+		return "command not found"
+	case code == ExitCanceled:
+		return "interrupted"
+	case code > exitSignal && code < exitSignal+65:
+		sig := syscall.Signal(code - exitSignal)
+		return "killed by " + signalName(sig)
+	}
+	return ""
+}
+
+func signalName(sig syscall.Signal) string {
+	names := map[syscall.Signal]string{syscall.SIGHUP: "SIGHUP", syscall.SIGINT: "SIGINT", syscall.SIGQUIT: "SIGQUIT",
+		syscall.SIGILL: "SIGILL", syscall.SIGABRT: "SIGABRT", syscall.SIGBUS: "SIGBUS", syscall.SIGFPE: "SIGFPE",
+		syscall.SIGKILL: "SIGKILL", syscall.SIGSEGV: "SIGSEGV", syscall.SIGPIPE: "SIGPIPE", syscall.SIGTERM: "SIGTERM"}
+	if n, ok := names[sig]; ok {
+		return n
+	}
+	return fmt.Sprintf("signal %d", int(sig))
+}
 
 // DefaultTimeout bounds a command when Options.Timeout is zero.
 const DefaultTimeout = 30 * time.Second
@@ -223,9 +258,13 @@ func (r *OSRunner) Run(ctx context.Context, name string, args []string, opts Opt
 	case err == nil:
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		res.Code = ExitTimeout
+	case errors.Is(ctx.Err(), context.Canceled):
+		res.Code = ExitCanceled
 	case errors.As(err, &exitErr):
 		res.Code = exitErr.ExitCode()
-		if res.Code < 0 {
+		if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			res.Code = exitSignal + int(ws.Signal())
+		} else if res.Code < 0 {
 			res.Code = ExitTimeout
 		}
 	default:
