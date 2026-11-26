@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.3] - 2026-11-26
+
 ### Fixed
 
 - A stable install is no longer offered a prerelease as its latest version. npm's `latest` dist-tag (for example `node` at `27.0.0-alpha`) and a prerelease `info.version` on PyPI are replaced by the newest stable release; crates already worked this way. A prerelease install is still offered newer prereleases.
