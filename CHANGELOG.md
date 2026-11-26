@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-26
+
 ### Changed
 
 - `audit history sync` refuses when histdb is empty, and when histdb has fewer entries than the history file (it only knows the commands since it was installed), unless `-F`/`--force` is given; it prints both counts first. It replaces the file under the same locks and checks as `history prune`, prints the backup's path, keeps the new file's modification time (it used to restore the old one, hiding the change from shells), and writes commands metafied as zsh does, so non-ASCII commands such as `ă` or `→` read back intact. `-f`/`--file` names the file; otherwise the first configured history that reads as zsh is used, so a custom name such as `~/.histfile` is found.
