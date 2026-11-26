@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.2] - 2026-11-26
+
 ### Fixed
 
 - `audit history prune` now holds the locks zsh honors while it replaces a history: `$HISTFILE.LOCK` (zsh's default) and an fcntl lock (`HIST_FCNTL_LOCK`). Its flock alone was ignored by zsh, so a shell saving during a prune could write to the file being replaced and lose those lines. A zsh saving meanwhile now waits and appends to the new file. Lines a lock-free writer such as bash appends just before the replacement are copied onto the new file, and the directory is synced so the replacement survives a crash.
