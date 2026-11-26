@@ -67,6 +67,9 @@ func TestPlanClean(t *testing.T) {
 		byCat[CatOrphaned][0] != "gio trash -- "+orphan || byCat[CatDownloads][0] != "gio trash -- "+dl {
 		t.Errorf("user files go to the trash, the first duplicate stays: %v", byCat)
 	}
+	if first := plan.Items[0]; first.Manager != CatTrash {
+		t.Errorf("the trash is emptied before anything is moved into it: first step %s %v", first.Manager, first.Command)
+	}
 	o.Paths = []string{filepath.Join(home, "proj")}
 	if plan := PlanClean(d, o); len(plan.Items) != 1 || plan.Items[0].Name != nm {
 		t.Errorf("paths limit the plan: %+v", plan.Items)

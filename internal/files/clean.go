@@ -112,6 +112,14 @@ func PlanClean(d Data, o CleanOptions) packages.Plan {
 		}
 		plan.Items = append(plan.Items, it)
 	}
+	// The trash is emptied first: steps run in order, and emptying it after
+	// the orphaned, downloads and duplicates steps moved files into it would
+	// delete those for good. First, it empties what the scan measured.
+	if o.wants(CatTrash) && d.Trash > 0 && len(o.Paths) == 0 {
+		it := item(CatTrash, d.TrashPath, d.Trash, "gio", "trash", "--empty")
+		it.Latest = "emptied"
+		plan.Items = append(plan.Items, it)
+	}
 	if o.wants(CatCache) {
 		for _, c := range d.Caches {
 			if c.Bytes < o.CacheMinMB*mb {
@@ -165,11 +173,6 @@ func PlanClean(d Data, o CleanOptions) packages.Plan {
 				trash(CatDuplicates, p, x.Bytes)
 			}
 		}
-	}
-	if o.wants(CatTrash) && d.Trash > 0 && len(o.Paths) == 0 {
-		it := item(CatTrash, d.TrashPath, d.Trash, "gio", "trash", "--empty")
-		it.Latest = "emptied"
-		plan.Items = append(plan.Items, it)
 	}
 	return plan
 }

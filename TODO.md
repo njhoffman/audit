@@ -11,7 +11,7 @@ Refreshed 2026-10-22 against the current working tree. Checked items may be
 implemented but not released yet. Issues below are based on source review;
 suggestions describe proposed behavior rather than existing guarantees.
 
-Reviewed: 2026-11-05
+Reviewed: 2026-11-26
 
 ## 1. Rescan everything and run unattended
 
@@ -383,3 +383,51 @@ them from being noise (one per check, dismissable like ignore rules).
   colors. Pick one mapping (shared shape and color where a severity maps to a
   priority, distinct otherwise), add a vertical separator between the findings
   and the open tasks columns, and keep the header legend matching.
+
+## 14. Review findings (2026-11-26)
+
+From a source review; items 2 onward are read from the code, not reproduced.
+
+- [x] **`files clean -C all` empties the trash after moving files into it.** (p1) [bug]
+  PlanClean (internal/files/clean.go) appended `gio trash --empty` after the orphaned,
+  downloads and duplicates `gio trash` steps, and RunUpdates runs steps in order, so
+  "move to the trash" was permanent. The empty step now runs first.
+- [ ] **Re-check targets before `files clean` acts on a saved scan.** (p2) [bug] The
+  plan comes from the saved run (stale after 168h). Duplicates trash every copy but
+  `Paths[0]` without checking the kept copy still exists with the same content; `Safe`
+  only Lstats the target (no symlink resolution in the path); build dirs are not
+  re-checked for idleness. Re-check size/mtime/hash and idleness at clean time, skip
+  what changed with a reason, and warn past `stale.warn`.
+- [ ] **Guard `audit history sync`.** (p2) [bug] internal/history/history.go replaces the
+  zsh history from histdb with no check that histdb is non-empty or covers the file,
+  no lock or changed-since check like prune, restores the old mtime on the new file
+  (`os.Chtimes`, line 124), writes commands without zsh metafication, never prints the
+  backup path, and finds the target by `zsh` in the basename. Refuse on an empty or
+  smaller histdb without `--force`, reuse prune's lock/recheck, keep the new mtime,
+  metafy (with a round-trip test), print the backup, accept an explicit target.
+- [ ] **Expand and validate `data_dir`.** (p2) [bug] `export.dir` goes through
+  expandHome, `data_dir` does not (internal/config/config.go:511), so `~/...` or a
+  relative path creates a separate database under the working directory. Expand `~`
+  and `$VAR`, reject relative paths in validate(), test it.
+- [ ] **Warn on unknown config keys.** (p2) [feature] `v.Unmarshal(cfg)` ignores typos
+  such as `packages.registery.max_age`. Decode with ErrorUnused (or diff
+  `v.AllKeys()` against the struct); warn on load, fail in `audit config`.
+- [ ] **Handle a symlinked binary in `bins install`.** (p3) [bug] findBin
+  (cmd/audit/cmd/bins.go) uses Lstat + IsRegular, so a symlinked binary is "not found"
+  and the install lands in `scan_dirs[0]`, replacing the link or leaving two copies.
+  Resolve and replace the target (or refuse), then check `env.Which(name)` matches.
+- [ ] **Keep the task server token off process command lines.** (p3) [bug] `todo
+  --serve --open` passes `?token=` to xdg-open, readable in /proc/*/cmdline without
+  hidepid, while internal/taskserver's doc says other local users cannot reach tasks.
+  Swap a single-use URL token for an HttpOnly SameSite=Strict cookie, or fix the claim.
+- [ ] **Report signals and cancels apart from timeouts.** (p3) [bug] internal/exec/exec.go
+  maps any negative exit code (SIGSEGV, OOM kill, Ctrl-C) to ExitTimeout, so update
+  results and explain prompts say "timed out" for crashes. Check ctx.Err() and
+  WaitStatus.Signaled(); add ExitSignal/ExitCanceled.
+- [ ] **Create the environment capture's side files in a private directory.** (p3) [bug]
+  internal/environment/capture.go creates `$AUDIT_ENV_OUT.t` and `.s` by shell
+  redirection in shared /tmp with guessable names. Use os.MkdirTemp (0700) for all three.
+- [ ] **Gate the release workflow and refresh its metadata.** (p3) [chore]
+  .github/workflows/release.yml runs goreleaser on a tag with no test step; the
+  `go mod tidy` hook mutates the tree (use `go mod tidy -diff`); .goreleaser.yml's
+  header describes the old sysaudit tool and archives `LICENSE*`, which does not exist.

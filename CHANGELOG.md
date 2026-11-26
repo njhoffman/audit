@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `audit files clean` empties the trash before moving orphaned data, old downloads and duplicates into it. With `-C all` (or `trash` together with any of those) it used to empty the trash last, deleting the files it had just said were moved to the trash.
+
 ## [0.27.3] - 2026-11-26
 
 ### Fixed
