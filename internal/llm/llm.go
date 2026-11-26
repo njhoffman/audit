@@ -162,6 +162,18 @@ func (c *Client) Ask(ctx context.Context, req Request, refresh bool) (*Response,
 	return resp, nil
 }
 
+// Cached returns the cached answer for req, or nil, without running the CLI.
+func (c *Client) Cached(ctx context.Context, req Request) (*Response, error) {
+	if c.Cache == nil {
+		return nil, nil
+	}
+	hit, err := c.Cache.CacheGet(ctx, c.Hash(req))
+	if err != nil || hit == nil {
+		return nil, err
+	}
+	return &Response{Text: hit.Text, Model: hit.Model, CostUSD: hit.CostUSD, Cached: true, CreatedAt: hit.CreatedAt}, nil
+}
+
 // AskJSON asks req, which must carry a Schema, and decodes the answer into v.
 func (c *Client) AskJSON(ctx context.Context, req Request, refresh bool, v any) (*Response, error) {
 	if req.Schema == "" {

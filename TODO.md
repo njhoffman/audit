@@ -363,7 +363,7 @@ them from being noise (one per check, dismissable like ignore rules).
   Decisions: commit on its own or after a prompt (config `ai.commit_fixes`);
   how to find the changed files (diff `git status` before and after, or ask the
   session to report them); refuse when the tree was already dirty.
-- [ ] **Pass the task's explanation to AI fix.** (p2) [feature] `audit todo explain`
+- [x] **Pass the task's explanation to AI fix.** (p2) [feature] `audit todo explain`
   answers are kept only in `llm_cache` under a prompt hash, and FixTaskPrompt
   (internal/llm/prompts.go) sends just the task and its findings. Look up the
   cached explanation for the task (or save explanations against the task id) and

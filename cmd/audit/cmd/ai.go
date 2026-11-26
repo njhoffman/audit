@@ -347,7 +347,27 @@ func (a *app) fixSession(ctx context.Context, id int64) (*osexec.Cmd, error) {
 	if t.Status.Closed() {
 		return nil, fmt.Errorf("#%d is %s", t.ID, t.Status.Label())
 	}
-	return a.aiClient("").SessionCommand(ctx, llm.FixTaskPrompt(t, fs)), nil
+	client := a.aiClient("")
+	return client.SessionCommand(ctx, llm.FixTaskPrompt(t, fs, a.cachedExplanation(ctx, client, t, fs))), nil
+}
+
+// cachedExplanation is the answer an earlier `audit todo explain` gave for t
+// and its current findings, at the configured analysis level first and then
+// at the others; "" when there is none. A failed cache read only loses the
+// context, so it is logged.
+func (a *app) cachedExplanation(ctx context.Context, client *llm.Client, t todo.Todo, fs []finding.Finding) string {
+	levels := append([]string{a.cfg.AI.AnalysisLevel}, llm.Levels...)
+	for _, level := range levels {
+		hit, err := client.Cached(ctx, llm.ExplainTaskRequest(t, fs, level))
+		if err != nil {
+			a.log.Warn("read the cached explanation", "task", t.ID, "err", err)
+			return ""
+		}
+		if hit != nil {
+			return hit.Text
+		}
+	}
+	return ""
 }
 
 // findingsFor picks the findings a scanned task was derived from.

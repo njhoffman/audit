@@ -3,10 +3,14 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/njhoffman/audit/internal/llm"
+	"github.com/njhoffman/audit/internal/store"
 
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/todo"
@@ -256,5 +260,32 @@ func TestTodoFix(t *testing.T) {
 	}
 	if got := readFile(t, argv); !strings.Contains(got, "--model\nm1\n--\n") || !strings.Contains(got, "Fix task #2") {
 		t.Errorf("claude argv:\n%s", got)
+	}
+}
+
+func TestFixUsesCachedExplanation(t *testing.T) {
+	env(t)
+	a := newApp(io.Discard, io.Discard)
+	if err := a.load(); err != nil {
+		t.Fatal(err)
+	}
+	defer a.close()
+	ctx := context.Background()
+	tk := todo.Todo{ID: 9, Command: "packages", Title: "Broken black"}
+	fs := []finding.Finding{{Check: "exe.broken", Subject: "black"}}
+	client := a.aiClient("")
+	if got := a.cachedExplanation(ctx, client, tk, fs); got != "" {
+		t.Fatalf("nothing cached yet: %q", got)
+	}
+	// Explained earlier at another level than the configured one.
+	req := llm.ExplainTaskRequest(tk, fs, "deep")
+	if err := a.store.CachePut(ctx, client.Hash(req), store.CachedResponse{Model: "m", Text: "the venv is gone", CreatedAt: timeNow()}); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.cachedExplanation(ctx, client, tk, fs); got != "the venv is gone" {
+		t.Errorf("cached explanation: %q", got)
+	}
+	if got := a.cachedExplanation(ctx, client, tk, append(fs, finding.Finding{Check: "other"})); got != "" {
+		t.Errorf("an explanation of other findings is not reused: %q", got)
 	}
 }
