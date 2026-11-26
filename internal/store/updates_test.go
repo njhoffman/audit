@@ -115,3 +115,50 @@ func TestRuntimeMetaRoundTrip(t *testing.T) {
 		t.Errorf("runtime meta: %+v %v", got, err)
 	}
 }
+
+func TestPruneUpdatesPerKind(t *testing.T) {
+	s := open(t)
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	save := func(i int, kinds ...string) int64 {
+		t.Helper()
+		u := &packages.Update{StartedAt: at.Add(time.Duration(i) * time.Hour), FinishedAt: at.Add(time.Duration(i) * time.Hour)}
+		for _, k := range kinds {
+			u.Items = append(u.Items, packages.UpdateResult{Manager: "m", ID: k, Name: k, Status: packages.UpdateOK, Kind: k})
+		}
+		if err := s.SaveUpdate(ctx, u); err != nil {
+			t.Fatal(err)
+		}
+		return u.ID
+	}
+	sync := save(0, "sync")
+	mixed := save(1, packages.KindRuntime, packages.KindMigration)
+	empty := save(2)
+	var pkgs []int64
+	for i := 3; i < 8; i++ {
+		pkgs = append(pkgs, save(i, packages.KindPackage))
+	}
+	if err := s.PruneUpdates(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	for kind, want := range map[string]int64{"sync": sync, packages.KindMigration: mixed, packages.KindRuntime: mixed} {
+		if u, err := s.LastUpdateOf(ctx, kind); err != nil || u == nil || u.ID != want {
+			t.Errorf("the last %s run was evicted by package updates: %+v %v", kind, u, err)
+		}
+	}
+	us, err := s.Updates(ctx, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, u := range us {
+		ids = append(ids, u.ID)
+	}
+	want := []int64{pkgs[4], pkgs[3], empty, mixed, sync}
+	if !reflect.DeepEqual(ids, want) {
+		t.Errorf("kept %v, want %v (2 newest package runs and the newest of every other kind)", ids, want)
+	}
+	var orphans int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM update_items WHERE update_id NOT IN (SELECT id FROM updates)`).Scan(&orphans); err != nil || orphans != 0 {
+		t.Errorf("items left behind by pruned runs: %d %v", orphans, err)
+	}
+}

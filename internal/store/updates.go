@@ -166,12 +166,22 @@ func (s *Store) UpdateFailures(ctx context.Context) (map[string]packages.UpdateF
 	return out, rows.Err()
 }
 
-// PruneUpdates keeps the newest keep update runs.
+// PruneUpdates keeps the newest keep update runs of each action kind (a run
+// counts toward every kind it has an item of), so frequent package updates
+// cannot evict the last repo sync, migration or cleanup. Runs without items
+// keep the newest keep of their own. Items go with their run (ON DELETE
+// CASCADE).
 func (s *Store) PruneUpdates(ctx context.Context, keep int) error {
 	if keep <= 0 {
 		return nil
 	}
-	_, err := s.db.ExecContext(ctx, `DELETE FROM updates WHERE id NOT IN
-		(SELECT id FROM updates ORDER BY finished_at DESC, id DESC LIMIT ?)`, keep)
+	_, err := s.db.ExecContext(ctx, `WITH kinds AS (SELECT DISTINCT update_id, kind FROM update_items),
+		ranked AS (SELECT k.update_id AS id,
+			ROW_NUMBER() OVER (PARTITION BY k.kind ORDER BY u.finished_at DESC, u.id DESC) AS rn
+			FROM kinds k JOIN updates u ON u.id = k.update_id),
+		bare AS (SELECT id FROM updates u WHERE NOT EXISTS (SELECT 1 FROM update_items i WHERE i.update_id = u.id)
+			ORDER BY finished_at DESC, id DESC LIMIT ?)
+		DELETE FROM updates WHERE id NOT IN (SELECT id FROM ranked WHERE rn <= ?) AND id NOT IN (SELECT id FROM bare)`,
+		keep, keep)
 	return err
 }

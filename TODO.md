@@ -87,7 +87,7 @@ global limit; AI cache entries and closed tasks still have no age limit.
 - [x] **Bound saved update runs.** `Store.PruneUpdates` keeps the newest
   `history` update runs; package updates and the shared `finishUpdate` path
   call it after saving.
-- [ ] **Keep update history per action kind.** (p2) [bug] `PruneUpdates` currently
+- [x] **Keep update history per action kind.** (p2) [bug] `PruneUpdates` currently
   applies one global limit. Frequent package updates can evict the last repo
   sync, runtime migration or cleanup, making that action's `--last` empty.
   Keep the newest N per kind and test mixed-kind runs and child-row cleanup.
