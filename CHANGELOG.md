@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.5] - 2026-11-26
+
 ### Fixed
 
 - `data_dir` expands `~/` and `$VARS` like `export.dir`, and a relative path is refused. `data_dir: ~/...` used to create a separate, empty database under a literal `~` folder in whatever directory audit was run from.
