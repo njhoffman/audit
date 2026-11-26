@@ -135,9 +135,8 @@ Run without a command in a terminal for the interactive dashboard, or with
 	root.MarkFlagsMutuallyExclusive("all", "fzf")
 	root.MarkFlagsMutuallyExclusive("only", "fzf")
 
-	root.AddCommand(newSystemCmd(a), newEnvironmentCmd(a), newPackagesCmd(a), newReposCmd(a), newFilesCmd(a), newConfigsCmd(a), newScriptsCmd(a), newAICmd(a),
-		newTodoCmd(a), newHistoryCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a),
-		newFzfHelperCmd(a))
+	root.AddCommand(scanCommands(a)...)
+	root.AddCommand(newTodoCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a), newFzfHelperCmd(a))
 	return root
 }
 

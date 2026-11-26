@@ -121,31 +121,6 @@ func (b tuiBackend) FixSession(ctx context.Context, id int64) (*osexec.Cmd, erro
 	return b.a.fixSession(ctx, id)
 }
 
-// defaultScanner builds command's scanner with its configured scope.
-func (a *app) defaultScanner(command string) (core.Scanner, error) {
-	switch command {
-	case "system":
-		return core.NewSystem(a.cfg, a.env, nil)
-	case "environment":
-		return core.NewEnvironment(a.cfg, a.env)
-	case "packages":
-		return a.packagesScanner(nil)
-	case "repos":
-		return a.reposScanner(), nil
-	case "files":
-		return core.NewFiles(a.cfg, a.env), nil
-	case "configs":
-		return a.configsScanner(context.Background()), nil
-	case "scripts":
-		return a.scriptsScanner(), nil
-	case "history":
-		return core.NewHistory(a.cfg, a.env), nil
-	case "ai":
-		return a.aiScanner(false), nil
-	}
-	return nil, fmt.Errorf("unknown command %q", command)
-}
-
 // printer renders into buf at width in the backend's color profile.
 func (b tuiBackend) printer(buf *bytes.Buffer, width int) *render.Printer {
 	p := render.NewProfile(buf, b.profile(), width)

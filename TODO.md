@@ -59,8 +59,8 @@ show the current state, not what moved.
 
 ## 3. New scanners (candidates)
 
-Each one implements `core.Scanner`, joins `core.Commands`, gets a subcommand
-and a `defaultScanner` case (see section 5 for collapsing those).
+Each one implements `core.Scanner`, joins `core.Commands`, gets a subcommand,
+an entry in `scanEntries` (cmd/audit/cmd/scanners.go) and a config section.
 
 - [ ] **`audit containers`** [feature] (p3): docker and podman dangling images, unused
   volumes, stopped containers older than N days, images far behind their tag,
@@ -101,7 +101,7 @@ global limit; AI cache entries and closed tasks still have no age limit.
 
 ## 5. Architecture cleanups
 
-- [ ] **One scanner registry.** (p2) [refactor] Adding a command touches `core.Commands`,
+- [x] **One scanner registry.** (scanEntries in cmd/audit/cmd/scanners.go builds the cobra commands and default scanners; a test keeps it in step with core.Commands and core.ScopeFlags, which stay in core for its own use) (p2) [refactor] Adding a command touches `core.Commands`,
   `core.ScopeFlags`, `defaultScanner` in `cmd/audit/cmd/tui.go`, the
   `root.AddCommand` list and the scan subcommand. A single table of
   `{name, scopeFlag, build func, newCmd func}` in core (or cmd) would make

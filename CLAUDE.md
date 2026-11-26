@@ -24,7 +24,7 @@ Roadmap, open issues and proposals live in `TODO.md`; every open item carries an
 
 ```
 cmd/audit/cmd/          cobra wiring: root (dashboard/summary/html), one file per command, todo, history, config, export,
-                        analyze, tasks web page, sudo session, TUI backend (tui.go: defaultScanner)
+                        analyze, tasks web page, sudo session, TUI backend (tui.go), the scanning-command table (scanners.go: scanEntries)
 internal/core/          Engine: Resolve (auto/rescan/saved-only), Execute (scan, ignore, save, prune, reconcile tasks), Analyze;
                         one scanner adapter per command, core.Commands, core.ScopeFlags
 internal/system/        system scanner over internal/scan/{procs,services,users,logs,programs,storage,resources,updates,security}
@@ -60,7 +60,7 @@ internal/version/       version, commit, date set by -ldflags
 tools/release/          `just release`: changelog-driven semver bump, commit, tag, push
 ```
 
-A new scanning command implements `core.Scanner` (and `core.Owner` if it supports a narrowed scope) with an adapter in `internal/core/`, gets added to `core.Commands` (and `core.ScopeFlags` if it has a scope flag), a `newXCmd` in its own file under `cmd/audit/cmd/` added to `root.AddCommand`, a case in `defaultScanner` (`cmd/audit/cmd/tui.go`), and a config section.
+A new scanning command implements `core.Scanner` (and `core.Owner` if it supports a narrowed scope) with an adapter in `internal/core/`, gets added to `core.Commands` (and `core.ScopeFlags` if it has a scope flag), a `newXCmd` in its own file under `cmd/audit/cmd/`, an entry in `scanEntries` (`cmd/audit/cmd/scanners.go`: its cobra command and default scanner; `TestScanEntriesMatchCommands` checks it against `core.Commands` and `core.ScopeFlags`), and a config section.
 
 ## Conventions
 
