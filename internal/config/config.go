@@ -68,6 +68,11 @@ type ShellHistoryConfig struct {
 	// Formats name the format of files whose name and content do not tell
 	// (a plain zsh history at a custom path reads as bash).
 	Formats []HistoryFormat `mapstructure:"formats" yaml:"formats"`
+	// BackupMaxAge and BackupKeep, when set, remove older prune, sync and
+	// restore backups after each of those commands; 0 leaves them to
+	// audit history backups clean.
+	BackupMaxAge time.Duration `mapstructure:"backup_max_age" yaml:"backup_max_age"`
+	BackupKeep   int           `mapstructure:"backup_keep" yaml:"backup_keep"`
 }
 
 // HistoryPattern is one shell_history.patterns entry: a literal substring
@@ -505,6 +510,8 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("shell_history.files", []string{"~/.zsh_history", "~/.bash_history", "$XDG_DATA_HOME/fish/fish_history"})
 	v.SetDefault("shell_history.histdb", "~/.histdb/zsh-history.db")
 	v.SetDefault("shell_history.patterns", []HistoryPattern{})
+	v.SetDefault("shell_history.backup_max_age", time.Duration(0))
+	v.SetDefault("shell_history.backup_keep", 0)
 	v.SetDefault("shell_history.max_lines", 10)
 	v.SetDefault("shell_history.max_mb", 32)
 	v.SetDefault("shell_history.formats", []HistoryFormat{})
@@ -611,6 +618,9 @@ func Load(explicit string) (*Config, string, error) {
 func (c *Config) validate() error {
 	if c.DataDir != "" && !filepath.IsAbs(c.DataDir) {
 		return fmt.Errorf("data_dir must be an absolute path (or start with ~/), not %q", c.DataDir)
+	}
+	if c.ShellHistory.BackupMaxAge < 0 || c.ShellHistory.BackupKeep < 0 {
+		return errors.New("shell_history.backup_max_age and backup_keep must be 0 (keep all) or more")
 	}
 	if c.ShellHistory.MaxMB > 1024 {
 		return errors.New("shell_history.max_mb must be at most 1024")
@@ -1036,6 +1046,11 @@ shell_history:
   # The format of a file whose name and content do not tell (zsh, bash or
   # fish); e.g. [{path: ~/.histfile, format: zsh}]. Others are detected.
   formats: []
+  # prune, sync and restore keep a private backup beside each history.
+  # They are removed only by audit history backups clean unless one of
+  # these is set, which then applies after each of those commands.
+  backup_max_age: 0s    # e.g. 720h
+  backup_keep: 0        # newest backups kept per history
 
 scripts:
   # Script directories (globs expanded), walked max_depth levels deep.

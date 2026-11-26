@@ -29,7 +29,7 @@ values. Repeated commands are retained and are not issues. The history summary
 includes histdb total, current-host and current-session entry counts when available.
 No history is changed. Use audit history runs to list saved audit runs.`,
 		func() (core.Scanner, error) { return core.NewHistory(a.cfg, a.env), nil }, nil)
-	c.AddCommand(newHistoryRunsCmd(a), newHistoryPruneCmd(a), newHistorySyncCmd(a))
+	c.AddCommand(newHistoryRunsCmd(a), newHistoryPruneCmd(a), newHistorySyncCmd(a), newHistoryBackupsCmd(a))
 	return c
 }
 
@@ -91,6 +91,7 @@ prune, after a private backup beside it whose path is printed.`,
 				return err
 			}
 			say(a.out, "Wrote %d histdb entries to %s; the previous file is in %s.\n", plan.HistDB, target, backup)
+			a.retainBackups(core.NewHistory(a.cfg, a.env).Options, true)
 			_, err = a.engine.Execute(context.WithoutCancel(c.Context()), core.NewHistory(a.cfg, a.env), a.progress(true))
 			return err
 		}}
@@ -210,6 +211,7 @@ original history, including any sensitive entries you removed.`,
 					say(a.out, "%s: %d entries removed; backup: %s\n", r.Path, r.Removed, backup)
 				}
 			}
+			a.retainBackups(o, !asJSON)
 			// Reconcile findings and tasks even after a partial prune.
 			_, err = a.engine.Execute(context.WithoutCancel(c.Context()), core.NewHistory(a.cfg, a.env), a.progress(!asJSON))
 			if err != nil {

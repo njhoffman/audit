@@ -57,6 +57,8 @@ audit history prune -N         # preview duplicate removals (keeps the first occ
 audit history prune            # confirm, back up, remove duplicates, then rescan
 audit history prune -O all -N  # preview duplicates, large entries and pattern matches
 audit history prune -O patterns # remove configured substring matches after confirmation
+audit history backups          # list prune/sync backups beside each history
+audit history backups clean -o 720h  # remove backups older than 30 days (asks first)
 audit history runs packages    # list saved audit runs for packages
 audit repos -w                 # findings added, resolved and changed since the previous repos run
 audit packages -r -w           # scan, then show what the scan changed

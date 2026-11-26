@@ -77,6 +77,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **history sync** [**-f** _file_] [**-F**] [**-y**]
 
+**audit** **history backups** [**-j**] | **clean** [**-o** _age_] [**-k** _n_] [**-N**] [**-y**] [**-j**] | **restore** _backup_ [**-N**] [**-y**] [**-j**]
+
 **audit** **history runs** [_command_] [**-l** _n_] [**-j**]
 
 **audit** **history runs diff** _A_ [_B_] [**-j**]
@@ -214,6 +216,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **history prune** [_file_...]
 :   Rechecks current configured histories and removes whole matching records, including bash timestamps and fish metadata. **-O**/**\-\-only** selects **duplicates** (default, keeps the first occurrence), **multiline**, **patterns**, or **all**. Ignore rules apply. Optional paths must name configured files. **-N**/**\-\-dry-run** previews counts and start lines without modifying files; **-j -N** prints a JSON plan. Otherwise the plan is confirmed, or **-y** skips confirmation; JSON execution requires **-y**. Each modified file gets a private mode-0600 **.NAME.audit-backup-*** beside it, then an atomic replacement preserving its permissions. Files changed after the preview, locked files, symlinks, hard links and files owned by others are refused. While replacing a file it holds the locks zsh honors: **$HISTFILE.LOCK** (zsh's default; one under 10 seconds old means a shell is saving, an older one is broken as zsh does) and an fcntl write lock (zsh with **HIST_FCNTL_LOCK**), plus a flock against other audit runs; a zsh saving meanwhile waits and then appends to the new file. bash takes no lock: lines it appends just before the replacement are copied onto the new file, and the directory is synced so the replacement survives a crash. Successful or partial pruning is followed by a rescan to reconcile tasks. Close other shell sessions first: their in-memory histories can restore removed entries on their next save. Backups contain the original commands, including any removed secrets; restore by copying the backup over the original path while shells are closed, and remove backups when no longer needed.
+
+**history backups**
+:   Lists the private **.NAME.audit-backup-*** files that **prune**, **sync** and **restore** leave beside each configured history, newest first, with age, size and record count (never their commands). They keep removed entries, secrets included. **clean** removes those older than **-o**/**\-\-older-than** _age_ and, per history, all but the newest **-k**/**\-\-keep** _n_ (at least one is required), after listing them and asking (**-y** skips, **-N** only lists). Nothing is removed otherwise, unless **shell_history.backup_max_age** or **shell_history.backup_keep** is set: then the same rule runs after every prune, sync and restore. **restore** _backup_ compares the backup with its history by record counts (how many come back, how many go), then replaces the history under prune's checks and locks; the current file is backed up first, so a restore can be undone the same way. Close other shell sessions before restoring.
 
 **history runs** [_command_]
 :   Lists saved audit runs, newest first. This was previously **audit history**. **-l** limits the count (20 by default, 0 for all); **-j** prints JSON. The top-level **history** configuration key still controls saved run retention.
@@ -530,6 +535,8 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     history: 20                # saved runs kept per command
     shell_history:
       files: [~/.zsh_history, ~/.bash_history, "$XDG_DATA_HOME/fish/fish_history"]
+      backup_max_age: 0s       # remove prune/sync/restore backups older than this after each of them; 0: only history backups clean
+      backup_keep: 0           # keep only this many newest backups per history after each of them; 0: no limit
       patterns: []             # case-sensitive literal substrings: "text" (subject PATH:pattern-N, by position) or {name: NAME, match: "text"} (subject PATH:NAME, kept when the list is reordered)
       max_lines: 10            # report entries with at least this many lines
       max_mb: 32               # skip larger files (1..1024), with a scan error

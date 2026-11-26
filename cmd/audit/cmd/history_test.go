@@ -236,3 +236,68 @@ func TestHistorySyncRefusesAndForces(t *testing.T) {
 		t.Error("a missing --file is an error")
 	}
 }
+
+func TestHistoryBackupsCommands(t *testing.T) {
+	cfgHome, _ := env(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".bash_history")
+	if err := os.WriteFile(path, []byte("ls\nls\npwd\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeCfg := func(extra string) {
+		cfg := "shell_history:\n  files: [" + path + "]\n" + extra
+		if err := os.WriteFile(filepath.Join(cfgHome, "audit.yaml"), []byte(cfg), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeCfg("")
+	if r := runArgs(t, "history", "backups"); r.e != nil || r.out != "No history backups.\n" {
+		t.Fatalf("none yet: %v %q", r.e, r.out)
+	}
+	if r := runArgs(t, "history", "prune", "-y"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	r := runArgs(t, "history", "backups", "-j")
+	var bs []struct {
+		Path    string `json:"path"`
+		Records int    `json:"records"`
+	}
+	if r.e != nil || json.Unmarshal([]byte(r.out), &bs) != nil || len(bs) != 1 || bs[0].Records != 3 {
+		t.Fatalf("one backup of 3 records: %v %s", r.e, r.out)
+	}
+	backup := bs[0].Path
+
+	r = runArgs(t, "history", "backups", "restore", backup, "-N")
+	if r.e != nil || !strings.Contains(r.out, "2 records now, 3 in the backup; restoring brings back 1 and drops 0") {
+		t.Fatalf("restore preview: %v %q", r.e, r.out)
+	}
+	if r := runArgs(t, "history", "backups", "restore", backup); r.e == nil || !strings.Contains(r.e.Error(), "--yes") {
+		t.Errorf("restore asks first: %v", r.e)
+	}
+	if r := runArgs(t, "history", "backups", "restore", backup, "-y"); r.e != nil || !strings.Contains(r.out, "Restored "+path) {
+		t.Fatalf("restore: %v %q", r.e, r.out)
+	}
+	if b, _ := os.ReadFile(path); string(b) != "ls\nls\npwd\n" { // #nosec G304 -- test file
+		t.Errorf("restored body %q", b)
+	}
+
+	if r := runArgs(t, "history", "backups", "clean"); r.e == nil || !strings.Contains(r.e.Error(), "--older-than, --keep") {
+		t.Errorf("clean needs a limit: %v", r.e)
+	}
+	r = runArgs(t, "history", "backups", "clean", "-k", "1", "-N")
+	if r.e != nil || strings.Count(r.out, ".audit-backup-") != 1 {
+		t.Errorf("keep 1 of 2 previews one removal: %v %q", r.e, r.out)
+	}
+	if r := runArgs(t, "history", "backups", "clean", "-k", "1", "-y"); r.e != nil || !strings.Contains(r.out, "Removed 1 backup(s).") {
+		t.Errorf("clean: %v %q", r.e, r.out)
+	}
+
+	// With backup_keep set, prune removes the older backups itself.
+	writeCfg("  backup_keep: 1\n")
+	if r := runArgs(t, "history", "prune", "-y"); r.e != nil || !strings.Contains(r.out, "Removed 1 old backup(s)") {
+		t.Errorf("retention after prune: %v %q", r.e, r.out)
+	}
+	if m, _ := filepath.Glob(filepath.Join(dir, "..bash_history.audit-backup-*")); len(m) != 1 {
+		t.Errorf("one backup left: %v", m)
+	}
+}
