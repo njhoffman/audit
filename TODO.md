@@ -221,7 +221,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   so it disappears with `-n` or in a pipe. RELEASED is the age of the latest release,
   not how long the install has trailed it. Add a gap column, the age of the installed
   version where the registry gives it, and per-manager behind counts in the summary.
-- [ ] **Per-manager package counts in the export's summary.json.** (p2) [feature]
+- [x] **Per-manager package counts in the export's summary.json.** (added without a schema_version bump: the contract bumps only on renames or removals) (p2) [feature]
   shdash's Packages panel wants, per manager, the installed count and how many
   can be updated (by gap: patch, minor, major, update; plus ahead and
   unchecked), and when they were checked. Today that means parsing

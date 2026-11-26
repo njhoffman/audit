@@ -44,6 +44,39 @@ type Summary struct {
 	Commands   []Command             `json:"commands"`
 	OpenTasks  map[todo.Priority]int `json:"open_tasks"`
 	LastUpdate *UpdateSummary        `json:"last_update,omitempty"`
+	// Packages counts the latest packages run's inventory per manager, so a
+	// widget need not read packages.json; omitted when packages never ran.
+	Packages map[string]ManagerSummary `json:"packages,omitempty"`
+}
+
+// ManagerSummary is one package manager's counts in summary.json.
+type ManagerSummary struct {
+	Available bool `json:"available"`
+	Installed int  `json:"installed"`
+	// Outdated counts packages behind their latest release: the sum of the
+	// patch, minor, major and update gaps.
+	Outdated int       `json:"outdated"`
+	Gaps     GapCounts `json:"gaps"`
+	// Unchecked counts packages with a registry and no cached lookup.
+	Unchecked int `json:"unchecked"`
+	// CheckedAt is the oldest registry lookup among the manager's packages,
+	// omitted when none was looked up (system managers have no registry).
+	CheckedAt time.Time `json:"checked_at,omitzero"`
+	// CarriedFrom is set when the run kept an earlier scan of this manager.
+	CarriedFrom time.Time `json:"carried_from,omitzero"`
+}
+
+// GapCounts counts packages by how far they trail their latest release.
+// Unknown counts packages whose versions do not compare (a commit, a
+// local build) or that have no latest version.
+type GapCounts struct {
+	Current int `json:"current"`
+	Patch   int `json:"patch"`
+	Minor   int `json:"minor"`
+	Major   int `json:"major"`
+	Update  int `json:"update"`
+	Ahead   int `json:"ahead"`
+	Unknown int `json:"unknown"`
 }
 
 // Command is one scanning command's state in the summary.
@@ -118,8 +151,9 @@ type Input struct {
 	Thresholds map[string]config.Thresholds
 	Todos      []todo.Todo
 	Updates    []packages.Update
-	// Packages is the annotated inventory added to packages.json.
-	Packages any
+	// Packages is the annotated inventory added to packages.json and
+	// counted in summary.json.
+	Packages []packages.Annotated
 	// Runtimes are the runtime statuses added to packages.json.
 	Runtimes []packages.RuntimeStatus
 	// Repos is the annotated repo list added to repos.json.
@@ -148,7 +182,11 @@ func Build(in Input) map[string]any {
 				Findings: r.Counts(), Ignored: r.Ignored, Errors: len(r.Errors)}
 			rf := RunFile{Header: h, Run: withoutData(r)}
 			if c == packages.Command {
-				rf.Packages, rf.Runtimes = in.Packages, in.Runtimes
+				rf.Runtimes = in.Runtimes
+				if in.Packages != nil {
+					rf.Packages = in.Packages
+					sum.Packages = managerCounts(in.Packages)
+				}
 			}
 			switch c {
 			case "repos":
@@ -181,6 +219,37 @@ func Build(in Input) map[string]any {
 	files[TasksFile] = Tasks{Header: h, Tasks: todos}
 	files[UpdatesFile] = Updates{Header: h, Updates: updates}
 	return files
+}
+
+func managerCounts(invs []packages.Annotated) map[string]ManagerSummary {
+	out := make(map[string]ManagerSummary, len(invs))
+	for _, inv := range invs {
+		m := ManagerSummary{Available: inv.Available, Installed: len(inv.Items), Unchecked: inv.Unchecked,
+			CheckedAt: inv.CheckedAt.UTC(), CarriedFrom: inv.CarriedFrom.UTC()}
+		for _, it := range inv.Items {
+			switch it.Gap {
+			case packages.GapCurrent:
+				m.Gaps.Current++
+			case packages.GapPatch:
+				m.Gaps.Patch++
+			case packages.GapMinor:
+				m.Gaps.Minor++
+			case packages.GapMajor:
+				m.Gaps.Major++
+			case packages.GapUpdate:
+				m.Gaps.Update++
+			case packages.GapAhead:
+				m.Gaps.Ahead++
+			default:
+				m.Gaps.Unknown++
+			}
+			if it.Gap.Behind() {
+				m.Outdated++
+			}
+		}
+		out[inv.Manager] = m
+	}
+	return out
 }
 
 func withoutData(r *run.Run) *run.Run {

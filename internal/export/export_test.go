@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +38,14 @@ func input() Input {
 			{Name: "ok", Status: packages.UpdateOK},
 			{Name: "bad", Status: packages.UpdateFailed, Reason: "exit status 1", Output: "token=abc\nerror"},
 		}}},
-		Packages: []string{"annotated"},
+		Packages: []packages.Annotated{
+			{Inventory: packages.Inventory{Manager: "uv", Available: true}, CheckedAt: now.Add(-time.Hour), Unchecked: 1,
+				Items: []packages.Item{{Gap: packages.GapCurrent}, {Gap: packages.GapPatch}, {Gap: packages.GapMajor},
+					{Gap: packages.GapAhead}, {}}},
+			{Inventory: packages.Inventory{Manager: "apt", Available: true, CarriedFrom: now.Add(-2 * time.Hour)},
+				Items: []packages.Item{{Gap: packages.GapUpdate}, {Gap: packages.GapMinor}}},
+			{Inventory: packages.Inventory{Manager: "snap"}},
+		},
 		Runtimes: []packages.RuntimeStatus{{Name: "python", Version: "3.14.8", Owner: "uv"}},
 	}
 }
@@ -65,6 +73,19 @@ func TestBuild(t *testing.T) {
 	}
 	if sum.LastUpdate == nil || sum.LastUpdate.Updated != 1 || sum.LastUpdate.Failed != 1 {
 		t.Errorf("last update: %+v", sum.LastUpdate)
+	}
+
+	want := map[string]ManagerSummary{
+		"uv": {Available: true, Installed: 5, Outdated: 2, Unchecked: 1, CheckedAt: now.Add(-time.Hour),
+			Gaps: GapCounts{Current: 1, Patch: 1, Major: 1, Ahead: 1, Unknown: 1}},
+		"apt":  {Available: true, Installed: 2, Outdated: 2, CarriedFrom: now.Add(-2 * time.Hour), Gaps: GapCounts{Update: 1, Minor: 1}},
+		"snap": {},
+	}
+	if !reflect.DeepEqual(sum.Packages, want) {
+		t.Errorf("per-manager counts:\n got %+v\nwant %+v", sum.Packages, want)
+	}
+	if b, _ := json.Marshal(sum.Packages["snap"]); strings.Contains(string(b), "checked_at") {
+		t.Errorf("an unchecked manager omits checked_at: %s", b)
 	}
 
 	sf := files["system.json"].(RunFile)
