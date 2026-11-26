@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -74,6 +76,35 @@ func TestOutdatedRefreshSavedAndUpdate(t *testing.T) {
 	r = runArgsWith(t, setup, "packages", "outdated", "-j", "-f", "ok")
 	if r.e != nil || json.Unmarshal([]byte(r.out), &got) != nil || len(got.Packages) != 0 {
 		t.Fatalf("updated package still outdated: %s %v", r.out, r.e)
+	}
+}
+
+// A failed cache read used to be logged while the command succeeded without
+// the list it was asked for.
+func TestInventoryViewErrorsFailTheCommand(t *testing.T) {
+	gh := updateEnv(t)
+	setup := func(a *app) { a.runner, a.looker = gh, latestLooker{} }
+	if r := runArgsWith(t, setup, "packages", "outdated"); r.e != nil {
+		t.Fatalf("scan: %v", r.e)
+	}
+	r := runArgsWith(t, setup, "packages", "outdated", "-l")
+	if r.e != nil {
+		t.Fatal(r.e)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(r.app.cfg.DataDir, "audit.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DROP TABLE package_tags; CREATE TABLE package_tags (broken TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	for _, args := range [][]string{
+		{"packages", "outdated", "-l"}, {"packages", "outdated", "-j"}, {"packages", "-l"}, {"packages", "-j"},
+	} {
+		if r := runArgsWith(t, setup, args...); r.e == nil {
+			t.Errorf("%v: a failed cache read must fail the command: %v\n%s", args, r.e, r.out)
+		}
 	}
 }
 

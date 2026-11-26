@@ -36,11 +36,10 @@ config.orphaned, with an uninstalled apt package of the same name when
 apt-cache knows one. --list shows every entry with its owner; --orphans
 only the orphans. audit configs clean moves orphans to the trash.`,
 		func() (core.Scanner, error) { return a.configsScanner(context.Background()), nil },
-		func(_ context.Context, p *render.Printer, r *run.Run) {
+		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d configs.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {
-				a.log.Warn("read configs data", "err", err)
-				return
+				return fmt.Errorf("read configs data: %w", err)
 			}
 			var rows [][]string
 			for _, e := range d.Entries {
@@ -57,6 +56,7 @@ only the orphans. audit configs clean moves orphans to the trash.`,
 			}
 			p.Table([]string{"CONFIG", "SIZE", "OWNER"}, rows)
 			say(a.out, "%d config file(s) parsed.\n", d.Parsed)
+			return nil
 		})
 	c.Flags().BoolVarP(&orphansOnly, "orphans", "O", false, "list only configs that belong to no installed program (implies --list)")
 	f.impliesList = func() bool { return orphansOnly }

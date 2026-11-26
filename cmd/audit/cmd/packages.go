@@ -64,11 +64,10 @@ old it is. --tag, --find and --outdated filter the inventory and imply
 			}
 			return a.packagesScanner(splitList(managers))
 		},
-		func(ctx context.Context, p *render.Printer, r *run.Run) {
+		func(ctx context.Context, p *render.Printer, r *run.Run) error {
 			as, err := a.annotated(ctx, r, q)
 			if err != nil {
-				a.log.Warn("load registry cache", "err", err)
-				return
+				return fmt.Errorf("load registry cache: %w", err)
 			}
 			if len(as) == 0 && !q.Empty() {
 				sayln(a.out, "No packages match the filter.")
@@ -76,6 +75,7 @@ old it is. --tag, --find and --outdated filter the inventory and imply
 				p.Packages(as)
 			}
 			a.printSystemNote(r)
+			return nil
 		})
 	sf, cmd = f, c
 	fl := c.Flags()
@@ -319,10 +319,13 @@ removed with audit packages tag -d are not put back without --ai-retag.`,
 					say(a.errOut, "AI tagging failed: %v\n", err)
 				}
 			}
-			view := func(ctx context.Context, p *render.Printer, r *run.Run) {
-				if as, err := a.annotated(ctx, r, packages.Query{}); err == nil {
-					p.Packages(as)
+			view := func(ctx context.Context, p *render.Printer, r *run.Run) error {
+				as, err := a.annotated(ctx, r, packages.Query{})
+				if err != nil {
+					return fmt.Errorf("load registry cache: %w", err)
 				}
+				p.Packages(as)
+				return nil
 			}
 			f := &scanFlags{report: !list && !asJSON, list: list, json: asJSON,
 				jsonExtra: func(ctx context.Context, r *run.Run) (any, error) { return a.annotated(ctx, r, packages.Query{}) }}

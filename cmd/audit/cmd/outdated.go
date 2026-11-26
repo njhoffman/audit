@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -52,21 +53,21 @@ displayed packages and preserve --manager. Major releases need --major.`,
 			}
 			s.Refresh = a.registryRefresh(nil, force)
 			f.jsonExtra = func(ctx context.Context, r *run.Run) (any, error) { return a.annotated(ctx, r, q) }
-			return a.runScan(c.Context(), s, f, func(ctx context.Context, p *render.Printer, r *run.Run) {
+			return a.runScan(c.Context(), s, f, func(ctx context.Context, p *render.Printer, r *run.Run) error {
 				as, err := a.annotated(ctx, r, q)
 				if err != nil {
-					a.log.Warn("load outdated packages", "err", err)
-					return
+					return fmt.Errorf("load outdated packages: %w", err)
 				}
 				if len(as) == 0 {
 					sayln(a.out, "No known outdated packages. Use --force to recheck registry versions.")
 					a.printSystemNote(r)
-					return
+					return nil
 				}
 				p.Packages(as)
 				args := outdatedUpdateArgs(as, splitList(managers))
 				sayln(a.out, "Preview updates: "+outdatedUpdateHint(append([]string{"--dry-run"}, args...))+"\nUpdate: "+outdatedUpdateHint(args)+" (add --major before -- for major releases)")
 				a.printSystemNote(r)
+				return nil
 			})
 		},
 	}

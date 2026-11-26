@@ -190,7 +190,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   or versions are unknown. Show checked/unchecked/failed counts and cache
   age, including the age of system package lists. Offer the appropriate
   refresh command; `--force` only forces registry lookups, not apt lists.
-- [ ] **Return inventory-rendering errors to callers.** (p2) [bug] The outdated view
+- [x] **Return inventory-rendering errors to callers.** (p2) [bug] The outdated view
   logs annotation errors and returns from a callback, leaving the command
   successful without its requested package list. Let inventory views return
   errors and cover failed cache/tag reads in both text and JSON output.

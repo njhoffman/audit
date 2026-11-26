@@ -31,17 +31,17 @@ A scan never touches the network: ahead and behind are as of each repo's
 last fetch, which the list shows. --tag, --find, --owner, --dirty and
 --outdated filter the list and imply --list.`,
 		func() (core.Scanner, error) { return a.reposScanner(), nil },
-		func(ctx context.Context, p *render.Printer, r *run.Run) {
+		func(ctx context.Context, p *render.Printer, r *run.Run) error {
 			items, err := a.repoItems(ctx, r, q)
 			if err != nil {
-				a.log.Warn("load repos", "err", err)
-				return
+				return fmt.Errorf("load repos: %w", err)
 			}
 			if len(items) == 0 && !q.Empty() {
 				sayln(a.out, "No repos match the filter.")
-				return
+				return nil
 			}
 			p.Repos(items, a.env.Home)
+			return nil
 		})
 	fl := c.Flags()
 	fl.StringSliceVarP(&q.Tags, "tag", "t", nil, "list only repos with all of these tags (implies --list)")
@@ -102,10 +102,13 @@ save a fresh scan so ahead/behind and the GitHub checks are current.`,
 			s.Fetch, s.Lookup, s.LookupForce = !noFetch, true, force
 			f := &scanFlags{rescan: true, report: !list && !asJSON, list: list, json: asJSON,
 				jsonExtra: func(ctx context.Context, r *run.Run) (any, error) { return a.repoItems(ctx, r, repos.Query{}) }}
-			view := func(ctx context.Context, p *render.Printer, r *run.Run) {
-				if items, err := a.repoItems(ctx, r, repos.Query{}); err == nil {
-					p.Repos(items, a.env.Home)
+			view := func(ctx context.Context, p *render.Printer, r *run.Run) error {
+				items, err := a.repoItems(ctx, r, repos.Query{})
+				if err != nil {
+					return fmt.Errorf("load repos: %w", err)
 				}
+				p.Repos(items, a.env.Home)
+				return nil
 			}
 			return a.runScan(ctx, s, f, view)
 		},

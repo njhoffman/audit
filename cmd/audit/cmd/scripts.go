@@ -39,11 +39,10 @@ runs BEGIN blocks.
 --list shows every script with its language, description and issue count;
 --find filters it; audit scripts info NAME shows one.`,
 		func() (core.Scanner, error) { return a.scriptsScanner(), nil },
-		func(_ context.Context, p *render.Printer, r *run.Run) {
+		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d scripts.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {
-				a.log.Warn("read scripts data", "err", err)
-				return
+				return fmt.Errorf("read scripts data: %w", err)
 			}
 			var rows [][]string
 			for _, s := range d.Scripts {
@@ -57,6 +56,7 @@ runs BEGIN blocks.
 				rows = append(rows, []string{s.Name, s.Lang, issues, s.Description, shortPath(filepath.Dir(s.Path), a.env.Home)})
 			}
 			p.Table([]string{"SCRIPT", "LANG", "ISSUES", "DESCRIPTION", "DIR"}, rows)
+			return nil
 		})
 	c.Flags().StringVarP(&find, "find", "f", "", "list only scripts whose path or description contains this text (implies --list)")
 	f.impliesList = func() bool { return find != "" }

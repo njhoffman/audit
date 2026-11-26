@@ -38,8 +38,10 @@ type scanFlags struct {
 	jsonExtra func(ctx context.Context, r *run.Run) (any, error)
 }
 
-// viewFunc prints a command's inventory for --list.
-type viewFunc func(ctx context.Context, p *render.Printer, r *run.Run)
+// viewFunc prints a command's inventory for --list. An error (unreadable
+// saved data, a failed cache read) fails the command, since the requested
+// list is missing.
+type viewFunc func(ctx context.Context, p *render.Printer, r *run.Run) error
 
 func (f *scanFlags) register(c *cobra.Command) {
 	fl := c.Flags()
@@ -202,7 +204,9 @@ func (a *app) runScan(ctx context.Context, s core.Scanner, f *scanFlags, view vi
 		p.List(r, o)
 		if view != nil && len(r.Data) > 0 {
 			sayln(a.out)
-			view(ctx, p, r)
+			if err := view(ctx, p, r); err != nil {
+				return err
+			}
 		}
 	default:
 		p.Report(r, o)
@@ -243,11 +247,13 @@ resulting environment and any unexpected output, trace which startup files
 are sourced, then check PATH, environment variables and the startup scripts
 (syntax, shellcheck, start-up time).`,
 		func() (core.Scanner, error) { return core.NewEnvironment(a.cfg, a.env) },
-		func(_ context.Context, p *render.Printer, r *run.Run) {
+		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d environment.Data
-			if json.Unmarshal(r.Data, &d) == nil {
-				p.Environment(d)
+			if err := json.Unmarshal(r.Data, &d); err != nil {
+				return fmt.Errorf("read environment data: %w", err)
 			}
+			p.Environment(d)
+			return nil
 		})
 	return c
 }
