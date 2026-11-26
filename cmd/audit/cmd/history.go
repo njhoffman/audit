@@ -139,7 +139,7 @@ original history, including any sensitive entries you removed.`,
 				if len(categories) != 1 {
 					return errors.New("--only all cannot be combined with other categories")
 				}
-				categories = []string{"duplicates", "multiline", "patterns"}
+				categories = slices.Clone(history.Categories)
 			}
 			if len(categories) == 0 {
 				return errors.New("--only requires duplicates, multiline, patterns, or all")

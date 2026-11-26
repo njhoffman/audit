@@ -302,7 +302,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   untimestamped. Leading blank command lines are dropped during parsing.
   Normalize format detection and preserve logical line counts and raw record
   ranges; add scan/prune regression fixtures with CRLF and blank boundaries.
-- [ ] **Share history classification and record boundaries.** (p2) [refactor] Scan and prune
+- [x] **Share history classification and record boundaries.** (records() maps entries to raw byte ranges once; one classifier serves scan and prune, and a test checks scan's reported lines equal prune's removals) (p2) [refactor] Scan and prune
   independently implement duplicate/multiline/pattern selection, and prune
   reconstructs byte ranges from line numbers. Have one parser expose raw
   ranges and one classifier select records so reporting and deletion agree.

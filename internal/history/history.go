@@ -178,6 +178,97 @@ func parse(body, format string) []entry {
 	return out
 }
 
+// record is a parsed entry with the raw bytes it occupies in the file,
+// from its bash timestamp (and the blank lines after it) through any fish
+// metadata, up to the next record. Records tile the file after its first
+// record start, so keeping a record copies it byte for byte.
+type record struct {
+	entry
+	start, end int
+}
+
+// records parses body and maps each entry back to its byte range.
+func records(body []byte, format string) []record {
+	es := parse(string(body), format)
+	lines := strings.SplitAfter(string(body), "\n")
+	offsets := make([]int, len(lines)+1)
+	for i, line := range lines {
+		offsets[i+1] = offsets[i] + len(line)
+	}
+	bare := func(i int) string { return strings.TrimSuffix(strings.TrimSuffix(lines[i], "\n"), "\r") }
+	out := make([]record, len(es))
+	for i, e := range es {
+		line := e.line - 1
+		if format == "bash" {
+			candidate := line
+			for candidate > 0 && bare(candidate-1) == "" {
+				candidate--
+			}
+			if candidate > 0 && timestamp.MatchString(bare(candidate-1)) {
+				line = candidate - 1
+			}
+		}
+		out[i] = record{entry: e, start: offsets[line]}
+	}
+	for i := range out {
+		out[i].end = len(body)
+		if i+1 < len(out) {
+			out[i].end = out[i+1].start
+		}
+	}
+	return out
+}
+
+// Categories of history entries that scan reports and prune removes.
+const (
+	CategoryDuplicates = "duplicates"
+	CategoryMultiline  = "multiline"
+	CategoryPatterns   = "patterns"
+)
+
+// Categories lists every category, in prune's order.
+var Categories = []string{CategoryDuplicates, CategoryMultiline, CategoryPatterns}
+
+// classification is what one entry matched.
+type classification struct {
+	// duplicate is set for a repeat of an earlier entry in the same file.
+	duplicate bool
+	multiline bool
+	// patterns are the indexes of the shell_history.patterns it contains.
+	patterns []int
+}
+
+// classifier classifies the entries of one file in order; scan and prune
+// share it so what is reported is what is removed.
+type classifier struct {
+	o    Options
+	seen map[string]bool
+}
+
+func newClassifier(o Options) *classifier { return &classifier{o: o, seen: map[string]bool{}} }
+
+// classify reports what e matched. Blank entries match nothing and are not
+// remembered for duplicates.
+func (c *classifier) classify(e entry) classification {
+	var m classification
+	text := strings.TrimSpace(e.text)
+	if text == "" {
+		return m
+	}
+	m.duplicate = c.seen[text]
+	c.seen[text] = true
+	m.multiline = strings.Count(e.text, "\n")+1 >= c.o.MaxLines
+	for i, p := range c.o.Patterns {
+		if p != "" && strings.Contains(e.text, p) {
+			m.patterns = append(m.patterns, i)
+		}
+	}
+	return m
+}
+
+// patternSubject is the finding subject of pattern i in path.
+func patternSubject(path string, i int) string { return fmt.Sprintf("%s:pattern-%d", path, i+1) }
+
 // Scan returns findings and counts only. Commands and configured pattern values
 // never enter findings, errors, the store, exports, or AI prompts.
 func Scan(ctx context.Context, o Options) ([]finding.Finding, int, int, []string, error) {
@@ -230,21 +321,17 @@ func Scan(ctx context.Context, o Options) ([]finding.Finding, int, int, []string
 		entries += len(es)
 		var large []int
 		matches := make([][]int, len(o.Patterns))
+		c := newClassifier(o)
 		for _, e := range es {
 			if err := ctx.Err(); err != nil {
 				return nil, 0, 0, nil, err
 			}
-			text := strings.TrimSpace(e.text)
-			if text == "" {
-				continue
-			}
-			if strings.Count(e.text, "\n")+1 >= o.MaxLines {
+			m := c.classify(e)
+			if m.multiline {
 				large = append(large, e.line)
 			}
-			for i, p := range o.Patterns {
-				if p != "" && strings.Contains(e.text, p) {
-					matches[i] = append(matches[i], e.line)
-				}
+			for _, i := range m.patterns {
+				matches[i] = append(matches[i], e.line)
 			}
 		}
 		add := func(check, subject, message string, severity finding.Severity, lines []int) {
@@ -261,7 +348,7 @@ func Scan(ctx context.Context, o Options) ([]finding.Finding, int, int, []string
 		}
 		add("history.multiline", path, fmt.Sprintf("history entries with at least %d lines", o.MaxLines), finding.Notice, large)
 		for i, lines := range matches {
-			add("history.pattern", fmt.Sprintf("%s:pattern-%d", path, i+1), fmt.Sprintf("history entries match shell_history.patterns item %d", i+1), finding.Warning, lines)
+			add("history.pattern", patternSubject(path, i), fmt.Sprintf("history entries match shell_history.patterns item %d", i+1), finding.Warning, lines)
 		}
 	}
 	finding.Sort(fs)

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"syscall"
 	"time"
 
@@ -36,7 +35,7 @@ type PrunePlan struct {
 // Ignore rules suppress removal, and locations are never taken from old runs.
 func PlanPrune(ctx context.Context, o Options, categories, ignore []string) ([]PrunePlan, error) {
 	for _, category := range categories {
-		if !slices.Contains([]string{"duplicates", "multiline", "patterns"}, category) {
+		if !slices.Contains(Categories, category) {
 			return nil, fmt.Errorf("unknown history prune category %q", category)
 		}
 	}
@@ -73,63 +72,34 @@ func PlanPrune(ctx context.Context, o Options, categories, ignore []string) ([]P
 		if int64(len(body)) > o.MaxBytes {
 			return nil, fmt.Errorf("%s: exceeds shell_history.max_mb", path)
 		}
-		format := o.format(path, body)
-		es := parse(string(body), format)
-		// Map command locations back to byte ranges, including bash timestamps
-		// and fish metadata. Retained records are copied byte for byte.
-		lines := strings.SplitAfter(string(body), "\n")
-		offsets := make([]int, len(lines)+1)
-		for i, line := range lines {
-			offsets[i+1] = offsets[i] + len(line)
-		}
-		starts := make([]int, len(es)+1)
-		for i, e := range es {
-			line := e.line - 1
-			if format == "bash" {
-				candidate := line
-				for candidate > 0 && strings.TrimSuffix(strings.TrimSuffix(lines[candidate-1], "\n"), "\r") == "" {
-					candidate--
-				}
-				if candidate > 0 && timestamp.MatchString(strings.TrimSuffix(strings.TrimSuffix(lines[candidate-1], "\n"), "\r")) {
-					line = candidate - 1
-				}
-			}
-			starts[i] = offsets[line]
-		}
-		starts[len(es)] = len(body)
+		rs := records(body, o.format(path, body))
 		plan := PrunePlan{Path: path, original: body, info: info, Lines: []int{}}
 		var out bytes.Buffer
-		if len(es) > 0 {
-			out.Write(body[:starts[0]])
+		if len(rs) > 0 {
+			out.Write(body[:rs[0].start])
 		} else {
 			out.Write(body)
 		}
-		seen := map[string]bool{}
-		for i, e := range es {
+		allowed := func(category, check, subject string) bool {
+			return slices.Contains(categories, category) && !ig.Ignored(finding.Finding{Command: "history", Check: check, Subject: subject})
+		}
+		c := newClassifier(o)
+		for _, r := range rs {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			text := strings.TrimSpace(e.text)
-			remove := false
-			allowed := func(category, check, subject string) bool {
-				return slices.Contains(categories, category) && !ig.Ignored(finding.Finding{Command: "history", Check: check, Subject: subject})
-			}
-			if text != "" {
-				remove = seen[text] && allowed("duplicates", "history.duplicates", path)
-				seen[text] = true
-				remove = remove || (strings.Count(e.text, "\n")+1 >= o.MaxLines && allowed("multiline", "history.multiline", path))
-				for j, pattern := range o.Patterns {
-					if pattern != "" && strings.Contains(e.text, pattern) && allowed("patterns", "history.pattern", fmt.Sprintf("%s:pattern-%d", path, j+1)) {
-						remove = true
-					}
-				}
+			m := c.classify(r.entry)
+			remove := (m.duplicate && allowed(CategoryDuplicates, "history.duplicates", path)) ||
+				(m.multiline && allowed(CategoryMultiline, "history.multiline", path))
+			for _, i := range m.patterns {
+				remove = remove || allowed(CategoryPatterns, "history.pattern", patternSubject(path, i))
 			}
 			if remove {
 				plan.Remove++
-				plan.Lines = append(plan.Lines, e.line)
+				plan.Lines = append(plan.Lines, r.line)
 			} else {
 				plan.Keep++
-				out.Write(body[starts[i]:starts[i+1]])
+				out.Write(body[r.start:r.end])
 			}
 		}
 		if plan.Remove > 0 {

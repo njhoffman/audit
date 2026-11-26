@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Internal: `audit history` and `audit history prune` now share one parser for record byte ranges and one classifier, so the entries a scan reports as multiline or pattern matches are exactly the ones prune removes; a test holds them to that.
+
 ## [0.42.2] - 2026-11-26
 
 ### Changed
