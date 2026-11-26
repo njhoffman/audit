@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-11-26
+
 ### Added
 
 - `audit system` names the package each analyzed program (sshd, nginx, postgres, apache, docker, cron) runs from, with its version and whether an update is available, matched against the last `audit packages` run (apt through `dpkg-query -S`, snaps, and other managers' recorded locations). The copy first on PATH is the one described; other copies are listed as shadowed, and `programs.shadowed` is raised when a shadowed copy is newer than the one that runs.
