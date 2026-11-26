@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-11-26
+
 ### Added
 
 - A packages screen in the dashboard (`p`): the outdated packages of the last full `audit packages` run across managers, with version, latest, gap and release age; `a` lists every package. `m` marks rows and `U` runs `audit packages update` for the marked ones (or the one under the cursor) in the terminal, with its usual plan, question and sudo prompt, then rescans packages and reloads the list. New `tui.keys`: `packages`, `mark`, `update`, `toggle_outdated`.
