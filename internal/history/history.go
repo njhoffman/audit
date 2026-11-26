@@ -4,6 +4,7 @@ package history
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +32,9 @@ type Options struct {
 
 // HistDBCounts reports entry totals without reading or returning command text.
 func HistDBCounts(ctx context.Context, path, host string, session int) (total, onHost, onSession int, err error) {
+	if path == "" {
+		return 0, 0, 0, errors.New("shell_history.histdb is not set")
+	}
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro")
 	if err != nil {
 		return

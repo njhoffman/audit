@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `shell_history.files` and `shell_history.histdb` are always made absolute: `${XDG_DATA_HOME}` (braced) falls back to `~/.local/share` when unset like `$XDG_DATA_HOME` already did, instead of becoming `/fish/fish_history`, and a relative path is taken from the home directory. A configured relative path used to be rejected by `audit history prune` as "not in shell_history.files".
+
 ## [0.30.0] - 2026-11-26
 
 ### Changed

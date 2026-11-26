@@ -24,11 +24,35 @@ func NewHistory(cfg *config.Config, env *exec.Env) *HistoryScanner {
 	h := cfg.ShellHistory
 	paths := make([]string, 0, len(h.Files))
 	for _, path := range h.Files {
-		path = strings.ReplaceAll(path, "$XDG_DATA_HOME", env.XDG("XDG_DATA_HOME"))
-		paths = append(paths, filepath.Clean(env.Expand(path)))
+		paths = append(paths, historyPath(env, path))
 	}
-	db := strings.ReplaceAll(h.HistDB, "$XDG_DATA_HOME", env.XDG("XDG_DATA_HOME"))
-	return &HistoryScanner{Options: history.Options{Files: paths, HistDB: filepath.Clean(env.Expand(db)), Session: sessionID(env), Patterns: h.Patterns, MaxLines: h.MaxLines, MaxBytes: h.MaxMB << 20}}
+	return &HistoryScanner{Options: history.Options{Files: paths, HistDB: historyPath(env, h.HistDB), Session: sessionID(env), Patterns: h.Patterns, MaxLines: h.MaxLines, MaxBytes: h.MaxMB << 20}}
+}
+
+// historyPath makes a configured history path absolute: ~ and $VAR or
+// ${VAR} are expanded, an unset XDG_* variable takes its default under the
+// home directory, and a relative path is taken from the home directory
+// (where audit runs commands), so it matches prune's absolute arguments.
+func historyPath(env *exec.Env, p string) string {
+	if p == "" {
+		return ""
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		p = env.Expand(p[:1]) + p[1:]
+	}
+	p = os.Expand(p, func(k string) string {
+		if strings.HasPrefix(k, "XDG_") && strings.HasSuffix(k, "_HOME") {
+			return env.XDG(k)
+		}
+		if k == "HOME" {
+			return env.Home
+		}
+		return env.Get(k)
+	})
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(env.Home, p)
+	}
+	return filepath.Clean(p)
 }
 
 func sessionID(env *exec.Env) int { n, _ := strconv.Atoi(env.Get("SESSION")); return n }

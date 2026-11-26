@@ -306,7 +306,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   removed secrets and currently accumulate beside histories. Persist prune
   counts, backup paths and per-file errors without command text so a partial
   prune can be inspected later; connect this to the action log in section 2.
-- [ ] **Normalize configured history paths.** (p2) [bug] `NewHistory` leaves relative
+- [x] **Normalize configured history paths.** (p2) [bug] `NewHistory` leaves relative
   paths relative, while explicit prune arguments become absolute, so a
   configured relative path can be rejected as unconfigured. Use consistent
   absolute paths and test `~`, relative paths, `$XDG_DATA_HOME` and
