@@ -85,6 +85,25 @@ func do(h http.Handler, method, target, body string, header map[string]string) *
 	return w
 }
 
+// login follows the printed link and returns the session token.
+func login(t *testing.T, h http.Handler) string {
+	t.Helper()
+	w := do(h, "GET", "/?token="+token, "", nil)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
+		t.Fatalf("the link redirects to a URL without the token: %d %v", w.Code, w.Header())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == SessionCookie {
+			if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Value == token {
+				t.Fatalf("session cookie %+v", c)
+			}
+			return c.Value
+		}
+	}
+	t.Fatal("no session cookie")
+	return ""
+}
+
 func TestPageNeedsToken(t *testing.T) {
 	_, h := setup()
 	if w := do(h, "GET", "/", "", nil); w.Code != http.StatusForbidden {
@@ -93,13 +112,23 @@ func TestPageNeedsToken(t *testing.T) {
 	if w := do(h, "GET", "/?token=wrong", "", nil); w.Code != http.StatusForbidden {
 		t.Errorf("wrong token: %d", w.Code)
 	}
-	w := do(h, "GET", "/?token="+token, "", nil)
+	session := login(t, h)
+	w := do(h, "GET", "/", "", map[string]string{"Cookie": SessionCookie + "=" + session})
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Fix shellcheck errors in 3 scripts") ||
-		!strings.Contains(w.Body.String(), `"`+token+`"`) {
+		!strings.Contains(w.Body.String(), `"`+session+`"`) || strings.Contains(w.Body.String(), token) {
 		t.Fatalf("page: %d\n%s", w.Code, w.Body.String())
 	}
 	if w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Referrer-Policy") != "no-referrer" {
 		t.Errorf("headers %v", w.Header())
+	}
+	if w := do(h, "GET", "/?token="+token, "", nil); w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "already used") {
+		t.Errorf("the link works once: %d %s", w.Code, w.Body.String())
+	}
+	if w := do(h, "GET", "/", "", map[string]string{"Cookie": SessionCookie + "=" + token}); w.Code != http.StatusForbidden {
+		t.Errorf("the link's token is not a session: %d", w.Code)
+	}
+	if w := do(h, "GET", "/api/tasks", "", map[string]string{TokenHeader: token}); w.Code != http.StatusForbidden {
+		t.Errorf("nor an API token: %d", w.Code)
 	}
 }
 
@@ -111,7 +140,8 @@ func TestRejectsForeignHost(t *testing.T) {
 		}
 	}
 	for _, host := range []string{"localhost:4321", "[::1]:4321", "127.0.0.1"} {
-		if w := do(h, "GET", "/?token="+token, "", map[string]string{"Host": host}); w.Code != http.StatusOK {
+		_, h := setup() // a fresh one-time link per host
+		if w := do(h, "GET", "/?token="+token, "", map[string]string{"Host": host}); w.Code != http.StatusSeeOther {
 			t.Errorf("host %s: %d", host, w.Code)
 		}
 	}
@@ -122,7 +152,7 @@ func TestList(t *testing.T) {
 	if w := do(h, "GET", "/api/tasks", "", nil); w.Code != http.StatusForbidden {
 		t.Errorf("list without token: %d", w.Code)
 	}
-	w := do(h, "GET", "/api/tasks", "", map[string]string{TokenHeader: token})
+	w := do(h, "GET", "/api/tasks", "", map[string]string{TokenHeader: login(t, h)})
 	var ts []todo.Todo
 	if err := json.Unmarshal(w.Body.Bytes(), &ts); err != nil || len(ts) != 1 || ts[0].ID != 7 {
 		t.Errorf("list: %d %s", w.Code, w.Body.String())
@@ -131,7 +161,8 @@ func TestList(t *testing.T) {
 
 func TestChange(t *testing.T) {
 	f, h := setup()
-	auth := map[string]string{TokenHeader: token, "Origin": "http://127.0.0.1:4321"}
+	session := login(t, h)
+	auth := map[string]string{TokenHeader: session, "Origin": "http://127.0.0.1:4321"}
 
 	w := do(h, "POST", "/api/tasks/7", `{"status":"in-progress","note":"halfway"}`, auth)
 	var got todo.Todo
@@ -155,8 +186,9 @@ func TestChange(t *testing.T) {
 	}{
 		{"no token", "/api/tasks/7", `{"status":"done"}`, map[string]string{}, http.StatusForbidden},
 		{"wrong token", "/api/tasks/7", `{"status":"done"}`, map[string]string{TokenHeader: "nope"}, http.StatusForbidden},
-		{"token in query only", "/api/tasks/7?token=" + token, `{"status":"done"}`, map[string]string{}, http.StatusForbidden},
-		{"cross origin", "/api/tasks/7", `{"status":"done"}`, map[string]string{TokenHeader: token, "Origin": "https://evil.example"}, http.StatusForbidden},
+		{"token in query only", "/api/tasks/7?token=" + session, `{"status":"done"}`, map[string]string{}, http.StatusForbidden},
+		{"the link's token", "/api/tasks/7", `{"status":"done"}`, map[string]string{TokenHeader: token}, http.StatusForbidden},
+		{"cross origin", "/api/tasks/7", `{"status":"done"}`, map[string]string{TokenHeader: session, "Origin": "https://evil.example"}, http.StatusForbidden},
 		{"bad status", "/api/tasks/7", `{"status":"finished"}`, auth, http.StatusBadRequest},
 		{"empty change", "/api/tasks/7", `{}`, auth, http.StatusBadRequest},
 		{"unknown field", "/api/tasks/7", `{"priority":"low"}`, auth, http.StatusBadRequest},

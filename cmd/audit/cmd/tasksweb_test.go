@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -98,21 +100,30 @@ func TestServeTasks(t *testing.T) {
 	if !strings.HasPrefix(url, "http://127.0.0.1:") || !strings.Contains(url, "/?token=") {
 		t.Fatalf("url %q", url)
 	}
-	resp, err := http.Get(url) // #nosec G107 -- local test server
+	jar, _ := cookiejar.New(nil)
+	browser := &http.Client{Jar: jar}
+	resp, err := browser.Get(url) // #nosec G107 -- local test server
 	if err != nil {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "rotate keys") {
-		t.Fatalf("page %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "rotate keys") || strings.Contains(resp.Request.URL.String(), "token=") {
+		t.Fatalf("page %d at %s", resp.StatusCode, resp.Request.URL)
+	}
+	if again, err := http.Get(url); err != nil || again.StatusCode != http.StatusForbidden { // #nosec G107 -- local test server
+		t.Errorf("the printed link works once: %v %v", again, err)
 	}
 
-	token := url[strings.Index(url, "token=")+len("token="):]
+	// The page holds the session token for its API calls, as TOKEN.
+	m := regexp.MustCompile(`TOKEN = "([0-9a-f]+)"`).FindStringSubmatch(string(body))
+	if m == nil {
+		t.Fatal("no session token in the page")
+	}
 	base, _, _ := strings.Cut(url, "/?")
 	req, _ := http.NewRequest("POST", base+"/api/tasks/1", strings.NewReader(`{"status":"done","note":"rotated"}`))
-	req.Header.Set(taskserver.TokenHeader, token)
-	resp, err = http.DefaultClient.Do(req)
+	req.Header.Set(taskserver.TokenHeader, m[1])
+	resp, err = browser.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

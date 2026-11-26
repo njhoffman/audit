@@ -1,8 +1,13 @@
 // Package taskserver serves the tasks page on localhost with an API that
-// saves status and note changes. Every request must carry the per-run token
-// audit printed, and the Host header must name a loopback address, so other
-// local users and web pages (including DNS rebinding) cannot read or change
-// tasks.
+// saves status and note changes. The URL audit prints carries a one-time
+// token: its first use sets an HttpOnly, SameSite=Strict session cookie and
+// redirects to a URL without it, and any later use is refused. The page
+// needs the cookie and the API the session token in a header, and the Host
+// header must name a loopback address, so web pages (including DNS
+// rebinding) cannot read or change tasks. The printed token does show up in
+// xdg-open's command line, which other local users can read in /proc
+// without hidepid; whoever uses it first gets the session, and the other
+// party is told the link was already used.
 package taskserver
 
 import (
@@ -17,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/njhoffman/audit/internal/htmlreport"
@@ -38,12 +44,20 @@ const TokenHeader = "X-Audit-Token" // #nosec G101 -- a header name, not a crede
 // maxBody bounds a change request.
 const maxBody = 64 << 10
 
+// SessionCookie holds the session token the one-time link was exchanged for.
+const SessionCookie = "audit_session"
+
 // Server is the tasks page and its API.
 type Server struct {
-	B     Backend
+	B Backend
+	// Token is the one-time token in the printed URL.
 	Token string
 	Host  string
 	Now   func() time.Time
+
+	mu      sync.Mutex
+	used    bool
+	session string
 }
 
 // NewToken returns a random token for one server run.
@@ -88,12 +102,50 @@ func loopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+func equal(given, want string) bool {
+	return given != "" && want != "" && subtle.ConstantTimeCompare([]byte(given), []byte(want)) == 1
+}
+
+// tokenOK checks the session token an API request carries.
 func (s *Server) tokenOK(given string) bool {
-	return given != "" && subtle.ConstantTimeCompare([]byte(given), []byte(s.Token)) == 1
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return equal(given, s.session)
+}
+
+// exchange trades the one-time token for the session token, once.
+func (s *Server) exchange(given string) (session string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !equal(given, s.Token) {
+		return "", errors.New("missing or wrong token: open the URL audit todo --serve printed")
+	}
+	if s.used {
+		return "", errors.New("this link was already used, here or by someone else; restart audit todo --serve for a new one")
+	}
+	if session, err = NewToken(); err != nil {
+		return "", err
+	}
+	s.used, s.session = true, session
+	return session, nil
 }
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
-	if !s.tokenOK(r.URL.Query().Get("token")) {
+	if q := r.URL.Query().Get("token"); q != "" {
+		session, err := s.exchange(q)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		// Not Secure: the server is plain HTTP on loopback, where a Secure
+		// cookie is not sent by every client.
+		http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: session, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode}) // #nosec G124 -- loopback HTTP
+		// Drop the token from the address bar and history.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	c, err := r.Cookie(SessionCookie)
+	if err != nil || !s.tokenOK(c.Value) {
 		http.Error(w, "missing or wrong token: open the URL audit todo --serve printed", http.StatusForbidden)
 		return
 	}
@@ -103,7 +155,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := htmlreport.WriteTasks(w, htmlreport.TasksPage{Tasks: ts, Host: s.Host, Now: s.Now(), Token: s.Token}); err != nil {
+	if err := htmlreport.WriteTasks(w, htmlreport.TasksPage{Tasks: ts, Host: s.Host, Now: s.Now(), Token: c.Value}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

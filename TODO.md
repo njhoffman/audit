@@ -431,7 +431,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
   (cmd/audit/cmd/bins.go) uses Lstat + IsRegular, so a symlinked binary is "not found"
   and the install lands in `scan_dirs[0]`, replacing the link or leaving two copies.
   Resolve and replace the target (or refuse), then check `env.Which(name)` matches.
-- [ ] **Keep the task server token off process command lines.** (p3) [bug] `todo
+- [x] **Keep the task server token off process command lines.** (done as a one-time link exchanged for a cookie; the link itself still passes through xdg-open) (p3) [bug] `todo
   --serve --open` passes `?token=` to xdg-open, readable in /proc/*/cmdline without
   hidepid, while internal/taskserver's doc says other local users cannot reach tasks.
   Swap a single-use URL token for an HttpOnly SameSite=Strict cookie, or fix the claim.
