@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.2] - 2026-11-26
+
 ### Changed
 
 - Internal: the scanning commands are wired from one table (`cmd/audit/cmd/scanners.go`) that builds their cobra commands and the scanners the dashboard, fzf and `todo fix` rescan with; a test checks it against the command list and scope flags. No user-visible change.
