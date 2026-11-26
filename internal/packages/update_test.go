@@ -88,6 +88,19 @@ func TestPlanUpdatesOutdated(t *testing.T) {
 	}
 }
 
+func TestPlanUpdatesPinsPnpm(t *testing.T) {
+	p := Package{Manager: "pnpm", Name: "node", Version: "24.21.0", Source: "npm"}
+	invs := []Inventory{{Manager: "pnpm", Available: true, Packages: []Package{p}}}
+	metas := map[string]Meta{p.Key(): {Manager: "pnpm", ID: "node", Latest: "24.22.0"}}
+	plan := PlanUpdates(invs, metas, PlanOptions{Major: true})
+	if len(plan.Items) != 1 || strings.Join(plan.Items[0].Command, " ") != "pnpm add -g node@24.22.0" {
+		t.Fatalf("the planned version, not the dist-tag, is installed: %+v", plan.Items)
+	}
+	if got := pinPlanned([]string{"uv", "tool", "upgrade", "ruff"}, Package{Manager: "uv", Name: "ruff"}, "1.0"); strings.Join(got, " ") != "uv tool upgrade ruff" {
+		t.Errorf("other managers are left alone: %v", got)
+	}
+}
+
 func TestPlanUpdatesNamed(t *testing.T) {
 	invs, metas := updateInventory()
 	refs := []Ref{ParseRef("current"), ParseRef("mine"), ParseRef("dev"), ParseRef("sha"), ParseRef("nometa"),

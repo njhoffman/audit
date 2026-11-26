@@ -236,7 +236,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   `unchecked` in LATEST with no `registry.*` findings (seen on the 2026-10-30 run:
   "registry never checked"). Refresh when the cache is past `registry.max_age`, or
   have the dashboard prompt for it.
-- [ ] **Do not offer prereleases as the latest version.** (p2) [bug] `pnpm:node` shows
+- [x] **Do not offer prereleases as the latest version.** (p2) [bug] `pnpm:node` shows
   `24.22.0 -> 27.0.0-alpha.0.0.0` with a `registry.major_behind` notice, because the
   npm lookup trusts the `latest` dist-tag (internal/registry/registry.go:378). Only
   the crates lookup filters prereleases (latestCrate). Apply one rule to every registry

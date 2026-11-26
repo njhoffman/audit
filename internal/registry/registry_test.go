@@ -32,8 +32,15 @@ var routes = map[string]string{
 		"repository":{"type":"git","url":"git+https://github.com/biomejs/biome.git","directory":"packages/@biomejs/biome"},
 		"license":"MIT OR Apache-2.0","keywords":["format","lint"]}`,
 	"/npm/@biomejs%2Fbiome": `{"time":{"2.0.0":"2026-06-01T00:00:00.000Z","2.1.0":"2026-07-01T12:00:00.000Z"}}`,
-	"/npm/left-pad/latest":  `{"version":"1.3.0","repository":"stevemao/left-pad","license":{"type":"WTFPL"},"deprecated":"use String.prototype.padStart()"}`,
-	"/index/ri/pg/ripgrep":  `{"name":"ripgrep","vers":"14.1.0","yanked":false}` + "\n" + `{"name":"ripgrep","vers":"14.1.1","yanked":false}` + "\n" + `{"name":"ripgrep","vers":"15.0.0-rc.1","yanked":false}` + "\n" + `{"name":"ripgrep","vers":"14.1.2","yanked":true}` + "\n",
+	"/npm/node/latest":      `{"version":"27.0.0-alpha.0.0.0","description":"node","deprecated":"alpha"}`,
+	"/npm/node": `{"time":{"24.22.0":"2026-10-01T00:00:00.000Z","27.0.0-alpha.0.0.0":"2026-11-01T00:00:00.000Z"},
+		"versions":{"24.21.0":{},"24.22.0":{},"25.0.0-rc.1":{},"27.0.0-alpha.0.0.0":{"deprecated":"alpha"}}}`,
+	"/pypi/black/json": `{"info":{"version":"26.1b1","summary":"formatter"},
+		"releases":{"25.9.0":[{"upload_time_iso_8601":"2026-09-01T00:00:00Z","yanked":false}],
+		"25.10.0":[{"upload_time_iso_8601":"2026-10-01T00:00:00Z","yanked":true}],
+		"26.1b1":[{"upload_time_iso_8601":"2026-11-01T00:00:00Z","yanked":false}],"25.11.0":[]}}`,
+	"/npm/left-pad/latest": `{"version":"1.3.0","repository":"stevemao/left-pad","license":{"type":"WTFPL"},"deprecated":"use String.prototype.padStart()"}`,
+	"/index/ri/pg/ripgrep": `{"name":"ripgrep","vers":"14.1.0","yanked":false}` + "\n" + `{"name":"ripgrep","vers":"14.1.1","yanked":false}` + "\n" + `{"name":"ripgrep","vers":"15.0.0-rc.1","yanked":false}` + "\n" + `{"name":"ripgrep","vers":"14.1.2","yanked":true}` + "\n",
 	"/crates/api/v1/crates/ripgrep": `{"crate":{"description":"ripgrep is a line-oriented search tool","homepage":"https://github.com/BurntSushi/ripgrep",
 		"repository":"https://github.com/BurntSushi/ripgrep","keywords":["regex","grep"]},
 		"versions":[{"num":"14.1.1","created_at":"2024-09-08T22:24:21.000000+00:00","license":"Unlicense OR MIT"}]}`,
@@ -230,6 +237,50 @@ func TestNpmSkipsFullDocWhenDated(t *testing.T) {
 	}
 }
 
+func TestPrereleaseLatest(t *testing.T) {
+	c, _, _ := newClient(t)
+	for _, tt := range []struct {
+		p          packages.Package
+		latest     string
+		deprecated string
+	}{
+		// The npm dist-tag is an alpha: a stable install is offered the
+		// newest stable release, with that version's deprecation.
+		{packages.Package{Manager: "pnpm", Name: "node", Version: "24.21.0", Source: "npm"}, "24.22.0", ""},
+		{packages.Package{Manager: "pnpm", Name: "node", Version: "25.0.0-rc.1", Source: "npm"}, "27.0.0-alpha.0.0.0", "alpha"},
+		// PyPI: skip the beta, the yanked release and the one without files.
+		{packages.Package{Manager: "uv", Name: "black", Version: "25.1.0", Source: "pypi"}, "25.9.0", ""},
+		{packages.Package{Manager: "uv", Name: "black", Version: "26.1a1", Source: "pypi"}, "26.1b1", ""},
+		// crates: a prerelease install sees the newer rc.
+		{packages.Package{Manager: "cargo", Name: "ripgrep", Version: "15.0.0-beta.1", Source: "crates.io"}, "15.0.0-rc.1", ""},
+	} {
+		m, _, err := c.Lookup(ctx, tt.p, nil, true)
+		if err != nil || m.Latest != tt.latest || m.Deprecated != tt.deprecated {
+			t.Errorf("%s@%s: latest %q deprecated %q err %v, want %q %q", tt.p.Key(), tt.p.Version, m.Latest, m.Deprecated, err, tt.latest, tt.deprecated)
+		}
+		if tt.p.Name == "node" && tt.latest == "24.22.0" && m.LatestAt.UTC() != time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC) {
+			t.Errorf("date of the stable pick: %v", m.LatestAt)
+		}
+	}
+}
+
+func TestNewestRelease(t *testing.T) {
+	vs := []string{"1.2.0", "1.10.0", "2.0.0-rc.1", "1.9.9"}
+	for _, tt := range []struct{ installed, want string }{
+		{"1.0.0", "1.10.0"}, {"", "1.10.0"}, {"2.0.0-beta.1", "2.0.0-rc.1"},
+	} {
+		if got := newestRelease("pnpm", tt.installed, vs); got != tt.want {
+			t.Errorf("installed %q: %q, want %q", tt.installed, got, tt.want)
+		}
+	}
+	if got := newestRelease("pnpm", "3.0.0-a", []string{"2.0.0", "1.0.0-rc"}); got != "2.0.0" {
+		t.Errorf("an older prerelease never beats a stable one: %q", got)
+	}
+	if got := newestRelease("pnpm", "1.0.0", nil); got != "" {
+		t.Errorf("empty: %q", got)
+	}
+}
+
 func TestHelpers(t *testing.T) {
 	for in, want := range map[string]string{
 		"git+https://github.com/a/b.git":   "https://github.com/a/b",
@@ -257,7 +308,7 @@ func TestHelpers(t *testing.T) {
 		}
 	}
 	vs := []crateVersion{{Vers: "1.0.0-rc.1"}, {Vers: "0.9.0", Yanked: true}}
-	if got := latestCrate(vs); got != "1.0.0-rc.1" {
+	if got := latestCrate("0.9.0", vs); got != "1.0.0-rc.1" {
 		t.Errorf("only prereleases: %q", got)
 	}
 }

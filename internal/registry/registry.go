@@ -281,10 +281,22 @@ type pypiResp struct {
 		ProjectURLs       map[string]string `json:"project_urls"`
 		Classifiers       []string          `json:"classifiers"`
 	} `json:"info"`
-	Releases map[string][]struct {
-		UploadTime string `json:"upload_time_iso_8601"`
-		Yanked     bool   `json:"yanked"`
-	} `json:"releases"`
+	Releases map[string][]pypiFile `json:"releases"`
+}
+
+type pypiFile struct {
+	UploadTime string `json:"upload_time_iso_8601"`
+	Yanked     bool   `json:"yanked"`
+}
+
+// pypiAvailable reports whether a release has files and not all are yanked.
+func pypiAvailable(files []pypiFile) bool {
+	for _, f := range files {
+		if !f.Yanked {
+			return true
+		}
+	}
+	return false
 }
 
 // pypiInactive is the trove classifier for abandoned projects.
@@ -301,7 +313,18 @@ func (c *Client) pypi(ctx context.Context, p packages.Package) (packages.Meta, e
 	if m.License == "" {
 		m.License = shortLicense(i.License)
 	}
-	for _, f := range r.Releases[i.Version] {
+	if wantsStable(p.Version, m.Latest) {
+		var names []string
+		for v, files := range r.Releases {
+			if pypiAvailable(files) {
+				names = append(names, v)
+			}
+		}
+		if v := newestRelease("uv", p.Version, names); v != "" {
+			m.Latest = v
+		}
+	}
+	for _, f := range r.Releases[m.Latest] {
 		if t := parseTime(f.UploadTime); !t.IsZero() && (m.LatestAt.IsZero() || t.Before(m.LatestAt)) {
 			m.LatestAt = t
 		}
@@ -385,14 +408,33 @@ func (c *Client) npm(ctx context.Context, p packages.Package, prev *packages.Met
 	if d := stringOr(r.Deprecated, ""); d != "" {
 		m.Deprecated = oneLine(d)
 	}
-	// Release dates are only in the full document, which can be megabytes,
-	// so it is fetched once per new release. A failure leaves the date
-	// unknown and it is tried again on the next lookup.
-	if prev == nil || prev.Latest != m.Latest || prev.LatestAt.IsZero() {
+	// The latest dist-tag can point at a prerelease (pnpm:node had
+	// 27.0.0-alpha). Picking a stable release instead needs the full
+	// document, as do release dates; that can be megabytes, so it is fetched
+	// once per new release, or on every lookup while the dist-tag is a
+	// prerelease. A failure leaves the date unknown (and the dist-tag's
+	// version in place) and it is tried again on the next lookup.
+	stable := wantsStable(p.Version, m.Latest)
+	if stable || prev == nil || prev.Latest != m.Latest || prev.LatestAt.IsZero() {
 		var doc struct {
-			Time map[string]string `json:"time"`
+			Time     map[string]string `json:"time"`
+			Versions map[string]struct {
+				Deprecated json.RawMessage `json:"deprecated"`
+			} `json:"versions"`
 		}
 		if err := c.getJSON(ctx, c.Base.Npm+"/"+name, &doc); err == nil {
+			if stable {
+				names := make([]string, 0, len(doc.Versions))
+				for v := range doc.Versions {
+					names = append(names, v)
+				}
+				if v := newestRelease("pnpm", p.Version, names); v != "" && v != m.Latest {
+					m.Latest, m.Deprecated = v, ""
+					if d := stringOr(doc.Versions[v].Deprecated, ""); d != "" {
+						m.Deprecated = oneLine(d)
+					}
+				}
+			}
 			m.LatestAt = parseTime(doc.Time[m.Latest])
 		} else if ctx.Err() != nil {
 			return packages.Meta{}, ctx.Err()
@@ -420,26 +462,49 @@ type crateVersion struct {
 	Yanked bool   `json:"yanked"`
 }
 
-// latestCrate picks the newest unyanked stable version, falling back to the
-// newest unyanked prerelease.
-func latestCrate(vs []crateVersion) string {
+// newestRelease is the one rule for picking a latest version from a
+// registry's full version list: a stable install is only offered stable
+// releases (falling back to the newest prerelease when there is none), while
+// a prerelease install is offered whichever is newest. Registries whose
+// latest endpoint already excludes prereleases (the Go proxy, rubygems,
+// GitHub's releases/latest) do not need it.
+func newestRelease(manager, installed string, vs []string) string {
 	best, bestPre := "", ""
 	for _, v := range vs {
-		if v.Yanked {
-			continue
-		}
 		slot := &best
-		if packages.IsPrerelease(v.Vers) {
+		if packages.IsPrerelease(v) {
 			slot = &bestPre
 		}
-		if c, ok := packages.CompareVersions("cargo", v.Vers, *slot); *slot == "" || (ok && c > 0) {
-			*slot = v.Vers
+		if c, ok := packages.CompareVersions(manager, v, *slot); *slot == "" || (ok && c > 0) {
+			*slot = v
 		}
 	}
 	if best == "" {
 		return bestPre
 	}
+	if installed != "" && packages.IsPrerelease(installed) && bestPre != "" {
+		if c, ok := packages.CompareVersions(manager, bestPre, best); ok && c > 0 {
+			return bestPre
+		}
+	}
 	return best
+}
+
+// wantsStable reports whether latest, a registry's own pick, should be
+// replaced by newestRelease: it is a prerelease and the install is not.
+func wantsStable(installed, latest string) bool {
+	return packages.IsPrerelease(latest) && !packages.IsPrerelease(installed)
+}
+
+// latestCrate picks from the unyanked versions by newestRelease.
+func latestCrate(installed string, vs []crateVersion) string {
+	var names []string
+	for _, v := range vs {
+		if !v.Yanked {
+			names = append(names, v.Vers)
+		}
+	}
+	return newestRelease("cargo", installed, names)
 }
 
 type crateResp struct {
@@ -468,7 +533,7 @@ func (c *Client) crates(ctx context.Context, p packages.Package, prev *packages.
 			vs = append(vs, v)
 		}
 	}
-	m := packages.Meta{Latest: latestCrate(vs)}
+	m := packages.Meta{Latest: latestCrate(p.Version, vs)}
 	for _, v := range vs {
 		if v.Vers == p.Version {
 			m.InstalledYanked = v.Yanked

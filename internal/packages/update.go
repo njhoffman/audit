@@ -178,7 +178,7 @@ func PlanUpdates(invs []Inventory, metas map[string]Meta, o PlanOptions) Plan {
 				}
 				continue
 			}
-			it.Command = cmd
+			it.Command = pinPlanned(cmd, p, it.Latest)
 			plan.Items = append(plan.Items, it)
 		}
 	}
@@ -188,6 +188,15 @@ func PlanUpdates(invs []Inventory, metas map[string]Meta, o PlanOptions) Plan {
 		}
 	}
 	return Batch(plan)
+}
+
+// pinPlanned makes a pnpm install target the planned version instead of the
+// latest dist-tag, which can be a prerelease the plan did not offer.
+func pinPlanned(cmd []string, p Package, latest string) []string {
+	if p.Manager != "pnpm" || latest == "" || len(cmd) == 0 || cmd[len(cmd)-1] != p.Name+"@latest" {
+		return cmd
+	}
+	return append(slices.Clone(cmd[:len(cmd)-1]), p.Name+"@"+latest)
 }
 
 // planOne plans p. ok is false when p is not part of the plan at all: an
