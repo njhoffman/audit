@@ -100,6 +100,9 @@ func behind(items []packages.Item) int {
 }
 
 // gapStyle colors a latest version by how far behind the install is.
+// GapStyle is the color of a package row by how far behind it is.
+func (p *Printer) GapStyle(it packages.Item) lipgloss.Style { return p.gapStyle(it) }
+
 func (p *Printer) gapStyle(it packages.Item) lipgloss.Style {
 	if it.Meta != nil && (it.Meta.Deprecated != "" || it.Meta.Archived || (it.Meta.InstalledYanked && it.Meta.Installed == it.Version)) {
 		return p.fg("9")

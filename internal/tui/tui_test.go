@@ -15,6 +15,7 @@ import (
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/keys"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/store"
 	"github.com/njhoffman/audit/internal/todo"
@@ -40,6 +41,15 @@ type fake struct {
 	resolve  int64 // the task a rescan of its command resolves
 	stale    []string
 	failScan string // the command whose rescan fails
+	pkgs     []packages.Annotated
+	updates  [][]string
+}
+
+func (f *fake) Packages(context.Context) ([]packages.Annotated, error) { return f.pkgs, nil }
+
+func (f *fake) UpdateSession(_ context.Context, refs []string) (*osexec.Cmd, error) {
+	f.updates = append(f.updates, refs)
+	return osexec.Command("true"), nil
 }
 
 func (f *fake) StaleCommands(context.Context) ([]string, error) { return f.stale, nil }
@@ -764,5 +774,84 @@ func TestRescanStaleMarksQueuedRows(t *testing.T) {
 	key(t, m, "R")
 	if !strings.Contains(m.View(), "wait for environment to finish") {
 		t.Errorf("a second sweep waits:\n%s", m.View())
+	}
+}
+
+func pkgFixture() []packages.Annotated {
+	item := func(m, n, v, latest string, gap packages.Gap) packages.Item {
+		return packages.Item{Package: packages.Package{Manager: m, Name: n, Version: v, Source: "pypi"},
+			Meta: &packages.Meta{Latest: latest, CheckedAt: now}, Gap: gap}
+	}
+	return []packages.Annotated{
+		{Inventory: packages.Inventory{Manager: "uv"}, Items: []packages.Item{
+			item("uv", "ruff", "0.8.0", "0.9.0", packages.GapMinor), item("uv", "black", "24.1", "24.1", packages.GapCurrent)}},
+		{Inventory: packages.Inventory{Manager: "cargo"}, Items: []packages.Item{item("cargo", "bat", "0.24.0", "0.25.0", packages.GapMinor)}},
+	}
+}
+
+func TestPackagesScreen(t *testing.T) {
+	f := newFake()
+	f.pkgs = pkgFixture()
+	m := start(t, f)
+	key(t, m, "p")
+	v := m.View()
+	if m.screen != screenPackages || !strings.Contains(v, "2 outdated of 3") || !strings.Contains(v, "ruff") ||
+		!strings.Contains(v, "bat") || strings.Contains(v, "black") {
+		t.Fatalf("outdated packages, manager order:\n%s", v)
+	}
+	if strings.Index(v, "bat") > strings.Index(v, "ruff") {
+		t.Errorf("cargo sorts before uv:\n%s", v)
+	}
+	key(t, m, "a")
+	if v := m.View(); !strings.Contains(v, "all 3") || !strings.Contains(v, "black") {
+		t.Errorf("a lists them all:\n%s", v)
+	}
+	key(t, m, "a")
+
+	// U with nothing marked updates the package under the cursor.
+	key(t, m, "U")
+	if len(f.updates) != 1 || !reflect.DeepEqual(f.updates[0], []string{"cargo:bat"}) {
+		t.Fatalf("updates %v", f.updates)
+	}
+	// m marks and moves down; U then runs every marked package.
+	key(t, m, "m")
+	key(t, m, "m")
+	if v := m.View(); !strings.Contains(v, "2 marked") || !strings.Contains(v, "* cargo") {
+		t.Errorf("marked rows:\n%s", v)
+	}
+	key(t, m, "U")
+	if len(f.updates) != 2 || !reflect.DeepEqual(f.updates[1], []string{"cargo:bat", "uv:ruff"}) {
+		t.Fatalf("updates %v", f.updates)
+	}
+	// When the update exits, packages is rescanned, the marks are cleared
+	// and the list reloads.
+	_, cmd := m.Update(updateMsg{})
+	drive(t, m, cmd)
+	if f.rescans[len(f.rescans)-1] != "packages" || len(m.pkg.marked) != 0 || m.screen != screenPackages {
+		t.Errorf("after the update: rescans %v marked %v", f.rescans, m.pkg.marked)
+	}
+	key(t, m, "esc")
+	if m.screen != screenDashboard {
+		t.Errorf("esc goes back to the dashboard: %v", m.screen)
+	}
+}
+
+func TestPackagesScreenEmpty(t *testing.T) {
+	f := newFake()
+	m := start(t, f)
+	key(t, m, "p")
+	if v := m.View(); !strings.Contains(v, "No saved packages run.") {
+		t.Errorf("never scanned:\n%s", v)
+	}
+	key(t, m, "U")
+	if len(f.updates) != 0 {
+		t.Errorf("nothing to update: %v", f.updates)
+	}
+	f.pkgs = pkgFixture()[:1]
+	f.pkgs[0].Items = f.pkgs[0].Items[1:]
+	key(t, m, "esc")
+	key(t, m, "p")
+	if v := m.View(); !strings.Contains(v, "Every package is up to date.") {
+		t.Errorf("all current:\n%s", v)
 	}
 }

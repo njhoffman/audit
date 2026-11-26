@@ -212,7 +212,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   managers and tracked binaries; document remaining gaps before retiring
   the prototype. The original prototype was not found in this checkout.
 
-- [ ] **Show the package inventory and outdated list in the dashboard.** (p2) [feature]
+- [x] **Show the package inventory and outdated list in the dashboard.** (p2) [feature]
   tuiBackend.Report (cmd/audit/cmd/tui.go) renders findings only, and internal/tui
   has no inventory view, so installed versions and available updates cannot be
   reached from bare `audit`. Add a packages screen: per manager, name, installed,

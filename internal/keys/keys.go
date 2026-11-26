@@ -21,12 +21,13 @@ const (
 	Tasks     Screen = "tasks"
 	Task      Screen = "task"
 	Explain   Screen = "explain"
+	Packages  Screen = "packages"
 )
 
 var (
-	allScreens = []Screen{Dashboard, Report, Tasks, Task, Explain}
+	allScreens = []Screen{Dashboard, Report, Tasks, Task, Explain, Packages}
 	// scrolling are the screens with a viewport or a table.
-	scrolling = []Screen{Report, Tasks, Task, Explain}
+	scrolling = []Screen{Report, Tasks, Task, Explain, Packages}
 )
 
 // Reserved is always quit and cannot be bound to an action.
@@ -61,6 +62,10 @@ const (
 	Search       = "search"
 	ToggleClosed = "toggle_closed"
 	CycleCommand = "cycle_command"
+	ShowPackages = "packages"
+	Mark         = "mark"
+	Update       = "update"
+	ToggleAll    = "toggle_outdated"
 )
 
 // Action is something a key does.
@@ -100,6 +105,10 @@ var Actions = []Action{
 	{Search, "find", []Screen{Tasks}, []string{"/"}},
 	{ToggleClosed, "closed", []Screen{Tasks}, []string{"a"}},
 	{CycleCommand, "command", []Screen{Tasks}, []string{"c"}},
+	{ShowPackages, "packages", []Screen{Dashboard}, []string{"p"}},
+	{Mark, "mark", []Screen{Packages}, []string{"m"}},
+	{Update, "update", []Screen{Packages}, []string{"U"}},
+	{ToggleAll, "all or outdated", []Screen{Packages}, []string{"a"}},
 }
 
 // Map holds the keys of each action by name.

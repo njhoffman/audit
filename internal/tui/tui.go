@@ -27,6 +27,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/njhoffman/audit/internal/keys"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/render"
 	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/todo"
@@ -57,6 +58,12 @@ type Backend interface {
 	// FixSession is an interactive AI session that fixes task id, to run on
 	// the terminal.
 	FixSession(ctx context.Context, id int64) (*osexec.Cmd, error)
+	// Packages is the saved package inventory with registry data, none when
+	// packages has never run.
+	Packages(ctx context.Context) ([]packages.Annotated, error)
+	// UpdateSession is audit packages update for refs (manager:name), to run
+	// on the terminal with its own plan, question and sudo prompt.
+	UpdateSession(ctx context.Context, refs []string) (*osexec.Cmd, error)
 }
 
 type screen int
@@ -71,6 +78,9 @@ const (
 	// screenTask shows every field and detail line of one task; esc returns
 	// to the task list.
 	screenTask
+	// screenPackages lists the package inventory; esc returns to the
+	// dashboard.
+	screenPackages
 )
 
 // input is what the text field at the bottom of the task list is editing.
@@ -112,6 +122,7 @@ type Model struct {
 	reportLoaded bool
 
 	busy    string // command being rescanned, "" when idle
+	pkg     pkgScreen
 	spinner spinner.Model
 
 	explainID int64     // task shown on screenExplain
@@ -457,6 +468,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case rescanMsg:
 		m.busy = ""
 		cmds := []tea.Cmd{m.loadStatuses(), m.loadTodos()}
+		if m.screen == screenPackages && msg.command == "packages" {
+			cmds = append(cmds, m.loadPackages())
+		}
 		switch {
 		case m.sweep != nil:
 			if next := m.sweepStep(msg); next != nil {
@@ -536,6 +550,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("#%d %s", msg.task.ID, msg.task.Status.Label()), false)
 		m.applyFilter()
 		return m, m.loadStatuses()
+	case packagesMsg:
+		m.pkg.loaded = true
+		if msg.err != nil {
+			m.setStatus(msg.err.Error(), true)
+			return m, nil
+		}
+		m.pkg.all = msg.items
+		m.filterPackages()
+		return m, nil
+	case updateMsg:
+		if msg.err != nil {
+			m.setStatus("update: "+msg.err.Error(), true)
+		}
+		clear(m.pkg.marked)
+		if m.busy == "" {
+			return m, m.rescan("packages")
+		}
+		return m, m.loadPackages()
 	case tea.KeyMsg:
 		return m.key(msg)
 	}
@@ -589,6 +621,8 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.dashboardKey(k)
 	case screenReport:
 		return m.reportKey(k)
+	case screenPackages:
+		return m.packagesKey(k)
 	case screenTask:
 		switch {
 		case m.is(k, keys.Editor):
@@ -656,6 +690,8 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.rows) > 0 && m.busy == "" {
 			return m.requestRescan(m.rows[m.cursor].Command)
 		}
+	case m.is(k, keys.ShowPackages):
+		return m, m.openPackages()
 	case m.is(k, keys.RescanStale):
 		if m.busy != "" {
 			m.setStatus("wait for "+m.busy+" to finish", true)
@@ -863,6 +899,9 @@ func (m *Model) layout() {
 	m.report.Width, m.report.Height = m.width, body
 	// The table's header takes two lines and the detail pane under it three.
 	m.table.setHeight(body - 5)
+	// The packages table has its header line under the title.
+	m.pkg.height = max(1, body-2)
+	m.pkg.follow()
 	m.field.Width = max(10, m.width-20)
 }
 
@@ -900,6 +939,9 @@ func (m *Model) View() string {
 		default:
 			b.WriteString("\n  loading...")
 		}
+	case screenPackages:
+		b.WriteString(titleStyle.Render("audit packages") + faintStyle.Render("  "+m.packagesLabel()) + "\n")
+		b.WriteString(m.packagesView())
 	default:
 		b.WriteString(titleStyle.Render("audit todo") + faintStyle.Render("  "+m.filterLabel()) + "\n")
 		b.WriteString(m.todosView())
@@ -1033,7 +1075,10 @@ func (m *Model) help() string {
 		return "enter keep  esc clear"
 	case m.screen == screenDashboard:
 		hints = [][]string{{"move", keys.Down, keys.Up}, {"report", keys.Open}, {"rescan", keys.Rescan},
-			{"rescan stale", keys.RescanStale}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
+			{"rescan stale", keys.RescanStale}, {"packages", keys.ShowPackages}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
+	case m.screen == screenPackages:
+		hints = [][]string{{"move", keys.Down, keys.Up}, {"mark", keys.Mark}, {"update", keys.Update},
+			{"all/outdated", keys.ToggleAll}, {"back", keys.Back}, {"quit", keys.Quit}}
 	case m.screen == screenReport:
 		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
 			{"details", keys.Details}, {"rescan", keys.Rescan}, {"back", keys.Back}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}

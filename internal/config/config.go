@@ -909,6 +909,10 @@ tui:
     search: [/]
     toggle_closed: [a]
     cycle_command: [c]
+    packages: [p]                  # dashboard: the package inventory
+    mark: [m]                      # packages: mark the package for update
+    update: [U]                    # packages: run audit packages update for the marked ones
+    toggle_outdated: [a]           # packages: all packages or only outdated ones
   # Keys of the fzf interface, in fzf's key names. Plain letters go to the
   # query, so actions use alt-; scrolling, searching (just type) and leaving
   # (esc) are fzf's own. Only these actions exist in fzf.

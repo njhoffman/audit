@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	osexec "os/exec"
@@ -157,4 +158,24 @@ func (b tuiBackend) profile() termenv.Profile {
 // applies inside the full-screen UI.
 func (a *app) noColorTUI() bool {
 	return a.flags.noColor || a.cfg.NoColor || lipgloss.ColorProfile() == termenv.Ascii
+}
+
+// Packages implements tui.Backend with the saved full packages run, as
+// audit packages -l lists it; none when packages has never run.
+func (b tuiBackend) Packages(ctx context.Context) ([]packages.Annotated, error) {
+	r, err := b.a.engine.Saved(ctx, packages.Command, "")
+	if err != nil || r == nil {
+		return nil, err
+	}
+	return b.a.annotated(ctx, r, packages.Query{})
+}
+
+// UpdateSession implements tui.Backend: this binary's packages update for
+// refs, on the terminal, so it plans, asks and prompts for sudo itself.
+func (b tuiBackend) UpdateSession(_ context.Context, refs []string) (*osexec.Cmd, error) {
+	if len(refs) == 0 {
+		return nil, errors.New("no packages to update")
+	}
+	args := append([]string{"packages", "update"}, refs...)
+	return osexec.Command(packages.SelfCommand, args...), nil // #nosec G204 -- this binary with package refs from its own inventory
 }
