@@ -30,8 +30,7 @@ nothing tells you when a scan would turn up something new.
 - [x] **Rescan every stale command from the dashboard.** (`R`, tui.keys rescan_stale: audit -r's targets one at a time, asking the system-managers question once; the TUI only, fzf has no binding) (p2) [feature] A key (say `R`) that
   runs what `audit -r` runs, with the dashboard rows as its progress.
 
-Decisions to make: whether a scheduled run may use the AI review (it costs
-money per run unless the cache hits).
+Decided 2026-11-26: scheduled runs skip the AI review unless `schedule.ai` is set.
 
 ## 2. Change tracking between runs
 
@@ -91,9 +90,10 @@ global limit; AI cache entries and closed tasks still have no age limit.
   applies one global limit. Frequent package updates can evict the last repo
   sync, runtime migration or cleanup, making that action's `--last` empty.
   Keep the newest N per kind and test mixed-kind runs and child-row cleanup.
-- [ ] **Prune closed tasks.** [chore] (p3) Resolved and done tasks accumulate forever and
+- [x] **Prune closed tasks.** [chore] (p3) Resolved and done tasks accumulate forever and
   feed `tasks.html` and `tasks.json`. Delete ones closed longer than a
   configured age; keep `wont-do`, since it suppresses re-creation.
+  Decided 2026-11-26: `todo.closed_max_age`, default 90 days.
 - [x] **Migration ladder instead of `if v == "1"`.** [refactor] (p3) `checkVersion` handles
   one hard-coded upgrade. A slice of `func(*sql.Tx) error` indexed by
   version, each step in its own transaction, scales to the next schema change
@@ -203,6 +203,9 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   include installed/latest versions and registry freshness in the program
   summary, linking to `audit packages info` and `audit packages update`.
   Handle executable/package name differences and ambiguous ownership.
+  Decided 2026-11-26: use the package of the executable first on PATH; show the
+  package name, and flag other managers' copies as shadowed (a finding when the
+  shadowed copy is newer).
   Reuse package data and update plans rather than adding another updater.
 - [ ] **Verify parity with the original pkgm toolsets.** (p2) [test] Compare its package
   groups, manager self-updates and install/update recipes against audit's
@@ -215,6 +218,9 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   reached from bare `audit`. Add a packages screen: per manager, name, installed,
   latest, gap; filter to outdated; preview and run updates from it (overlaps
   "Preview package updates" in section 10).
+  Decided 2026-11-26: a view-only screen (all/outdated toggle); marking packages and
+  pressing u suspends the TUI into `audit packages update` for them (its own plan,
+  confirm and sudo), like F does for AI fixes, then rescans.
 - [x] **Show the package table without a wall of findings.** (p2) [feature] Bare
   `audit packages` and `-R` print no version table at all, `-l` puts it after every
   finding, and `outdated` prints 225 finding rows before its first package. Make
@@ -327,8 +333,10 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   absolute paths and test `~`, relative paths, `$XDG_DATA_HOME` and
   `${XDG_DATA_HOME}` with the variable unset.
 
-Decisions to make: whether backup cleanup is manual-only or opt-in retention;
-whether format detection should refuse pruning ambiguous histories.
+Decided 2026-11-26: backup cleanup is manual (`audit history backups`, by age or count)
+unless a retention key is set. Patterns may be named: an entry is a string (keeps
+`pattern-N`) or `{name, match}` (subject `PATH:NAME`).
+Still open: whether format detection should refuse pruning ambiguous histories.
 
 ## 10. Dashboard actions
 
@@ -402,6 +410,7 @@ them from being noise (one per check, dismissable like ignore rules).
   colors. Pick one mapping (shared shape and color where a severity maps to a
   priority, distinct otherwise), add a vertical separator between the findings
   and the open tasks columns, and keep the header legend matching.
+  Decided 2026-11-26: as proposed (shared shape and color for mapped pairs).
 
 ## 14. Review findings (2026-11-26)
 

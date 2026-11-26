@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -457,5 +458,41 @@ func TestMigrateV2AddsInstalledAt(t *testing.T) {
 	}
 	if ms, _ = s.PackageMeta(ctx); !ms["uv:ruff"].InstalledAt.Equal(at) {
 		t.Errorf("installed_at round trip: %v", ms["uv:ruff"].InstalledAt)
+	}
+}
+
+func TestPruneClosedTodos(t *testing.T) {
+	s := open(t)
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	old, recent := now.Add(-100*24*time.Hour), now.Add(-10*24*time.Hour)
+	mk := func(key string, st todo.Status, updated, resolved time.Time) todo.Todo {
+		return todo.Todo{Key: key, Command: "repos", Title: key, Priority: todo.Low, Status: st, Source: todo.FromFinding,
+			CreatedAt: old.Add(-time.Hour), UpdatedAt: updated, LastSeenAt: updated, ResolvedAt: resolved}
+	}
+	if err := s.SaveTodos(ctx, []todo.Todo{
+		mk("done-old", todo.Done, old, time.Time{}),       // closed by hand, long ago: deleted
+		mk("resolved-old", todo.Resolved, recent, old),    // resolved long ago, touched since: deleted
+		mk("resolved-new", todo.Resolved, recent, recent), // kept
+		mk("wontdo-old", todo.WontDo, old, time.Time{}),   // always kept
+		mk("open-old", todo.Open, old, time.Time{}),       // open: kept
+		mk("done-new", todo.Done, recent, time.Time{}),    // kept
+	}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.PruneClosedTodos(ctx, now.Add(-90*24*time.Hour))
+	if err != nil || n != 2 {
+		t.Fatalf("pruned %d: %v", n, err)
+	}
+	ts, err := s.Todos(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for _, x := range ts {
+		keys = append(keys, x.Key)
+	}
+	slices.Sort(keys)
+	if want := []string{"done-new", "open-old", "resolved-new", "wontdo-old"}; !slices.Equal(keys, want) {
+		t.Errorf("kept %v, want %v", keys, want)
 	}
 }

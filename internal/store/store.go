@@ -722,6 +722,18 @@ func (s *Store) PruneCache(ctx context.Context, cutoff time.Time) (int64, error)
 	return res.RowsAffected()
 }
 
+// PruneClosedTodos deletes done and resolved tasks that closed before
+// cutoff (their resolved time, else their last update) and reports how many
+// went. Won't-do tasks stay: they keep a dismissed finding from coming back.
+func (s *Store) PruneClosedTodos(ctx context.Context, cutoff time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM todos WHERE status IN (?, ?)
+		AND COALESCE(NULLIF(resolved_at, ''), updated_at) < ?`, string(todo.Done), string(todo.Resolved), fmtTime(cutoff))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // NextManualKey returns a unique key for a hand-written task.
 func NextManualKey(command string, now time.Time) string {
 	if command == "" {

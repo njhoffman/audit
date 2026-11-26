@@ -142,6 +142,14 @@ func (a *app) load() error {
 	if a.changes, err = st.Changes(context.Background()); err != nil {
 		a.log.Warn("read the database change count", "err", err)
 	}
+	// After the baseline: deleted tasks change tasks.html and the export.
+	if age := cfg.Todo.ClosedMaxAge; age > 0 {
+		if n, err := st.PruneClosedTodos(context.Background(), timeNow().Add(-age)); err != nil {
+			a.log.Warn("prune closed tasks", "err", err)
+		} else if n > 0 {
+			a.log.Debug("pruned closed tasks", "tasks", n, "closed_before", age)
+		}
+	}
 	host, _ := os.Hostname()
 	a.env = exec.FromOS()
 	if a.runner != nil {

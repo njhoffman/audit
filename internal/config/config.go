@@ -44,6 +44,15 @@ type Config struct {
 	Configs      ConfigsConfig      `mapstructure:"configs" yaml:"configs"`
 	Scripts      ScriptsConfig      `mapstructure:"scripts" yaml:"scripts"`
 	ShellHistory ShellHistoryConfig `mapstructure:"shell_history" yaml:"shell_history"`
+	Todo         TodoConfig         `mapstructure:"todo" yaml:"todo"`
+}
+
+// TodoConfig controls the task list.
+type TodoConfig struct {
+	// ClosedMaxAge is how long a done or resolved task is kept after it
+	// closed; 0 keeps them all. Won't-do tasks are always kept, since they
+	// stop the task from being created again.
+	ClosedMaxAge time.Duration `mapstructure:"closed_max_age" yaml:"closed_max_age"`
 }
 
 // ShellHistoryConfig controls read-only shell history checks. History above
@@ -417,6 +426,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("ai.max_details", 10)
 	v.SetDefault("ai.instruction_limit_kb", 40)
 	v.SetDefault("ai.cache_max_age", 90*24*time.Hour)
+	v.SetDefault("todo.closed_max_age", 90*24*time.Hour)
 	v.SetDefault("system.journal", DefaultJournalFlags)
 	v.SetDefault("system.logs", DefaultLogs)
 	v.SetDefault("system.log_max_lines", 5000)
@@ -632,6 +642,9 @@ func (c *Config) validate() error {
 	if c.System.Services.HighRestarts < 0 {
 		return fmt.Errorf("system.services.high_restarts must be 0 (off) or more, got %d", c.System.Services.HighRestarts)
 	}
+	if c.Todo.ClosedMaxAge < 0 {
+		return fmt.Errorf("todo.closed_max_age must be 0 (keep all) or more, got %s", c.Todo.ClosedMaxAge)
+	}
 	if c.AI.CacheMaxAge < 0 {
 		return fmt.Errorf("ai.cache_max_age must be 0 (keep all) or more, got %s", c.AI.CacheMaxAge)
 	}
@@ -778,6 +791,11 @@ stale:
   old: 168h
   commands:
     files: {warn: 168h, old: 720h}
+
+# Done and resolved tasks are deleted this long after they closed (0 keeps
+# them all). Won't-do tasks are always kept: they stop the task coming back.
+todo:
+  closed_max_age: 2160h      # 90 days
 
 # Findings to hide. Each entry is a full key (command:check:subject), a
 # command-qualified check (packages:pnpm.legacy_shim) or a bare check id.

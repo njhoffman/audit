@@ -541,6 +541,8 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       commands:
         files: {warn: 168h, old: 720h}
     ignore: []                 # command:check:subject, command:check or check
+    todo:
+      closed_max_age: 2160h    # done and resolved tasks deleted this long after closing (90 days) at startup; 0 keeps all; won't-do tasks are kept
     scan:
       concurrency: 3           # audit -r: commands scanning at once after packages
     display:
