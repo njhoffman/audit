@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-26
+
 ### Added
 
 - `summary.json` in the export directory has a `packages` block: per manager, whether it is available, how many packages are installed, how many are outdated, counts by gap (current, patch, minor, major, update, ahead, unknown), how many were never looked up, and when the registry was last checked. A dashboard no longer has to parse the much larger `packages.json` for these numbers. `schema_version` stays 1, since nothing was renamed or removed.
