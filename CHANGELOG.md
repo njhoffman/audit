@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-26
+
 ### Changed
 
 - `audit packages outdated` says how complete its answer is: how many packages it could check, how many were never looked up, failed, or have versions that do not compare, and how old the registry data is, with the command that looks the rest up. An empty list no longer reads "No known outdated packages" when some were never checked, and stale apt lists are called out with the command that refreshes them (`--force` does not).
