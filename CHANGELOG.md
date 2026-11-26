@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-11-26
+
 ### Changed
 
 - The dashboard and `audit --summary` separate finding counts from open task counts with a `│` and name the markers in a legend under the table. Task priorities now use the marker and color of the severity whose findings become them: high `●` (error), medium `▲` (warning), low `◆` (notice); suggestion keeps `◇`, and info's `○` no longer doubles as low. The Nerd Font icons follow the same pairing. The task editor, `audit todo` and the fzf task list show the new priority markers too.
