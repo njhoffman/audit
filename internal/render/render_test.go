@@ -170,7 +170,8 @@ func TestSummary(t *testing.T) {
 		{Command: "repos", Thresholds: th},
 	})
 	out := b.String()
-	for _, w := range []string{"COMMAND", "system", "2h", "● 2  ○ 1  ● 2  ○ 1",
+	for _, w := range []string{"COMMAND", "system", "2h", "● 2  ○ 1  │ ● 2  ◆ 1", "│ OPEN TASKS",
+		"findings ● error  ○ info  │ tasks ● high  ◆ low",
 		"packages", "10d", "✓ none", "repos", "never"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("summary missing %q:\n%s", w, out)
@@ -443,13 +444,32 @@ func TestCountColumnsAlign(t *testing.T) {
 		got = append(got, p.RunCounts(cc, r)+" | "+p.TaskCounts(cc, r.Open))
 	}
 	want := []string{
-		"● 8  ▲ 88  ○ 54 | ● 3  ○  5",
-		"     ▲  4 |      ○ 12",
+		"● 8  ▲ 88  ○ 54 | ● 3  ◆  5",
+		"     ▲  4 |      ◆ 12",
 		"✓ none | ",
 		" | ",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if l := p.CountLegend(cc); l != "findings ● error  ▲ warning  ○ info  │ tasks ● high  ◆ low" {
+		t.Errorf("legend %q", l)
+	}
+	if l := p.CountLegend(NewCountColumns(nil)); l != "" {
+		t.Errorf("no counts, no legend: %q", l)
+	}
+	// Each priority marker is its mapped severity's, and the unmapped
+	// ones differ from every severity marker.
+	for _, g := range []Glyphs{UnicodeGlyphs, NerdGlyphs} {
+		if g.Priority[todo.High] != g.Severity[finding.Error] || g.Priority[todo.Medium] != g.Severity[finding.Warning] ||
+			g.Priority[todo.Low] != g.Severity[finding.Notice] {
+			t.Errorf("nerd=%v: priorities do not share their severities' markers", g.Nerd)
+		}
+		for _, m := range g.Severity {
+			if m == g.Priority[todo.Suggestion] {
+				t.Errorf("nerd=%v: the suggestion marker is a severity's", g.Nerd)
+			}
+		}
 	}
 }
 

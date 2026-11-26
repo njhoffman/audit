@@ -206,7 +206,7 @@ func start(t *testing.T, f *fake, opts ...Option) *Model {
 func TestDashboardShowsCommandsAndAges(t *testing.T) {
 	m := start(t, newFake())
 	v := m.View()
-	for _, s := range []string{"system", "environment", "packages", "1h", "10d", "never", "● 2       ● 2", "✓ none"} {
+	for _, s := range []string{"system", "environment", "packages", "1h", "10d", "never", "● 2       │ ● 2", "│ OPEN TASKS", "findings ● error  │ tasks ● high", "✓ none"} {
 		if !strings.Contains(v, s) {
 			t.Errorf("dashboard missing %q:\n%s", s, v)
 		}
@@ -521,7 +521,7 @@ func TestToggleDetails(t *testing.T) {
 func TestTaskListMarkersAndColumns(t *testing.T) {
 	m := start(t, newFake(), StartInTodos(todo.Filter{ShowClosed: true}))
 	v := m.View()
-	for _, s := range []string{"PRIORITY", "● high", "○ low", "◐ medium", "done", "fix sshd", "F fix"} {
+	for _, s := range []string{"PRIORITY", "● high", "◆ low", "▲ medium", "done", "fix sshd", "F fix"} {
 		if !strings.Contains(v, s) {
 			t.Errorf("task list missing %q:\n%s", s, v)
 		}

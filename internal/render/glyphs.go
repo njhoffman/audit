@@ -16,13 +16,16 @@ type Glyphs struct {
 	Icons map[string]string
 }
 
-// UnicodeGlyphs are plain Unicode markers and no icons.
+// UnicodeGlyphs are plain Unicode markers and no icons. A priority shares
+// the marker (and color) of the severity whose findings become tasks of it
+// (error high, warning medium, notice low); critical, info and suggestion
+// map to nothing else and have markers of their own.
 var UnicodeGlyphs = Glyphs{
 	Severity: map[finding.Severity]string{
 		finding.Critical: "◉", finding.Error: "●", finding.Warning: "▲", finding.Notice: "◆", finding.Info: "○",
 	},
 	Priority: map[todo.Priority]string{
-		todo.High: "●", todo.Medium: "◐", todo.Low: "○", todo.Suggestion: "◇",
+		todo.High: "●", todo.Medium: "▲", todo.Low: "◆", todo.Suggestion: "◇",
 	},
 }
 
@@ -38,10 +41,11 @@ var NerdGlyphs = Glyphs{
 		finding.Notice:   "\uf0f3", // fa-bell
 		finding.Info:     "\uf05a", // fa-info_circle
 	},
+	// As in UnicodeGlyphs, a priority shares its severity's icon.
 	Priority: map[todo.Priority]string{
-		todo.High:       "\uf102", // fa-angle_double_up
-		todo.Medium:     "\uf106", // fa-angle_up
-		todo.Low:        "\uf107", // fa-angle_down
+		todo.High:       "\uf057", // fa-times_circle, as error
+		todo.Medium:     "\uf071", // fa-warning, as warning
+		todo.Low:        "\uf0f3", // fa-bell, as notice
 		todo.Suggestion: "\uf0eb", // fa-lightbulb_o
 	},
 	Icons: map[string]string{

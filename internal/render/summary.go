@@ -29,24 +29,53 @@ type CommandStatus struct {
 func (p *Printer) Summary(rows []CommandStatus) {
 	now := p.Now()
 	cc := NewCountColumns(rows)
-	cols := []column{{title: "COMMAND"}, {title: "LAST RUN"}, {title: "AGE"}, {title: "FINDINGS"}, {title: "TASKS"}}
+	cols := []column{{title: "COMMAND"}, {title: "LAST RUN"}, {title: "AGE"}, {title: "FINDINGS"}, {title: CountSeparator + "OPEN TASKS"}}
 	cells := make([][]string, len(rows))
 	styles := make([][]lipgloss.Style, len(rows))
 	for i, r := range rows {
 		st := []lipgloss.Style{p.fg("12").Bold(true), p.style(), p.style(), p.style(), p.style()}
 		name := p.glyphs().Icon(r.Command) + r.Command
 		if r.Latest == nil {
-			cells[i] = []string{name, "never", "-", p.RunCounts(cc, r), p.TaskCounts(cc, r.Open)}
+			cells[i] = []string{name, "never", "-", p.RunCounts(cc, r), p.faint().Render(CountSeparator) + p.TaskCounts(cc, r.Open)}
 			st[1], st[2] = p.faint(), p.faint()
 		} else {
 			age := now.Sub(r.Latest.FinishedAt)
 			cells[i] = []string{name, r.Latest.FinishedAt.Local().Format("2006-01-02 15:04"),
-				run.HumanAge(age), p.RunCounts(cc, r), p.TaskCounts(cc, r.Open)}
+				run.HumanAge(age), p.RunCounts(cc, r), p.faint().Render(CountSeparator) + p.TaskCounts(cc, r.Open)}
 			st[2] = p.ageStyle(age, r.Thresholds)
 		}
 		styles[i] = st
 	}
 	p.table(cols, cells, func(row, col int) lipgloss.Style { return styles[row][col] })
+	if l := p.CountLegend(cc); l != "" {
+		p.println("")
+		p.println(l)
+	}
+}
+
+// CountSeparator divides the finding counts from the open task counts.
+const CountSeparator = "│ "
+
+// CountLegend names the markers of the count columns in use, findings then
+// tasks: "◉ critical  ● error ... │ ● high  ▲ medium ...", faint, or "" when
+// no column has a count.
+func (p *Printer) CountLegend(cc CountColumns) string {
+	g := p.glyphs()
+	var sev, pri []string
+	for _, s := range cc.sev {
+		sev = append(sev, p.mutedSev(s).Render(g.Severity[s])+" "+string(s))
+	}
+	for _, pr := range cc.pri {
+		pri = append(pri, p.prioStyle(pr).UnsetBold().Render(g.Priority[pr])+" "+string(pr))
+	}
+	if len(sev) == 0 && len(pri) == 0 {
+		return ""
+	}
+	out := p.faint().Render("findings ") + strings.Join(sev, "  ")
+	if len(pri) > 0 {
+		out += p.faint().Render("  "+CountSeparator+"tasks ") + strings.Join(pri, "  ")
+	}
+	return out
 }
 
 // ageStyle colors an age by its freshness.

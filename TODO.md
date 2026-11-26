@@ -404,7 +404,7 @@ them from being noise (one per check, dismissable like ignore rules).
   moves over the top-level rows (system, packages, repos, ...), show one line
   below the table on what that command scans for, taken from each cobra
   command's Short so the two cannot drift.
-- [ ] **Make finding and task count columns distinguishable.** (p2) [bug] The
+- [x] **Make finding and task count columns distinguishable.** (p2) [bug] The
   dashboard rows read `● 21 ▲ 138 ◆ 95 ○ 116 | ● 4 ◐ 1 ○ 96 ◇ 12`, and the
   styles in FindingCounts/TaskCounts (internal/render/summary.go) do not line up:
   `◆ 95` (suggestion) and `○ 96` (low priority) share a color with different

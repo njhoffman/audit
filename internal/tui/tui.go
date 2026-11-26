@@ -923,7 +923,7 @@ func (m *Model) dashboardView() string {
 	nameW, findW := len("COMMAND"), len("FINDINGS")
 	for i, r := range m.rows {
 		l := line{name: m.glyphs.Icon(r.Command) + r.Command, last: faintStyle.Render("never"), age: faintStyle.Render("-"),
-			findings: p.RunCounts(cc, r), tasks: p.TaskCounts(cc, r.Open)}
+			findings: p.RunCounts(cc, r), tasks: faintStyle.Render(render.CountSeparator) + p.TaskCounts(cc, r.Open)}
 		if r.Latest != nil {
 			d := now.Sub(r.Latest.FinishedAt)
 			l.last = r.Latest.FinishedAt.Local().Format("2006-01-02 15:04")
@@ -943,7 +943,7 @@ func (m *Model) dashboardView() string {
 	pad := func(s string, w int) string { return s + strings.Repeat(" ", max(0, w-ansi.StringWidth(s))) }
 	var b strings.Builder
 	header := "  " + pad("COMMAND", nameW) + "  " + pad("LAST RUN", 16) + "  " + pad("AGE", 8) + "  " + pad("FINDINGS", findW) +
-		"  " + m.glyphs.Icon("tasks") + "OPEN TASKS"
+		"  " + render.CountSeparator + m.glyphs.Icon("tasks") + "OPEN TASKS"
 	b.WriteString(lipgloss.NewStyle().Bold(true).Render(header) + "\n")
 	for i, l := range lines {
 		marker := "  "
@@ -960,6 +960,9 @@ func (m *Model) dashboardView() string {
 			name = titleStyle.Render(name)
 		}
 		b.WriteString(marker + name + "  " + pad(l.last, 16) + "  " + pad(l.age, 8) + "  " + pad(l.findings, findW) + "  " + l.tasks + "\n")
+	}
+	if l := p.CountLegend(cc); l != "" {
+		b.WriteString("\n  " + l + "\n")
 	}
 	if m.cursor < len(m.rows) {
 		if d := m.descriptions[m.rows[m.cursor].Command]; d != "" {

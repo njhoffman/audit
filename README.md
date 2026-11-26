@@ -112,7 +112,7 @@ AI features go through a local CLI picked by `ai.provider` (or `-I/--ai-provider
 - `audit todo fix ID`, or `F` in the task editor: starts `claude` or `codex` interactively with the task and its findings, asking it to fix the task. This is the one AI feature that can change your machine: the CLI runs with its normal permission prompts, so you approve each edit and command. Tasks a built-in action covers (`packages update`, `repos sync`, `files clean`, `configs clean`) are pointed at that action. When you leave the session, audit rescans the task's command and says whether the task resolved.
 - `-e/--explain` on `packages update` and `packages runtimes update|migrate` (also with `-L`): why the failed items failed. This sends the tail of their command output.
 
-The dashboard lines up each command's finding counts by severity (`◉` critical, `●` error, `▲` warning, `◆` notice, `○` info) and its open tasks by priority (`●` high, `◐` medium, `○` low, `◇` suggestion). With a Nerd Font, `display.nerd_fonts: true` (or `-G`) swaps the markers for icons and adds icons to commands, report sections and summary groups.
+The dashboard lines up each command's finding counts by severity (`◉` critical, `●` error, `▲` warning, `◆` notice, `○` info) and, after a `│`, its open tasks by priority (`●` high, `▲` medium, `◆` low, `◇` suggestion): a priority uses the marker and color of the severity that becomes it, and a legend under the table names the markers shown. With a Nerd Font, `display.nerd_fonts: true` (or `-G`) swaps the markers for icons and adds icons to commands, report sections and summary groups.
 
 ### Dashboard keys
 
