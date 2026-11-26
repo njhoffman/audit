@@ -220,9 +220,10 @@ func (p *Printer) Todos(ts []todo.Todo) {
 		p.println(p.faint().Render("No tasks match."))
 		return
 	}
+	g := p.glyphs()
 	rows := make([][]string, len(ts))
 	for i, t := range ts {
-		rows[i] = []string{fmt.Sprintf("%d", t.ID), string(t.Priority), t.Status.Label(), t.Command, p.tilde(t.Title)}
+		rows[i] = []string{fmt.Sprintf("%d", t.ID), g.PriorityLabel(t.Priority), t.Status.Label(), g.Icon(t.Command) + t.Command, p.tilde(t.Title)}
 	}
 	p.table([]column{{title: "ID"}, {title: "PRIORITY"}, {title: "STATUS"}, {title: "COMMAND"}, {title: "TITLE", flex: true}},
 		rows, func(row, col int) lipgloss.Style {

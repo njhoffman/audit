@@ -201,7 +201,7 @@ func TestTodos(t *testing.T) {
 	}
 	p.Todos(ts)
 	out := b.String()
-	for _, w := range []string{"ID", "PRIORITY", "3   high", "in progress", "won't do", "Tidy PATH"} {
+	for _, w := range []string{"ID", "PRIORITY", "3   ● high", "in progress", "won't do", "Tidy PATH"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("todos missing %q:\n%s", w, out)
 		}

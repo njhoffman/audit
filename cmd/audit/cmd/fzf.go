@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/njhoffman/audit/internal/render"
+
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -68,7 +70,7 @@ func runFzfTasks(ctx context.Context, a *app, flt todo.Filter) error {
 	}
 	state := fzf.State{Command: flt.Command, Closed: flt.ShowClosed}
 	f := fzf.Filter{Priorities: flt.Priorities, Statuses: flt.Statuses}
-	return fzf.Run(ctx, a.fzfInterface().TasksArgs(state, flt.Search), fzf.TaskLines(ts, state, f, a.env.Home),
+	return fzf.Run(ctx, a.fzfInterface().TasksArgs(state, flt.Search), fzf.TaskLines(ts, state, f, a.env.Home, render.GlyphsFor(a.cfg.Display.NerdFonts)),
 		[]string{fzf.FilterEnv + "=" + f.Encode()})
 }
 
@@ -118,7 +120,7 @@ func (a *app) fzfQuiet(ctx context.Context, op string, args []string) error {
 		if err != nil {
 			return err
 		}
-		return writeLines(a.out, fzf.TaskLines(ts, state, fzf.DecodeFilter(os.Getenv(fzf.FilterEnv)), a.env.Home))
+		return writeLines(a.out, fzf.TaskLines(ts, state, fzf.DecodeFilter(os.Getenv(fzf.FilterEnv)), a.env.Home, render.GlyphsFor(a.cfg.Display.NerdFonts)))
 	case op == "preview" && len(args) == 2:
 		width, _ := strconv.Atoi(os.Getenv("FZF_PREVIEW_COLUMNS"))
 		text, err := a.fzfRender(ctx, args[0], args[1], width)

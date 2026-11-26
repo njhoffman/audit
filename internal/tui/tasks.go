@@ -116,11 +116,7 @@ func (t *taskTable) view(width int, g render.Glyphs, home string) string {
 			i = l - 1
 		}
 		tk := t.tasks[i]
-		marker := g.Priority[tk.Priority]
-		if marker != "" {
-			marker += " "
-		}
-		cells := []string{cell(fmt.Sprintf("%d", tk.ID), idW), cell(marker+string(tk.Priority), prioW),
+		cells := []string{cell(fmt.Sprintf("%d", tk.ID), idW), cell(g.PriorityLabel(tk.Priority), prioW),
 			cell(tk.Status.Label(), statusW), cell(g.Icon(tk.Command)+tk.Command, cmdW), cell(render.Tilde(tk.Title, home), titleW)}
 		if i == t.cursor {
 			b.WriteString(cursorStyle.Render(ansi.Truncate(strings.Join(cells, gap), width, "")) + "\n")

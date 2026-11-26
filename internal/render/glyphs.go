@@ -92,6 +92,15 @@ func GlyphsFor(nerd bool) Glyphs {
 }
 
 // Icon is name's icon followed by a space, or "" when it has none.
+// PriorityLabel is a priority with its marker in front ("● high"), as the
+// task editor, audit todo and the fzf task list show it.
+func (g Glyphs) PriorityLabel(p todo.Priority) string {
+	if m := g.Priority[p]; m != "" {
+		return m + " " + string(p)
+	}
+	return string(p)
+}
+
 func (g Glyphs) Icon(name string) string {
 	if i := g.Icons[name]; i != "" {
 		return i + " "

@@ -240,12 +240,12 @@ func DecodeFilter(v string) Filter {
 // TaskLines are the tasks of state and f, sorted, one line each: the ID
 // (the field the bindings use), then priority, status, command and title,
 // with home shown as ~.
-func TaskLines(ts []todo.Todo, state State, f Filter, home string) []string {
+func TaskLines(ts []todo.Todo, state State, f Filter, home string, g render.Glyphs) []string {
 	ts = todo.Filter{Command: state.Command, ShowClosed: state.Closed, Priorities: f.Priorities, Statuses: f.Statuses}.Apply(ts)
 	todo.Sort(ts)
 	out := make([]string, 0, len(ts))
 	for _, t := range ts {
-		out = append(out, fmt.Sprintf("%-5d %-10s %-11s %-11s %s", t.ID, t.Priority, t.Status.Label(), t.Command, render.Tilde(t.Title, home)))
+		out = append(out, fmt.Sprintf("%-5d %-12s %-11s %-13s %s", t.ID, g.PriorityLabel(t.Priority), t.Status.Label(), g.Icon(t.Command)+t.Command, render.Tilde(t.Title, home)))
 	}
 	return out
 }
