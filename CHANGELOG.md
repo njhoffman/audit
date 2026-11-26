@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-26
+
 ### Changed
 
 - `audit todo --serve`: the printed link works once. Opening it sets an HttpOnly, SameSite=Strict session cookie and redirects to a URL without the token; a second use is refused, so a token read from `xdg-open`'s command line by another local user cannot be used unnoticed. Reloading the page keeps working through the cookie; restart the server for a new link.
