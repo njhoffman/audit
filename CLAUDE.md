@@ -70,4 +70,4 @@ A new scanning command implements `core.Scanner` (and `core.Owner` if it support
 - Never persist raw shell xtrace output; it echoes variable values. Keep file paths only.
 - A new config key goes in `defaults()`, the `Template` (with a comment) and `validate()` if it has a range; `TestTemplateMatchesDefaults` fails if the template drifts.
 - When adding or changing a command or flag, update `man/audit.1.md`, `README.md` and `CHANGELOG.md` in the same change.
-- Versioning is semver through git tags (`vX.Y.Z`; the binary reports `git describe`). After each finished feature or fix is committed, cut a release with `just release` so every update is tagged and pushed.
+- Versioning is semver through git tags (`vX.Y.Z`; the binary reports `git describe`). After each finished feature or fix is committed, cut a release with `just release --no-push` so every update is tagged locally; the owner pushes commits and tags in batches (`git push --atomic origin main vX.Y.Z ...`, at most three tags per push so each fires its GitHub release build). Report how many commits and tags are unpushed instead of pushing.
