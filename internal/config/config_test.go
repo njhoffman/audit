@@ -6,7 +6,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 func isolate(t *testing.T) string {
@@ -299,5 +302,56 @@ func TestValidateSystemManagers(t *testing.T) {
 	cfg.Packages.SystemManagers = "sometimes"
 	if err := cfg.validate(); err == nil || !strings.Contains(err.Error(), "packages.system_managers") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestHistoryPatterns(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dir := t.TempDir()
+	path := filepath.Join(dir, "c.yaml")
+	write := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("shell_history:\n  patterns: [\"curl | sh\", {name: aws-key, match: AKIA}]\n")
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []HistoryPattern{{Match: "curl | sh"}, {Name: "aws-key", Match: "AKIA"}}
+	if !reflect.DeepEqual(cfg.ShellHistory.Patterns, want) || len(cfg.Unknown) != 0 {
+		t.Fatalf("mixed list: %+v unknown %v", cfg.ShellHistory.Patterns, cfg.Unknown)
+	}
+	b, err := yaml.Marshal(cfg.ShellHistory)
+	if err != nil || !strings.Contains(string(b), "- curl | sh\n") || !strings.Contains(string(b), "name: aws-key") {
+		t.Errorf("an unnamed pattern prints as a plain string:\n%s %v", b, err)
+	}
+	for body, msg := range map[string]string{
+		"shell_history: {patterns: [\"\"]}":                                     "item 1 has nothing to match",
+		"shell_history: {patterns: [{name: a}]}":                                "item 1 has nothing to match",
+		"shell_history: {patterns: [{name: 'a:b', match: x}]}":                  `name "a:b" must be`,
+		"shell_history: {patterns: [{name: pattern-2, match: x}]}":              "not start with pattern-",
+		"shell_history: {patterns: [{name: a, match: x}, {name: a, match: y}]}": `name "a" is used twice`,
+	} {
+		write(body + "\n")
+		if _, _, err := Load(path); err == nil || !strings.Contains(err.Error(), msg) {
+			t.Errorf("%s: %v, want %q", body, err, msg)
+		}
+	}
+}
+
+func TestHistoryPatternsFromEnv(t *testing.T) {
+	dir := isolate(t)
+	path := filepath.Join(dir, "c.yaml")
+	write(t, path, "no_color: true\n")
+	t.Setenv("AUDIT_SHELL_HISTORY_PATTERNS", "curl | sh,AKIA")
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []HistoryPattern{{Match: "curl | sh"}, {Match: "AKIA"}}; !reflect.DeepEqual(cfg.ShellHistory.Patterns, want) {
+		t.Errorf("env patterns: %+v", cfg.ShellHistory.Patterns)
 	}
 }

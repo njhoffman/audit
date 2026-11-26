@@ -299,7 +299,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   that way). Scan and prune compare the escaped bytes, so a non-ASCII
   `shell_history.patterns` entry never matches a zsh record. Unmetafy zsh text in
   parse (the raw bytes still drive prune's byte ranges) and test with "→" and "ă".
-- [ ] **Give patterns stable identities.** (p2) [refactor] Findings and ignore rules use
+- [x] **Give patterns stable identities.** ({name, match} entries; plain strings stay positional) (p2) [refactor] Findings and ignore rules use
   `PATH:pattern-N`; reordering `shell_history.patterns` changes which pattern
   a saved task or ignore rule refers to. Support named pattern IDs without
   storing pattern values in findings, and test reorder/add/remove behavior.

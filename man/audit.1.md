@@ -530,7 +530,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     history: 20                # saved runs kept per command
     shell_history:
       files: [~/.zsh_history, ~/.bash_history, "$XDG_DATA_HOME/fish/fish_history"]
-      patterns: []             # case-sensitive literal substrings
+      patterns: []             # case-sensitive literal substrings: "text" (subject PATH:pattern-N, by position) or {name: NAME, match: "text"} (subject PATH:NAME, kept when the list is reordered)
       max_lines: 10            # report entries with at least this many lines
       max_mb: 32               # skip larger files (1..1024), with a scan error
       formats: []              # [{path: ~/.histfile, format: zsh}]: zsh, bash or fish where detection fails

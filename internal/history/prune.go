@@ -92,7 +92,7 @@ func PlanPrune(ctx context.Context, o Options, categories, ignore []string) ([]P
 			remove := (m.duplicate && allowed(CategoryDuplicates, "history.duplicates", path)) ||
 				(m.multiline && allowed(CategoryMultiline, "history.multiline", path))
 			for _, i := range m.patterns {
-				remove = remove || allowed(CategoryPatterns, "history.pattern", patternSubject(path, i))
+				remove = remove || allowed(CategoryPatterns, "history.pattern", o.patternSubject(path, i))
 			}
 			if remove {
 				plan.Remove++

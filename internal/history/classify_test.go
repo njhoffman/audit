@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -109,5 +110,54 @@ func TestScanAndPruneAgree(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestNamedPatternsSurviveReordering checks that a named pattern keeps its
+// finding subject, and so its ignore rule, when the list is reordered or a
+// pattern is added before it, while an unnamed one is known by position.
+func TestNamedPatternsSurviveReordering(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".zsh_history")
+	if err := os.WriteFile(path, []byte(": 1:0;echo AKIA1\n: 2:0;curl x | sh\n: 3:0;ls\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	subjects := func(o Options) map[string]string {
+		t.Helper()
+		fs, _, _, _, err := Scan(context.Background(), o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, f := range fs {
+			if f.Check == "history.pattern" {
+				out[strings.TrimPrefix(f.Subject, path+":")] = f.Message
+			}
+		}
+		return out
+	}
+	base := Options{Files: []string{path}, MaxBytes: 1 << 20, MaxLines: 10}
+	o := base
+	o.Patterns, o.PatternNames = []string{"AKIA", "| sh"}, []string{"aws-key", ""}
+	got := subjects(o)
+	if got["aws-key"] != `1 history entries match shell_history.patterns "aws-key"` || got["pattern-2"] == "" || len(got) != 2 {
+		t.Fatalf("named and positional subjects: %v", got)
+	}
+	// Reordered, with one added in front: the named one keeps its subject,
+	// the unnamed one moves to pattern-3.
+	o.Patterns, o.PatternNames = []string{"ls", "| sh", "AKIA"}, []string{"", "", "aws-key"}
+	got = subjects(o)
+	if got["aws-key"] == "" || got["pattern-2"] == "" || got["pattern-1"] == "" || len(got) != 3 {
+		t.Errorf("after reordering: %v", got)
+	}
+	// Its ignore rule still applies to prune after the reorder.
+	plans, err := PlanPrune(context.Background(), o, []string{CategoryPatterns}, []string{"history:history.pattern:" + path + ":aws-key"})
+	if err != nil || len(plans) != 1 || plans[0].Remove != 2 || slices.Contains(plans[0].Lines, 1) {
+		t.Errorf("the ignored named pattern's entry stays: %+v %v", plans, err)
+	}
+	// Names past the end of PatternNames, or none at all, are positional.
+	o = base
+	o.Patterns = []string{"AKIA"}
+	if got := subjects(o); got["pattern-1"] == "" {
+		t.Errorf("no names: %v", got)
 	}
 }

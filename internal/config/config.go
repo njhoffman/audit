@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -58,14 +60,44 @@ type TodoConfig struct {
 // ShellHistoryConfig controls read-only shell history checks. History above
 // remains the number of saved audit runs to retain.
 type ShellHistoryConfig struct {
-	Files    []string `mapstructure:"files" yaml:"files"`
-	HistDB   string   `mapstructure:"histdb" yaml:"histdb"`
-	Patterns []string `mapstructure:"patterns" yaml:"patterns"`
-	MaxLines int      `mapstructure:"max_lines" yaml:"max_lines"`
-	MaxMB    int64    `mapstructure:"max_mb" yaml:"max_mb"`
+	Files    []string         `mapstructure:"files" yaml:"files"`
+	HistDB   string           `mapstructure:"histdb" yaml:"histdb"`
+	Patterns []HistoryPattern `mapstructure:"patterns" yaml:"patterns"`
+	MaxLines int              `mapstructure:"max_lines" yaml:"max_lines"`
+	MaxMB    int64            `mapstructure:"max_mb" yaml:"max_mb"`
 	// Formats name the format of files whose name and content do not tell
 	// (a plain zsh history at a custom path reads as bash).
 	Formats []HistoryFormat `mapstructure:"formats" yaml:"formats"`
+}
+
+// HistoryPattern is one shell_history.patterns entry: a literal substring
+// to Match, written either as a plain string (known by its position,
+// pattern-N) or as {name, match}. A named pattern's findings, tasks and
+// ignore rules use PATH:NAME, so they survive reordering the list.
+type HistoryPattern struct {
+	Name  string `mapstructure:"name" yaml:"name"`
+	Match string `mapstructure:"match" yaml:"match"`
+}
+
+// MarshalYAML writes an unnamed pattern back as a plain string.
+func (p HistoryPattern) MarshalYAML() (any, error) {
+	if p.Name == "" {
+		return p.Match, nil
+	}
+	type plain HistoryPattern
+	return plain(p), nil
+}
+
+// patternNameRE is what a pattern name may contain: it becomes part of a
+// finding subject (PATH:NAME) and of ignore rules.
+var patternNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+
+// stringToHistoryPattern decodes a plain string entry as an unnamed pattern.
+func stringToHistoryPattern(from, to reflect.Type, data any) (any, error) {
+	if to == reflect.TypeFor[HistoryPattern]() && from.Kind() == reflect.String {
+		return HistoryPattern{Match: data.(string)}, nil
+	}
+	return data, nil
 }
 
 // HistoryFormat says how one history file is written: zsh, bash or fish.
@@ -472,7 +504,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("scripts.max_kb", 512)
 	v.SetDefault("shell_history.files", []string{"~/.zsh_history", "~/.bash_history", "$XDG_DATA_HOME/fish/fish_history"})
 	v.SetDefault("shell_history.histdb", "~/.histdb/zsh-history.db")
-	v.SetDefault("shell_history.patterns", []string{})
+	v.SetDefault("shell_history.patterns", []HistoryPattern{})
 	v.SetDefault("shell_history.max_lines", 10)
 	v.SetDefault("shell_history.max_mb", 32)
 	v.SetDefault("shell_history.formats", []HistoryFormat{})
@@ -556,7 +588,10 @@ func Load(explicit string) (*Config, string, error) {
 
 	cfg := &Config{}
 	var md mapstructure.Metadata
-	if err := v.Unmarshal(cfg, func(dc *mapstructure.DecoderConfig) { dc.Metadata = &md }); err != nil {
+	if err := v.Unmarshal(cfg, func(dc *mapstructure.DecoderConfig) {
+		dc.Metadata = &md
+		dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(dc.DecodeHook, stringToHistoryPattern)
+	}); err != nil {
 		return nil, "", fmt.Errorf("parse config %s: %w", path, err)
 	}
 	cfg.Unknown = slices.Sorted(slices.Values(md.Unused))
@@ -585,10 +620,21 @@ func (c *Config) validate() error {
 			return fmt.Errorf("shell_history.formats entries need a path and a format of %s, got %+v", strings.Join(HistoryFormats, ", "), f)
 		}
 	}
-	for _, pattern := range c.ShellHistory.Patterns {
-		if pattern == "" {
-			return errors.New("shell_history.patterns must not contain empty strings")
+	names := map[string]bool{}
+	for i, p := range c.ShellHistory.Patterns {
+		if p.Match == "" {
+			return fmt.Errorf("shell_history.patterns item %d has nothing to match", i+1)
 		}
+		if p.Name == "" {
+			continue
+		}
+		if !patternNameRE.MatchString(p.Name) || strings.HasPrefix(p.Name, "pattern-") {
+			return fmt.Errorf("shell_history.patterns name %q must be letters, digits, '.', '_' or '-' and not start with pattern-", p.Name)
+		}
+		if names[p.Name] {
+			return fmt.Errorf("shell_history.patterns name %q is used twice", p.Name)
+		}
+		names[p.Name] = true
 	}
 	if c.History < 1 {
 		return fmt.Errorf("history must be at least 1, got %d", c.History)
@@ -980,7 +1026,11 @@ export:
 shell_history:
   files: [~/.zsh_history, ~/.bash_history, "$XDG_DATA_HOME/fish/fish_history"]
   histdb: ~/.histdb/zsh-history.db
-  patterns: []          # case-sensitive literal substrings; e.g. ["curl | sh"]
+  # Case-sensitive literal substrings. A plain string is known by its
+  # position (pattern-1, ...); {name, match} keeps its findings, tasks and
+  # ignore rules when the list is reordered. e.g.
+  #   patterns: ["curl | sh", {name: aws-key, match: AKIA}]
+  patterns: []
   max_lines: 10         # report entries with at least this many logical lines
   max_mb: 32            # skip larger history files, reporting an error
   # The format of a file whose name and content do not tell (zsh, bash or

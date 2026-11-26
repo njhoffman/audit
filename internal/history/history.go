@@ -24,8 +24,11 @@ type Options struct {
 	Host     string
 	Session  int
 	Patterns []string
-	MaxLines int
-	MaxBytes int64
+	// PatternNames name Patterns by index; "" (or a missing entry) leaves
+	// pattern i known by its position, as pattern-<i+1>.
+	PatternNames []string
+	MaxLines     int
+	MaxBytes     int64
 	// Formats are configured formats by absolute path; other files are
 	// detected from their name and content.
 	Formats map[string]string
@@ -266,8 +269,30 @@ func (c *classifier) classify(e entry) classification {
 	return m
 }
 
-// patternSubject is the finding subject of pattern i in path.
-func patternSubject(path string, i int) string { return fmt.Sprintf("%s:pattern-%d", path, i+1) }
+// patternSubject is the finding subject of pattern i in path: PATH:NAME for
+// a named pattern, else PATH:pattern-<i+1>. Ignore rules and tasks key on it,
+// so a named pattern keeps its identity when the list is reordered.
+func (o Options) patternSubject(path string, i int) string {
+	if n := o.patternName(i); n != "" {
+		return path + ":" + n
+	}
+	return fmt.Sprintf("%s:pattern-%d", path, i+1)
+}
+
+func (o Options) patternName(i int) string {
+	if i < len(o.PatternNames) {
+		return o.PatternNames[i]
+	}
+	return ""
+}
+
+// patternLabel names pattern i in a message: its name, or its position.
+func (o Options) patternLabel(i int) string {
+	if n := o.patternName(i); n != "" {
+		return fmt.Sprintf("shell_history.patterns %q", n)
+	}
+	return fmt.Sprintf("shell_history.patterns item %d", i+1)
+}
 
 // Scan returns findings and counts only. Commands and configured pattern values
 // never enter findings, errors, the store, exports, or AI prompts.
@@ -348,7 +373,7 @@ func Scan(ctx context.Context, o Options) ([]finding.Finding, int, int, []string
 		}
 		add("history.multiline", path, fmt.Sprintf("history entries with at least %d lines", o.MaxLines), finding.Notice, large)
 		for i, lines := range matches {
-			add("history.pattern", patternSubject(path, i), fmt.Sprintf("history entries match shell_history.patterns item %d", i+1), finding.Warning, lines)
+			add("history.pattern", o.patternSubject(path, i), "history entries match "+o.patternLabel(i), finding.Warning, lines)
 		}
 	}
 	finding.Sort(fs)

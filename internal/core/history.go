@@ -30,7 +30,12 @@ func NewHistory(cfg *config.Config, env *exec.Env) *HistoryScanner {
 	for _, f := range h.Formats {
 		formats[historyPath(env, f.Path)] = f.Format
 	}
-	return &HistoryScanner{Options: history.Options{Files: paths, HistDB: historyPath(env, h.HistDB), Session: sessionID(env), Patterns: h.Patterns, MaxLines: h.MaxLines, MaxBytes: h.MaxMB << 20, Formats: formats}}
+	patterns, names := make([]string, len(h.Patterns)), make([]string, len(h.Patterns))
+	for i, p := range h.Patterns {
+		patterns[i], names[i] = p.Match, p.Name
+	}
+	return &HistoryScanner{Options: history.Options{Files: paths, HistDB: historyPath(env, h.HistDB), Session: sessionID(env),
+		Patterns: patterns, PatternNames: names, MaxLines: h.MaxLines, MaxBytes: h.MaxMB << 20, Formats: formats}}
 }
 
 // historyPath makes a configured history path absolute: ~ and $VAR or
