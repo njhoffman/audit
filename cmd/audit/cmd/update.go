@@ -201,7 +201,14 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 		}
 	}
 	if len(attempted) > 0 {
-		s2, err := a.packagesScanner(splitList(f.managers))
+		// Every manager is rescanned (only the attempted packages are looked
+		// up again), so the full results the saved views read show the
+		// update even when --manager narrowed it; system managers the scan
+		// leaves out keep their last results.
+		if slices.ContainsFunc(attempted, func(r packages.Ref) bool { return slices.Contains(packages.SystemNames(), r.Manager) }) {
+			a.setSystemAnswer(true)
+		}
+		s2, err := a.packagesScanner(nil)
 		if err != nil {
 			return err
 		}

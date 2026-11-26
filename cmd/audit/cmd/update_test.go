@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/njhoffman/audit/internal/run"
+
 	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/packages"
 )
@@ -199,5 +201,39 @@ func TestPackagesUpdateRun(t *testing.T) {
 	r = runUpdate(t, gh, false, "", "packages")
 	if !strings.Contains(r.out, "1 updated, 2 failed, 1 skipped") {
 		t.Errorf("report should show the last update:\n%s", r.out)
+	}
+}
+
+// A --manager update rescans every manager, so the full results the saved
+// views read show the new version.
+func TestNarrowedUpdateRefreshesTheFullView(t *testing.T) {
+	gh := updateEnv(t)
+	cfgHome := os.Getenv("XDG_CONFIG_HOME")
+	if err := os.WriteFile(filepath.Join(cfgHome, "audit.yaml"), []byte("packages: {env: process, managers: [gh, bins], scan_dirs: []}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := runUpdate(t, gh, false, "", "packages", "-r", "-s"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	if r := runUpdate(t, gh, false, "", "packages", "update", "-y", "-M", "gh", "gh:ok"); r.e != nil {
+		t.Fatalf("update: %v\n%s", r.e, r.err)
+	}
+	r := runUpdate(t, gh, false, "", "packages", "-j")
+	var got struct {
+		Run      *run.Run             `json:"run"`
+		Packages []packages.Annotated `json:"packages"`
+	}
+	if r.e != nil || json.Unmarshal([]byte(r.out), &got) != nil {
+		t.Fatalf("saved view: %v %s", r.e, r.out)
+	}
+	if got.Run.Scope != "" {
+		t.Errorf("the saved view is a full run, scope %q", got.Run.Scope)
+	}
+	for _, inv := range got.Packages {
+		for _, it := range inv.Items {
+			if it.Name == "ok" && it.Version != "v1.1.0" {
+				t.Errorf("the full view still shows gh:ok at %s", it.Version)
+			}
+		}
 	}
 }

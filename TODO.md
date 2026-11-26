@@ -270,7 +270,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   `packages.system_managers: ask`, the rescan after `audit todo fix` and fzf's rescan
   (defaultScanner) skip apt, snap and flatpak without asking. A fixed system-package
   task stays open until a scan that includes them. Include them when the task is theirs.
-- [ ] **Refresh the saved view after a narrowed update.** (p3) [bug] `audit packages
+- [x] **Refresh the saved view after a narrowed update.** (rescan every manager afterwards; registry lookups stay limited to the attempted packages) (p3) [bug] `audit packages
   update -M uv` rescans only uv, and that scoped run no longer reaches `audit packages -l`,
   which keeps showing the updated packages as behind until the next full scan.
   Merge a scoped run's inventories into the full view, or rescan fully after an update.
