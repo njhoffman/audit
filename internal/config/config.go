@@ -821,6 +821,7 @@ tui:
     bottom: [end, G]
     open: [enter, l, right]        # dashboard: report; tasks: details
     rescan: [r]                    # dashboard, report
+    rescan_stale: [R]              # dashboard: every stale or never-run command, like audit -r
     toggle_details: [x]            # report: expand or collapse findings
     reask: [r]                     # explain: ask the AI again
     explain: [e]                   # tasks, task

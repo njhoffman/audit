@@ -45,6 +45,9 @@ type Backend interface {
 	RescanQuestion(command string) string
 	// AnswerRescan gives the answer for the next Rescan of command.
 	AnswerRescan(command string, yes bool)
+	// StaleCommands are the commands whose saved run is stale or missing,
+	// in the order to scan them (what audit -r scans).
+	StaleCommands(ctx context.Context) ([]string, error)
 	Todos(ctx context.Context) ([]todo.Todo, error)
 	SetStatus(ctx context.Context, id int64, s todo.Status) (todo.Todo, error)
 	SetNote(ctx context.Context, id int64, note string) (todo.Todo, error)
@@ -88,6 +91,12 @@ type Model struct {
 
 	// askRescan is the command whose rescan waits on a yes or no.
 	askRescan string
+	// askSweep, when set, is the sweep that starts once askRescan is
+	// answered, instead of a rescan of askRescan alone.
+	askSweep []string
+	// sweep is the rescan of every stale command in progress, nil when
+	// none is.
+	sweep *sweep
 
 	screen        screen
 	standalone    bool // started on the task list; leaving it quits
@@ -223,6 +232,21 @@ type rescanMsg struct {
 	err     error
 }
 
+type staleMsg struct {
+	commands []string
+	err      error
+}
+
+// sweep rescans several commands one after another; the dashboard row of
+// each shows the spinner while it runs and the queued ones are marked.
+type sweep struct {
+	queue   []string // still to scan, in order
+	total   int
+	done    int
+	changed int
+	failed  []string // "command: error"
+}
+
 type explainMsg struct {
 	id   int64
 	text string
@@ -295,26 +319,80 @@ func (m *Model) requestRescan(command string) (tea.Model, tea.Cmd) {
 
 // rescanKey answers the pending rescan question; other keys wait for one.
 func (m *Model) rescanKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	command := m.askRescan
+	command, sweep := m.askRescan, m.askSweep
 	switch k.String() {
-	case "y", "Y":
-		m.askRescan = ""
-		m.b.AnswerRescan(command, true)
-		return m, m.rescan(command)
-	case "n", "N":
-		m.askRescan = ""
-		m.b.AnswerRescan(command, false)
+	case "y", "Y", "n", "N":
+		m.askRescan, m.askSweep = "", nil
+		m.b.AnswerRescan(command, strings.EqualFold(k.String(), "y"))
+		if sweep != nil {
+			return m, m.startSweep(sweep)
+		}
 		return m, m.rescan(command)
 	case "esc":
-		m.askRescan = ""
+		m.askRescan, m.askSweep = "", nil
 		m.setStatus("", false)
 	}
 	return m, nil
 }
 
+func (m *Model) loadStale() tea.Cmd {
+	return func() tea.Msg {
+		cs, err := m.b.StaleCommands(m.ctx)
+		return staleMsg{cs, err}
+	}
+}
+
+// requestSweep rescans commands one at a time, asking first when one of
+// them has a question (packages and the system managers): the answer
+// stands for the whole sweep.
+func (m *Model) requestSweep(commands []string) (tea.Model, tea.Cmd) {
+	for _, c := range commands {
+		if q := m.b.RescanQuestion(c); q != "" {
+			m.askRescan, m.askSweep = c, commands
+			m.setStatus(q+" [y/n, esc cancels]", false)
+			return m, nil
+		}
+	}
+	return m, m.startSweep(commands)
+}
+
+func (m *Model) startSweep(commands []string) tea.Cmd {
+	m.sweep = &sweep{queue: commands[1:], total: len(commands)}
+	return m.rescan(commands[0])
+}
+
+// sweepStep records the scan that finished and starts the next one, or
+// reports the whole sweep once the queue is empty.
+func (m *Model) sweepStep(msg rescanMsg) tea.Cmd {
+	sw := m.sweep
+	sw.done++
+	if msg.err != nil {
+		sw.failed = append(sw.failed, msg.command+": "+msg.err.Error())
+	} else {
+		sw.changed += msg.changed
+	}
+	if len(sw.queue) > 0 && m.ctx.Err() == nil {
+		next := sw.queue[0]
+		sw.queue = sw.queue[1:]
+		return m.rescan(next)
+	}
+	m.sweep = nil
+	summary := fmt.Sprintf("%d of %d scanned; %d task(s) updated", sw.done-len(sw.failed), sw.total, sw.changed)
+	if len(sw.failed) > 0 {
+		m.setStatus(summary+"; failed: "+strings.Join(sw.failed, "; "), true)
+	} else {
+		m.setStatus(summary, false)
+	}
+	return nil
+}
+
 func (m *Model) rescan(command string) tea.Cmd {
 	m.busy = command
-	m.setStatus("scanning "+command+"...", false)
+	if m.sweep != nil {
+		m.setStatus(fmt.Sprintf("scanning %s (%d of %d)...", command, m.sweep.done+1, m.sweep.total), false)
+	} else {
+		m.setStatus("scanning "+command+"...", false)
+	}
 	return tea.Batch(m.spinner.Tick, func() tea.Msg {
 		n, err := m.b.Rescan(m.ctx, command)
 		return rescanMsg{command, n, err}
@@ -378,17 +456,32 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case rescanMsg:
 		m.busy = ""
-		if msg.err != nil {
+		cmds := []tea.Cmd{m.loadStatuses(), m.loadTodos()}
+		switch {
+		case m.sweep != nil:
+			if next := m.sweepStep(msg); next != nil {
+				cmds = append(cmds, next)
+			}
+		case msg.err != nil:
 			m.fixing = 0
 			m.setStatus(msg.command+": "+msg.err.Error(), true)
-		} else {
+		default:
 			m.setStatus(fmt.Sprintf("%s scanned; %d task(s) updated", msg.command, msg.changed), false)
 		}
-		cmds := []tea.Cmd{m.loadStatuses(), m.loadTodos()}
 		if m.screen == screenReport && m.reportCmd == msg.command {
 			cmds = append(cmds, m.loadReport(msg.command))
 		}
 		return m, tea.Batch(cmds...)
+	case staleMsg:
+		switch {
+		case msg.err != nil:
+			m.setStatus(msg.err.Error(), true)
+		case len(msg.commands) == 0:
+			m.setStatus("every command is fresh", false)
+		case m.busy == "":
+			return m.requestSweep(msg.commands)
+		}
+		return m, nil
 	case fixMsg:
 		if msg.err != nil {
 			m.setStatus("fix: "+msg.err.Error(), true)
@@ -563,6 +656,12 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.rows) > 0 && m.busy == "" {
 			return m.requestRescan(m.rows[m.cursor].Command)
 		}
+	case m.is(k, keys.RescanStale):
+		if m.busy != "" {
+			m.setStatus("wait for "+m.busy+" to finish", true)
+			return m, nil
+		}
+		return m, m.loadStale()
 	}
 	return m, nil
 }
@@ -848,8 +947,11 @@ func (m *Model) dashboardView() string {
 	b.WriteString(lipgloss.NewStyle().Bold(true).Render(header) + "\n")
 	for i, l := range lines {
 		marker := "  "
-		if m.busy == m.rows[i].Command {
+		switch {
+		case m.busy == m.rows[i].Command:
 			marker = m.spinner.View() + " "
+		case m.sweep != nil && slices.Contains(m.sweep.queue, m.rows[i].Command):
+			marker = faintStyle.Render("·") + " "
 		}
 		name := pad(l.name, nameW)
 		if i == m.cursor {
@@ -928,7 +1030,7 @@ func (m *Model) help() string {
 		return "enter keep  esc clear"
 	case m.screen == screenDashboard:
 		hints = [][]string{{"move", keys.Down, keys.Up}, {"report", keys.Open}, {"rescan", keys.Rescan},
-			{"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
+			{"rescan stale", keys.RescanStale}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
 	case m.screen == screenReport:
 		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
 			{"details", keys.Details}, {"rescan", keys.Rescan}, {"back", keys.Back}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}

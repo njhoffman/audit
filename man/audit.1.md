@@ -454,6 +454,7 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     top, bottom         home g, end G         same
     open                enter l right         dashboard (report), tasks (details)
     rescan              r                     dashboard, report
+    rescan_stale        R                     dashboard (every stale or never-run command, one at a time, like audit -r)
     toggle_details      x                     report (expand or collapse findings)
     reask               r                     explain (ask the AI again)
     explain             e                     tasks, task

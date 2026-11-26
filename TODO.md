@@ -27,7 +27,7 @@ nothing tells you when a scan would turn up something new.
   new since the previous run, and a pointer to `audit todo`. Opt-in
   `notify.enabled`, `notify.min_priority`.
 
-- [ ] **Rescan every stale command from the dashboard.** (p2) [feature] A key (say `R`) that
+- [x] **Rescan every stale command from the dashboard.** (`R`, tui.keys rescan_stale: audit -r's targets one at a time, asking the system-managers question once; the TUI only, fzf has no binding) (p2) [feature] A key (say `R`) that
   runs what `audit -r` runs, with the dashboard rows as its progress.
 
 Decisions to make: whether a scheduled run may use the AI review (it costs

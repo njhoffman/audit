@@ -38,7 +38,11 @@ type fake struct {
 	expanded []bool // the expanded argument of each Report
 	fixes    []int64
 	resolve  int64 // the task a rescan of its command resolves
+	stale    []string
+	failScan string // the command whose rescan fails
 }
+
+func (f *fake) StaleCommands(context.Context) ([]string, error) { return f.stale, nil }
 
 func (f *fake) FixSession(_ context.Context, id int64) (*osexec.Cmd, error) {
 	f.fixes = append(f.fixes, id)
@@ -85,6 +89,9 @@ func (f *fake) AnswerRescan(c string, yes bool) {
 
 func (f *fake) Rescan(_ context.Context, c string) (int, error) {
 	f.rescans = append(f.rescans, c)
+	if c == f.failScan {
+		return 0, errors.New("boom")
+	}
 	for i := range f.tasks {
 		if f.tasks[i].ID == f.resolve && f.tasks[i].Command == c {
 			f.tasks[i].Status = todo.Resolved
@@ -697,5 +704,65 @@ func TestRescanQuestion(t *testing.T) {
 	key(t, m, "y")
 	if !reflect.DeepEqual(f.answers, []string{"system=false", "system=true"}) || len(f.rescans) != 2 {
 		t.Errorf("yes: %v %v", f.answers, f.rescans)
+	}
+}
+
+func TestRescanStaleSweepsInOrder(t *testing.T) {
+	f := newFake()
+	m := start(t, f)
+	key(t, m, "R")
+	if len(f.rescans) != 0 || !strings.Contains(m.View(), "every command is fresh") {
+		t.Fatalf("nothing stale: %v\n%s", f.rescans, m.View())
+	}
+	f.stale = []string{"environment", "packages", "system"}
+	key(t, m, "R")
+	if !reflect.DeepEqual(f.rescans, f.stale) {
+		t.Fatalf("rescans %v", f.rescans)
+	}
+	if m.busy != "" || m.sweep != nil || !strings.Contains(m.View(), "3 of 3 scanned; 9 task(s) updated") {
+		t.Errorf("want the sweep summary:\n%s", m.View())
+	}
+}
+
+func TestRescanStaleAsksOnceAndReportsFailures(t *testing.T) {
+	f := newFake()
+	f.stale, f.askFor, f.failScan = []string{"system", "packages", "environment"}, "packages", "system"
+	m := start(t, f)
+	key(t, m, "R")
+	if len(f.rescans) != 0 || !strings.Contains(m.View(), "Include more? [y/n, esc cancels]") {
+		t.Fatalf("asks before the sweep: %v\n%s", f.rescans, m.View())
+	}
+	key(t, m, "esc")
+	if len(f.rescans) != 0 || m.askSweep != nil {
+		t.Fatalf("esc cancels the sweep: %v", f.rescans)
+	}
+	key(t, m, "R")
+	key(t, m, "y")
+	if !reflect.DeepEqual(f.answers, []string{"packages=true"}) || !reflect.DeepEqual(f.rescans, f.stale) {
+		t.Fatalf("answers %v rescans %v", f.answers, f.rescans)
+	}
+	v := m.View()
+	if !m.statusErr || !strings.Contains(v, "2 of 3 scanned; 6 task(s) updated; failed: system: boom") {
+		t.Errorf("a failure does not stop the sweep and is reported:\n%s", v)
+	}
+}
+
+func TestRescanStaleMarksQueuedRows(t *testing.T) {
+	f := newFake()
+	m := start(t, f)
+	m.sweep = &sweep{queue: []string{"packages"}, total: 2}
+	m.busy = "environment"
+	lines := strings.Split(m.View(), "\n")
+	for _, l := range lines {
+		if strings.Contains(l, "packages") && strings.Contains(l, "never") && !strings.Contains(l, "·") {
+			t.Errorf("a queued row is marked: %q", l)
+		}
+		if strings.Contains(l, "system") && strings.Contains(l, "·") {
+			t.Errorf("a row outside the sweep is not: %q", l)
+		}
+	}
+	key(t, m, "R")
+	if !strings.Contains(m.View(), "wait for environment to finish") {
+		t.Errorf("a second sweep waits:\n%s", m.View())
 	}
 }

@@ -94,6 +94,11 @@ func (b tuiBackend) RescanQuestion(command string) string {
 // AnswerRescan implements tui.Backend.
 func (b tuiBackend) AnswerRescan(_ string, yes bool) { b.a.setSystemAnswer(yes) }
 
+// StaleCommands implements tui.Backend with audit -r's targets.
+func (b tuiBackend) StaleCommands(ctx context.Context) ([]string, error) {
+	return b.a.rescanTargets(ctx, rescanFlags{})
+}
+
 func (b tuiBackend) Todos(ctx context.Context) ([]todo.Todo, error) {
 	return b.a.store.Todos(ctx, "")
 }

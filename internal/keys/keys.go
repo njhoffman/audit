@@ -47,6 +47,7 @@ const (
 	Bottom       = "bottom"
 	Open         = "open"
 	Rescan       = "rescan"
+	RescanStale  = "rescan_stale"
 	Details      = "toggle_details"
 	Reask        = "reask"
 	ExplainTask  = "explain"
@@ -85,6 +86,7 @@ var Actions = []Action{
 	{Bottom, "bottom", scrolling, []string{"end", "G"}},
 	{Open, "open", []Screen{Dashboard, Tasks}, []string{"enter", "l", "right"}},
 	{Rescan, "rescan", []Screen{Dashboard, Report}, []string{"r"}},
+	{RescanStale, "rescan stale", []Screen{Dashboard}, []string{"R"}},
 	{Details, "details", []Screen{Report}, []string{"x"}},
 	{Reask, "ask again", []Screen{Explain}, []string{"r"}},
 	{ExplainTask, "explain", []Screen{Tasks, Task}, []string{"e"}},
