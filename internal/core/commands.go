@@ -61,6 +61,15 @@ func (p prefixOwner) Owns(check string) bool {
 // SystemScanner adapts system.Scanner.
 type SystemScanner struct {
 	*system.Scanner
+	// Env finds the programs' executables and runs dpkg-query.
+	Env *exec.Env
+	// Packages, when set, matches each analyzed program to its package from
+	// the saved packages run; nil leaves the program checks unmatched.
+	Packages ProgramPackageStore
+	// Dpkg names the apt package of a path; nil asks dpkg-query (tests).
+	Dpkg func(path string) string
+	// Now is the scan's clock; zero means time.Now.
+	Now time.Time
 }
 
 // NewSystem builds the system scanner; only restricts it to some parts.
@@ -86,7 +95,7 @@ func NewSystem(cfg *config.Config, env *exec.Env, only []string) (*SystemScanner
 	if err != nil {
 		return nil, err
 	}
-	return &SystemScanner{s}, nil
+	return &SystemScanner{Scanner: s, Env: env}, nil
 }
 
 // Command implements Scanner.
@@ -107,6 +116,13 @@ func (s *SystemScanner) Scan(ctx context.Context, rep progress.Reporter) (*Outco
 	res, err := s.Scanner.Scan(ctx)
 	if err != nil {
 		return nil, err
+	}
+	now := s.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	if pps := s.programPackages(ctx, res, now); pps != nil {
+		res.Data.Parts["programs"]["packages"] = pps
 	}
 	return &Outcome{Findings: res.Findings, Stats: res.Stats, Errors: res.Errors, Data: res.RawData()}, nil
 }

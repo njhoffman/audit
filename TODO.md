@@ -198,7 +198,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   logs annotation errors and returns from a callback, leaving the command
   successful without its requested package list. Let inventory views return
   errors and cover failed cache/tag reads in both text and JSON output.
-- [ ] **Show package versions and updates beside program checks.** (p2) [feature] Match each
+- [x] **Show package versions and updates beside program checks.** (p2) [feature] Match each
   configured program to its package inventory entry and owning manager;
   include installed/latest versions and registry freshness in the program
   summary, linking to `audit packages info` and `audit packages update`.

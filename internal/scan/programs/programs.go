@@ -29,6 +29,17 @@ var AllPrograms = []Program{
 	ProgramApache, ProgramDocker, ProgramCron,
 }
 
+// Executables are the commands each program runs as, in the order to look
+// for them; the first found on PATH names the program's package.
+var Executables = map[Program][]string{
+	ProgramSSHD:     {"sshd"},
+	ProgramNginx:    {"nginx"},
+	ProgramPostgres: {"postgres", "psql"},
+	ProgramApache:   {"apache2", "httpd"},
+	ProgramDocker:   {"dockerd", "docker"},
+	ProgramCron:     {"cron", "crond"},
+}
+
 // ProgramResult is the per-program contribution to a programs scan.
 type ProgramResult struct {
 	Program  Program        `json:"program"`

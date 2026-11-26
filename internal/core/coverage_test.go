@@ -14,6 +14,8 @@ import (
 	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/progress"
+	"github.com/njhoffman/audit/internal/scan/programs"
+	"github.com/njhoffman/audit/internal/system"
 )
 
 type carriedStore struct {
@@ -128,5 +130,71 @@ func TestSystemScannerScan(t *testing.T) {
 	}
 	if s.Command() != "system" || s.Scope() != "users" {
 		t.Errorf("command %q scope %q", s.Command(), s.Scope())
+	}
+}
+
+type programStore struct {
+	carriedStore
+	metas map[string]packages.Meta
+}
+
+func (p *programStore) PackageMeta(context.Context) (map[string]packages.Meta, error) {
+	return p.metas, nil
+}
+func (p *programStore) SavePackageMeta(context.Context, []packages.Meta) error { return nil }
+
+func TestSystemProgramPackages(t *testing.T) {
+	sbin, home := t.TempDir(), t.TempDir()
+	local := filepath.Join(home, "bin")
+	for _, d := range []string{sbin, local} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "cron"), []byte("#!/bin/sh\n"), 0o700); err != nil { // #nosec G306 -- test executable
+			t.Fatal(err)
+		}
+	}
+	env := &exec.Env{Vars: map[string]string{"PATH": sbin + ":" + local}, Home: home}
+	now := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	st := &programStore{carriedStore: carriedStore{invs: []packages.Inventory{
+		{Manager: "apt", Available: true, Packages: []packages.Package{{Manager: "apt", Name: "cron", Version: "3.0pl1-196", Available: "3.0pl1-197"}}},
+		{Manager: "bins", Available: true, Packages: []packages.Package{{Manager: "bins", Name: "cron", Version: "4.1", Location: filepath.Join(local, "cron")}}},
+	}}}
+	s := &SystemScanner{Env: env, Packages: st, Now: now, Dpkg: func(p string) string {
+		if p == filepath.Join(sbin, "cron") {
+			return "cron"
+		}
+		return ""
+	}}
+	res := &system.Result{Data: system.Data{Parts: map[string]map[string]any{"programs": {
+		"per_program": []programs.ProgramResult{{Program: programs.ProgramCron}, {Program: programs.ProgramNginx, Skipped: true}},
+	}}}}
+	pps := s.programPackages(context.Background(), res, now)
+	if len(pps) != 1 || len(pps[0].Copies) != 2 {
+		t.Fatalf("cron matched twice, nginx skipped: %+v", pps)
+	}
+	var stat string
+	for _, x := range res.Stats {
+		if x.Name == "cron package" {
+			stat = x.Value + " | " + x.Note
+		}
+	}
+	if !strings.HasPrefix(stat, "cron 3.0pl1-196 (apt) | patch update to 3.0pl1-197; audit packages update -M apt") ||
+		!strings.Contains(stat, "also "+filepath.Join(local, "cron")+": bins cron 4.1, shadowed") {
+		t.Errorf("stat %q", stat)
+	}
+	if len(res.Findings) != 1 || res.Findings[0].Check != CheckProgramShadowed || !strings.Contains(res.Findings[0].Message, "is newer (bins cron 4.1)") {
+		t.Errorf("the newer shadowed copy is a finding: %+v", res.Findings)
+	}
+
+	// No saved packages run: one stat says how to get one.
+	res = &system.Result{Data: system.Data{Parts: map[string]map[string]any{"programs": {"per_program": []programs.ProgramResult{{Program: programs.ProgramCron}}}}}}
+	s.Packages = &programStore{}
+	if pps := s.programPackages(context.Background(), res, now); pps != nil || len(res.Stats) != 1 || res.Stats[0].Value != "unknown" {
+		t.Errorf("no inventories: %+v %+v", pps, res.Stats)
+	}
+	s.Packages = &programStore{carriedStore: carriedStore{err: errors.New("disk")}}
+	if s.programPackages(context.Background(), res, now); !slices.ContainsFunc(res.Errors, func(e string) bool { return strings.Contains(e, "read saved packages") }) {
+		t.Errorf("a store error is reported: %v", res.Errors)
 	}
 }

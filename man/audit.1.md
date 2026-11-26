@@ -98,6 +98,8 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 **system**
 :   Processes, systemd units, user and group accounts, logs (journal, dmesg, boot, auth, kern, misc), program configurations (sshd, nginx, apache, postgres, docker, cron), and:
 
+    **programs**: besides each installed program's configuration checks, the summary names the package its executable comes from (**sshd package  openssh-server 1:10.0p1-5ubuntu5.4 (apt)  up to date**), matched against the last **audit packages** run: apt by **dpkg-query -S** on the path, snaps by **/snap/bin**, other managers by their recorded locations and bin directories. The copy first on PATH is the one described; other copies are listed as shadowed, and **programs.shadowed** (notice) is raised when a shadowed copy is a newer version than the one that runs. An update available for the package is shown with the **audit packages update -M** _manager_ that applies it. Without a saved packages run the stat says to run one.
+
     **storage**: filesystem space and inode use per mount against **system.storage.warn_pct** and **error_pct**, filesystems mounted read-only (the kernel does so after errors), zfs pools that are not healthy, and with **system.storage.smart** each disk's SMART health (**smartctl -H**) and btrfs device errors, both through **sudo -n**, so they need cached credentials or a NOPASSWD rule.
 
     **resources**: memory, I/O and CPU stall time over five minutes (PSI), available memory and swap use, OOM kills in the last week's kernel log, the 15-minute load against the core count, temperatures within 5 C of their critical trip point, thermal throttling since boot, and battery wear (peripheral batteries left out).

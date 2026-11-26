@@ -22,7 +22,7 @@ type scanEntry struct {
 // command is added here, to core.Commands and, with a scope flag, to
 // core.ScopeFlags.
 var scanEntries = []scanEntry{
-	{"system", newSystemCmd, func(a *app) (core.Scanner, error) { return core.NewSystem(a.cfg, a.env, nil) }},
+	{"system", newSystemCmd, func(a *app) (core.Scanner, error) { return a.systemScanner(nil) }},
 	{"environment", newEnvironmentCmd, func(a *app) (core.Scanner, error) { return core.NewEnvironment(a.cfg, a.env) }},
 	{"packages", newPackagesCmd, func(a *app) (core.Scanner, error) { return a.packagesScanner(nil) }},
 	{"repos", newReposCmd, func(a *app) (core.Scanner, error) { return a.reposScanner(), nil }},

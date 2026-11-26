@@ -266,7 +266,7 @@ programs (nginx, apache, sshd, postgres, docker, cron).
 
 Results are saved. Without --rescan, saved results younger than the stale
 warn threshold are shown instead of scanning again.`,
-		func() (core.Scanner, error) { return core.NewSystem(a.cfg, a.env, splitList(only)) }, nil)
+		func() (core.Scanner, error) { return a.systemScanner(splitList(only)) }, nil)
 	c.Flags().StringSliceVarP(&only, "only", "O", nil, "scan only these parts: "+strings.Join(system.Kinds, ", "))
 	return c
 }
@@ -333,4 +333,17 @@ type diffRun struct {
 
 func runRef(r *run.Run) diffRun {
 	return diffRun{ID: r.ID, Command: r.Command, Scope: r.Scope, FinishedAt: r.FinishedAt}
+}
+
+// systemScanner builds the system scanner with the saved packages to match
+// the program checks against.
+func (a *app) systemScanner(only []string) (*core.SystemScanner, error) {
+	s, err := core.NewSystem(a.cfg, a.env, only)
+	if err != nil {
+		return nil, err
+	}
+	if a.store != nil {
+		s.Packages = a.store
+	}
+	return s, nil
 }
