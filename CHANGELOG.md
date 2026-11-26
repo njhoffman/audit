@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.2] - 2026-11-26
+
 ### Fixed
 
 - After `audit packages update -M uv` (or any narrowed update), `audit packages -l` shows the updated versions: the rescan that follows an update covers every manager, looking up only the attempted packages again, instead of saving a uv-only run the saved views skip.
