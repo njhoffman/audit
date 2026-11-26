@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-11-26
+
 ### Added
 
 - `audit history backups` lists the private backups prune and sync leave beside each history (age, size, record count; never their commands). `backups clean -o AGE -k N` removes them by age or count after asking, and `backups restore BACKUP` shows how many records would come back or go, then puts the backup back under prune's checks and locks, backing up the current file first. Backups are only removed when you ask, unless `shell_history.backup_max_age` or `shell_history.backup_keep` is set, which then applies after every prune, sync and restore.
