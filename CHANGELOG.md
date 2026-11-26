@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-11-26
+
 ### Added
 
 - `shell_history.formats` names the format (zsh, bash or fish) of a history whose name and content do not tell, such as a plain zsh history under another name, which used to be read as bash and lose its multiline records. The history summary lists the format each file was read as and whether it was detected or configured.
