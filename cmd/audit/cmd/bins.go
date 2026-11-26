@@ -1,18 +1,9 @@
 package cmd
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"compress/bzip2"
-	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,9 +16,6 @@ import (
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/registry"
 )
-
-// maxBinary bounds what an archive member may unpack to.
-const maxBinary = 1 << 30
 
 func newBinsCmd(a *app) *cobra.Command {
 	var asJSON bool
@@ -240,7 +228,7 @@ func (a *app) installBin(ctx context.Context, name, tag string, skipChecksum, fo
 	if !ok {
 		return fmt.Errorf("%s is not tracked; run audit packages bins track %s OWNER/REPO first", name, name)
 	}
-	rel, err := a.ghRelease(ctx, t.Repo, tag)
+	rel, err := packages.FetchRelease(ctx, a.env, t.Repo, tag)
 	if err != nil {
 		return err
 	}
@@ -268,314 +256,26 @@ func (a *app) installBin(ctx context.Context, name, tag string, skipChecksum, fo
 			return nil
 		}
 	}
-	asset, err := packages.SelectAsset(rel.Assets, t.Asset, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		return err
-	}
-	tmp, err := os.MkdirTemp("", "audit-bin-")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.RemoveAll(tmp) }()
-
-	file, err := a.ghDownload(ctx, t.Repo, rel.Tag, asset.Name, tmp)
-	if err != nil {
-		return err
-	}
-	want, ok, err := packages.AssetSHA256(asset, rel.Assets, func(ra packages.ReleaseAsset) (string, error) {
-		p, err := a.ghDownload(ctx, t.Repo, rel.Tag, ra.Name, filepath.Join(tmp, "sums"))
-		if err != nil {
-			return "", err
-		}
-		b, err := os.ReadFile(p) // #nosec G304 -- our temp download
-		return string(b), err
+	got, err := packages.InstallRelease(ctx, a.env, packages.InstallSpec{
+		Repo: t.Repo, Name: name, Release: rel, AssetGlob: t.Asset,
+		GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
+		Dest: dest, BackupDir: filepath.Join(a.cfg.DataDir, "bins"), OldVersion: t.Version,
+		SkipChecksum: skipChecksum, Timeout: a.cfg.Packages.Update.Timeout,
 	})
 	if err != nil {
 		return err
 	}
-	got, err := fileSHA256(file)
-	if err != nil {
-		return err
-	}
-	switch {
-	case !ok && !skipChecksum:
-		return fmt.Errorf("%w (%s %s); pass --skip-checksum to install it anyway", packages.ErrNoChecksum, t.Repo, asset.Name)
-	case ok && got != want:
-		return fmt.Errorf("checksum mismatch for %s: got %s, want %s", asset.Name, got, want)
-	}
-	bin, err := a.unpack(ctx, file, name, filepath.Join(tmp, "x"))
-	if err != nil {
-		return err
-	}
-	if err := a.replaceBin(dest, bin, name, t.Version); err != nil {
-		return err
-	}
-	t.Version, t.SHA256, t.InstalledAt = rel.Tag, got, timeNow()
+	t.Version, t.SHA256, t.InstalledAt = rel.Tag, got.SHA256, timeNow()
 	if err := a.store.SaveTrackedBin(ctx, t); err != nil {
 		return err
 	}
 	verified := "sha256 checked"
-	if !ok {
+	if !got.Verified {
 		verified = "no checksum published"
 	}
-	say(a.out, "Installed %s %s from %s (%s) at %s.\n", name, rel.Tag, asset.Name, verified, dest)
+	say(a.out, "Installed %s %s from %s (%s) at %s.\n", name, rel.Tag, got.Asset, verified, dest)
 	if w := a.env.Which(name); w != "" && w != dest {
 		say(a.out, "Note: %s runs %s first on PATH, not the one installed.\n", name, w)
 	}
 	return nil
-}
-
-func (a *app) ghRelease(ctx context.Context, repo, tag string) (packages.Release, error) {
-	path := "repos/" + repo + "/releases/latest"
-	if tag != "" {
-		path = "repos/" + repo + "/releases/tags/" + tag
-	}
-	r := a.env.Run(ctx, "gh", []string{"api", path}, exec.Options{Timeout: time.Minute})
-	var rel packages.Release
-	if !r.OK() {
-		return rel, fmt.Errorf("gh api %s: %s", path, packages.LastLine(r.Stderr+"\n"+r.Stdout))
-	}
-	if err := json.Unmarshal([]byte(r.Stdout), &rel); err != nil {
-		return rel, fmt.Errorf("unexpected answer from gh api %s: %w", path, err)
-	}
-	return rel, nil
-}
-
-func (a *app) ghDownload(ctx context.Context, repo, tag, asset, dir string) (string, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	out := filepath.Join(dir, filepath.Base(asset))
-	r := a.env.Run(ctx, "gh", []string{"release", "download", tag, "-R", repo, "-p", asset, "-O", out, "--clobber"},
-		exec.Options{Timeout: a.cfg.Packages.Update.Timeout})
-	if !r.OK() {
-		return "", fmt.Errorf("gh release download %s %s: %s", repo, asset, packages.LastLine(r.Stderr+"\n"+r.Stdout))
-	}
-	if _, err := os.Stat(out); err != nil {
-		return "", fmt.Errorf("gh release download left no %s", asset)
-	}
-	return out, nil
-}
-
-func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path) // #nosec G304 -- our temp download
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = f.Close() }()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// unpack extracts file into dir and returns the binary called name in it,
-// or the only executable file; a bare asset is the binary itself.
-func (a *app) unpack(ctx context.Context, file, name, dir string) (string, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	lower := strings.ToLower(file)
-	switch {
-	case strings.HasSuffix(lower, ".zip"):
-		if err := unzip(file, dir); err != nil {
-			return "", err
-		}
-	case strings.HasSuffix(lower, ".tar.gz"), strings.HasSuffix(lower, ".tgz"), strings.HasSuffix(lower, ".tar.bz2"),
-		strings.HasSuffix(lower, ".tar"):
-		if err := untar(file, dir); err != nil {
-			return "", fmt.Errorf("unpack %s: %w", filepath.Base(file), err)
-		}
-	case strings.Contains(lower, ".tar."):
-		// xz and zstd have no decoder in the standard library.
-		r := a.env.Run(ctx, "tar", []string{"-xf", file, "-C", dir, "--no-same-owner"}, exec.Options{Timeout: 5 * time.Minute})
-		if !r.OK() {
-			return "", fmt.Errorf("tar -xf %s: %s", filepath.Base(file), packages.LastLine(r.Stderr))
-		}
-	case strings.HasSuffix(lower, ".gz"):
-		out := filepath.Join(dir, name)
-		if err := gunzip(file, out); err != nil {
-			return "", err
-		}
-		return out, nil
-	default:
-		return file, nil
-	}
-	var exact, execs []string
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || !d.Type().IsRegular() {
-			return err
-		}
-		if d.Name() == name {
-			exact = append(exact, p)
-		}
-		if st, err := d.Info(); err == nil && st.Mode().Perm()&0o111 != 0 {
-			execs = append(execs, p)
-		}
-		return nil
-	})
-	switch {
-	case err != nil:
-		return "", err
-	case len(exact) == 1:
-		return exact[0], nil
-	case len(exact) == 0 && len(execs) == 1:
-		return execs[0], nil
-	}
-	return "", fmt.Errorf("the archive holds no single %s (found %d by name, %d executables)", name, len(exact), len(execs))
-}
-
-// untar extracts the regular files of a plain, gzip or bzip2 tar archive,
-// keeping every path inside dir.
-func untar(file, dir string) error {
-	f, err := os.Open(file) // #nosec G304 -- our temp download
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-	var r io.Reader = f
-	switch lower := strings.ToLower(file); {
-	case strings.HasSuffix(lower, ".bz2"):
-		r = bzip2.NewReader(f)
-	case strings.HasSuffix(lower, ".gz"), strings.HasSuffix(lower, ".tgz"):
-		zr, err := gzip.NewReader(f)
-		if err != nil {
-			return err
-		}
-		r = zr
-	}
-	tr := tar.NewReader(r)
-	for {
-		h, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if h.Typeflag != tar.TypeReg {
-			continue
-		}
-		p := filepath.Join(dir, filepath.Clean("/"+h.Name)) // #nosec G305 -- cleaned against a rooted path
-		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-			return err
-		}
-		out, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(h.Mode).Perm()|0o600) // #nosec G115 G304 -- inside our temp dir
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(out, io.LimitReader(tr, maxBinary))
-		if cerr := out.Close(); err == nil {
-			err = cerr
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
-
-func unzip(file, dir string) error {
-	zr, err := zip.OpenReader(file)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = zr.Close() }()
-	for _, f := range zr.File {
-		p := filepath.Join(dir, filepath.Clean("/"+f.Name)) // #nosec G305 -- cleaned against a rooted path
-		if f.FileInfo().IsDir() {
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-			return err
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
-		out, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode().Perm()|0o600) // #nosec G304 -- inside our temp dir
-		if err == nil {
-			_, err = io.Copy(out, io.LimitReader(rc, maxBinary))
-			if cerr := out.Close(); err == nil {
-				err = cerr
-			}
-		}
-		_ = rc.Close()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func gunzip(file, out string) error {
-	in, err := os.Open(file) // #nosec G304 -- our temp download
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	zr, err := gzip.NewReader(in)
-	if err != nil {
-		return err
-	}
-	f, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o700) // #nosec G302 G304 -- an executable in our temp dir
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(f, io.LimitReader(zr, maxBinary))
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	return err
-}
-
-// replaceBin installs src at dest through a temporary file in dest's
-// directory, so the swap is a rename, after copying the old file to
-// <data_dir>/bins/NAME-VERSION.
-func (a *app) replaceBin(dest, src, name, oldVersion string) error {
-	dir := filepath.Dir(dest)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
-	}
-	if _, err := os.Stat(dest); err == nil {
-		if oldVersion == "" {
-			oldVersion = "previous"
-		}
-		backup := filepath.Join(a.cfg.DataDir, "bins", name+"-"+oldVersion)
-		if err := copyFile(dest, backup, 0o700); err != nil {
-			return fmt.Errorf("back up %s: %w", dest, err)
-		}
-	}
-	tmp := filepath.Join(dir, "."+name+".audit-new")
-	if err := copyFile(src, tmp, 0o755); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, dest); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
-}
-
-func copyFile(src, dst string, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-		return err
-	}
-	in, err := os.Open(src) // #nosec G304 -- paths audit chose
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode) // #nosec G302 G304 -- installing an executable
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		_ = out.Close()
-		return err
-	}
-	if err := out.Close(); err != nil {
-		return err
-	}
-	return os.Chmod(dst, mode)
 }

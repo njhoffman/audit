@@ -24,13 +24,13 @@ Roadmap, open issues and proposals live in `TODO.md`; every open item carries an
 
 ```
 cmd/audit/cmd/          cobra wiring: root (dashboard/summary/html), one file per command, todo, history, config, export,
-                        analyze, tasks web page, sudo session, TUI backend (tui.go: defaultScanner); bins install lives here too
+                        analyze, tasks web page, sudo session, TUI backend (tui.go: defaultScanner)
 internal/core/          Engine: Resolve (auto/rescan/saved-only), Execute (scan, ignore, save, prune, reconcile tasks), Analyze;
                         one scanner adapter per command, core.Commands, core.ScopeFlags
 internal/system/        system scanner over internal/scan/{procs,services,users,logs,programs,storage,resources,updates,security}
 internal/environment/   login-shell capture, startup tracing, PATH/env/script checks
 internal/packages/      package-manager collectors (uv, pnpm, cargo, go, gem, gh, apt, snap, flatpak, bins), checks,
-                        update plans, runtimes
+                        update plans, runtimes, release-binary install (download, sha256, unpack, atomic replace)
 internal/registry/      PyPI, npm, crates.io, Go proxy, rubygems, GitHub lookups feeding the cached packages.Meta
 internal/repos/         git repo discovery, local-only inspection and checks; GitHub data via gh api graphql; sync plans
 internal/files/         disk usage walk, reclaimable space (caches, build dirs, orphaned data, duplicates); clean plans

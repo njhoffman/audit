@@ -107,7 +107,7 @@ global limit; AI cache entries and closed tasks still have no age limit.
   `{name, scopeFlag, build func, newCmd func}` in core (or cmd) would make
   the list, the TUI backend and cobra wiring all derive from it, and a test
   could assert every entry is complete.
-- [ ] **Move bins install out of the cmd package.** (p2) [refactor] `cmd/audit/cmd/bins.go`
+- [x] **Move bins install out of the cmd package.** (now internal/packages/install.go: FetchRelease, InstallRelease, Unpack, ReplaceBin) (p2) [refactor] `cmd/audit/cmd/bins.go`
   holds the release download, sha256 check, untar/unzip/gunzip and atomic
   replace (`installBin` through `copyFile`). That is package logic with
   security-relevant edge cases (archive member paths, symlinks); it belongs

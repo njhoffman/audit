@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"archive/tar"
-	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -194,72 +193,6 @@ func TestBinsUpdatePlan(t *testing.T) {
 	}
 	if r := runBins(t, f, "packages", "bins", "untrack", "tool"); r.e == nil {
 		t.Error("untracking twice must fail")
-	}
-}
-
-func TestUnpackers(t *testing.T) {
-	dir := t.TempDir()
-	// A tar member that tries to escape lands inside the target.
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	for _, n := range []string{"../../evil", "pkg/tool"} {
-		if err := tw.WriteHeader(&tar.Header{Name: n, Mode: 0o755, Size: 2, Typeflag: tar.TypeReg}); err != nil {
-			t.Fatal(err)
-		}
-		_, _ = tw.Write([]byte("hi"))
-	}
-	_ = tw.Close()
-	archive := filepath.Join(dir, "a.tar")
-	if err := os.WriteFile(archive, buf.Bytes(), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	out := filepath.Join(dir, "out")
-	if err := os.MkdirAll(out, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := untar(archive, out); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(out, "evil")); err != nil {
-		t.Errorf("escaping member should land inside: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "evil")); err == nil {
-		t.Error("a member escaped the target directory")
-	}
-
-	var zbuf bytes.Buffer
-	zw := zip.NewWriter(&zbuf)
-	w, _ := zw.Create("dir/tool")
-	_, _ = w.Write([]byte("zipped"))
-	_ = zw.Close()
-	zfile := filepath.Join(dir, "t.zip")
-	if err := os.WriteFile(zfile, zbuf.Bytes(), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	a := &app{env: &exec.Env{Vars: map[string]string{}}}
-	got, err := a.unpack(context.Background(), zfile, "tool", filepath.Join(dir, "z"))
-	if b, _ := os.ReadFile(got); err != nil || string(b) != "zipped" { // #nosec G304 -- test file
-		t.Errorf("zip: %q %v", got, err)
-	}
-
-	var gbuf bytes.Buffer
-	gw := gzip.NewWriter(&gbuf)
-	_, _ = gw.Write([]byte("gunzipped"))
-	_ = gw.Close()
-	gfile := filepath.Join(dir, "tool.gz")
-	if err := os.WriteFile(gfile, gbuf.Bytes(), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	got, err = a.unpack(context.Background(), gfile, "tool", filepath.Join(dir, "g"))
-	if b, _ := os.ReadFile(got); err != nil || string(b) != "gunzipped" { // #nosec G304 -- test file
-		t.Errorf("gz: %q %v", got, err)
-	}
-	raw := filepath.Join(dir, "tool-linux-amd64")
-	if err := os.WriteFile(raw, []byte("raw"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := a.unpack(context.Background(), raw, "tool", filepath.Join(dir, "r")); err != nil || got != raw {
-		t.Errorf("a bare asset is the binary: %q %v", got, err)
 	}
 }
 
