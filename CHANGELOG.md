@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-26
+
 ### Changed
 
 - `audit todo fix` (and **F** in the task editor) passes an earlier `audit todo explain` answer for the same task and findings, at any analysis level, to the AI session as context, encoded and marked as an earlier answer rather than instructions. Nothing extra is asked of the AI; the answer comes from the cache.
