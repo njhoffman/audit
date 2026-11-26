@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-11-26
+
 ### Fixed
 
 - A list view that cannot read its saved data or cache (`packages -l`, `packages outdated`, `repos -l`, `files -l`, `configs -l`, `scripts -l`, `ai -l`, `environment -l`, `packages registry -l`, `repos refresh -l`) now fails with the error instead of logging a warning and exiting successfully without the list.
