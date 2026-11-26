@@ -180,6 +180,19 @@ func ApplyPrune(ctx context.Context, p PrunePlan) (string, error) {
 	if p.Remove == 0 || p.info == nil {
 		return "", errors.New("empty history prune plan")
 	}
+	return replaceHistory(ctx, p.Path, p.info, p.original, p.replacement)
+}
+
+// replaceHistory replaces the history at path, which must still hold
+// original (with info's identity, mode and size), with replacement: under
+// the locks described at ApplyPrune, after writing a private backup beside
+// it. It returns the backup's path.
+func replaceHistory(ctx context.Context, path string, pinfo os.FileInfo, original, replacement []byte) (string, error) {
+	p := struct {
+		Path                  string
+		info                  os.FileInfo
+		original, replacement []byte
+	}{path, pinfo, original, replacement}
 	unlockZsh, err := zshLock(p.Path)
 	if err != nil {
 		return "", err

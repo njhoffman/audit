@@ -278,6 +278,11 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   and file selection, previews, confirmation, ignore rules, private backups,
   whole-record preservation, changed-file and lock checks, and a rescan.
   Saved audit runs now live under `audit history runs`.
+- [ ] **Unmetafy zsh histories when scanning.** (p3) [bug] zsh stores bytes 0x83-0xa2
+  escaped as 0x83 plus the byte xor 0x20 (measured on zsh 5.9; history sync now writes
+  that way). Scan and prune compare the escaped bytes, so a non-ASCII
+  `shell_history.patterns` entry never matches a zsh record. Unmetafy zsh text in
+  parse (the raw bytes still drive prune's byte ranges) and test with "→" and "ă".
 - [ ] **Give patterns stable identities.** (p2) [refactor] Findings and ignore rules use
   `PATH:pattern-N`; reordering `shell_history.patterns` changes which pattern
   a saved task or ignore rule refers to. Support named pattern IDs without
@@ -402,7 +407,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
   only Lstats the target (no symlink resolution in the path); build dirs are not
   re-checked for idleness. Re-check size/mtime/hash and idleness at clean time, skip
   what changed with a reason, and warn past `stale.warn`.
-- [ ] **Guard `audit history sync`.** (p2) [bug] internal/history/history.go replaces the
+- [x] **Guard `audit history sync`.** (p2) [bug] internal/history/history.go replaces the
   zsh history from histdb with no check that histdb is non-empty or covers the file,
   no lock or changed-since check like prune, restores the old mtime on the new file
   (`os.Chtimes`, line 124), writes commands without zsh metafication, never prints the

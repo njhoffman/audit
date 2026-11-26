@@ -75,6 +75,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **history prune** [**-O** _categories_] [**-N**] [**-y**] [**-j**] [_file_...]
 
+**audit** **history sync** [**-f** _file_] [**-F**] [**-y**]
+
 **audit** **history runs** [_command_] [**-l** _n_] [**-j**]
 
 **audit** **config** [**-i** [**-f**]] [**-p**]
@@ -205,8 +207,8 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 **history**
 :   Checks **shell_history.files** for multiline and configured pattern matches. Repeated commands are retained without issues; use search-time duplicate filtering when desired. Shows histdb total, current-host and current-session entry counts in the history summary when available. Warns when histdb has more entries than the configured history files. Command text and pattern values are never saved or sent to AI. Configure the database with **shell_history.histdb** (default **~/.histdb/zsh-history.db**).
 
-**history sync**
-:   Rebuilds the configured zsh history file from histdb, preserving its recorded timestamps, durations and commands. The file is replaced after confirmation (or **-y**) and a private backup is kept beside it. Requires a configured zsh history file.
+**history sync** [**-f** _file_] [**-F**] [**-y**]
+:   Rebuilds a zsh history file from histdb, preserving its recorded timestamps, durations and commands, metafied as zsh writes its own history so non-ASCII commands read back intact. The target is **-f**/**\-\-file** _path_, or the first entry of **shell_history.files** that reads as zsh history (by content, so a custom name such as **~/.histfile** is found). It prints both entry counts and refuses when histdb is empty, and when histdb has fewer entries than the file (histdb only knows the commands since it was installed, so the rest would be dropped) unless **-F**/**\-\-force** is given. The file is replaced after confirmation (or **-y**) under the same locks and checks as **history prune**, after a private backup beside it whose path is printed.
 
 **history prune** [_file_...]
 :   Rechecks current configured histories and removes whole matching records, including bash timestamps and fish metadata. **-O**/**\-\-only** selects **duplicates** (default, keeps the first occurrence), **multiline**, **patterns**, or **all**. Ignore rules apply. Optional paths must name configured files. **-N**/**\-\-dry-run** previews counts and start lines without modifying files; **-j -N** prints a JSON plan. Otherwise the plan is confirmed, or **-y** skips confirmation; JSON execution requires **-y**. Each modified file gets a private mode-0600 **.NAME.audit-backup-*** beside it, then an atomic replacement preserving its permissions. Files changed after the preview, locked files, symlinks, hard links and files owned by others are refused. While replacing a file it holds the locks zsh honors: **$HISTFILE.LOCK** (zsh's default; one under 10 seconds old means a shell is saving, an older one is broken as zsh does) and an fcntl write lock (zsh with **HIST_FCNTL_LOCK**), plus a flock against other audit runs; a zsh saving meanwhile waits and then appends to the new file. bash takes no lock: lines it appends just before the replacement are copied onto the new file, and the directory is synced so the replacement survives a crash. Successful or partial pruning is followed by a rescan to reconcile tasks. Close other shell sessions first: their in-memory histories can restore removed entries on their next save. Backups contain the original commands, including any removed secrets; restore by copying the backup over the original path while shells are closed, and remove backups when no longer needed.

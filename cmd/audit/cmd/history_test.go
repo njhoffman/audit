@@ -190,3 +190,48 @@ func TestHistoryHistDBStatsInFreshAndSavedReports(t *testing.T) {
 		t.Fatal("history changed", err)
 	}
 }
+
+func TestHistorySyncRefusesAndForces(t *testing.T) {
+	cfgHome, _ := env(t)
+	dir := t.TempDir()
+	// A custom name: found by its content, not by "zsh" in the name.
+	path := filepath.Join(dir, ".histfile")
+	if err := os.WriteFile(path, []byte(": 1:0;one\n: 2:0;two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(dir, "histdb.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		"CREATE TABLE commands (id INTEGER PRIMARY KEY, argv TEXT)",
+		"CREATE TABLE places (id INTEGER PRIMARY KEY, host TEXT)",
+		"CREATE TABLE history (id INTEGER PRIMARY KEY, session INTEGER, command_id INTEGER, place_id INTEGER, start_time INTEGER, duration INTEGER)",
+		"INSERT INTO commands VALUES (1, 'one')",
+		"INSERT INTO history (session, command_id, place_id, start_time, duration) VALUES (1, 1, 1, 10, 0)",
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = db.Close()
+	cfg := "shell_history:\n  files: [" + path + "]\n  histdb: " + dbPath + "\n"
+	if err := os.WriteFile(filepath.Join(cfgHome, "audit.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := runArgs(t, "history", "sync", "-y")
+	if r.e == nil || !strings.Contains(r.e.Error(), "--force") || !strings.Contains(r.out, "histdb has 1 entries; "+path+" has 2") {
+		t.Fatalf("fewer histdb entries are refused: %v\n%s", r.e, r.out)
+	}
+	r = runArgs(t, "history", "sync", "-y", "-F")
+	if r.e != nil || !strings.Contains(r.out, "the previous file is in ") {
+		t.Fatalf("forced: %v\n%s", r.e, r.out)
+	}
+	if got, _ := os.ReadFile(path); string(got) != ": 10:0;one\n" {
+		t.Errorf("file: %q", got)
+	}
+	if r := runArgs(t, "history", "sync", "-y", "-f", filepath.Join(dir, "missing")); r.e == nil {
+		t.Error("a missing --file is an error")
+	}
+}

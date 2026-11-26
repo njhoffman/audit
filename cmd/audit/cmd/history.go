@@ -31,23 +31,48 @@ No history is changed. Use audit history runs to list saved audit runs.`,
 }
 
 func newHistorySyncCmd(a *app) *cobra.Command {
-	var yes bool
+	var yes, force bool
+	var file string
 	c := &cobra.Command{Use: "sync", Short: "Rebuild a zsh history file from histdb", Args: cobra.NoArgs,
-		Long: `Reconcile the configured zsh history file from histdb, which is the source of truth. Histdb timestamps and durations are retained. A private backup is created beside the history file before replacement.`,
+		Long: `Rebuild a zsh history file from histdb, keeping histdb's timestamps and
+durations, metafied as zsh writes its own history. The target is --file, or
+the first configured shell_history.files entry that reads as zsh history.
+
+It refuses when histdb is empty, and when histdb holds fewer entries than the
+file (histdb only knows the commands since it was installed, so replacing
+the file would drop the rest) unless --force is given. The file is replaced
+after confirmation (or --yes) under the same locks and checks as history
+prune, after a private backup beside it whose path is printed.`,
 		RunE: func(c *cobra.Command, _ []string) error {
 			if err := a.load(); err != nil {
 				return err
 			}
 			o := core.NewHistory(a.cfg, a.env).Options
-			var target string
-			for _, p := range o.Files {
-				if strings.Contains(filepath.Base(p), "zsh") {
-					target = p
-					break
+			target := ""
+			if file != "" {
+				abs, err := filepath.Abs(a.env.Expand(file))
+				if err != nil {
+					return err
+				}
+				target = abs
+			} else {
+				for _, p := range o.Files {
+					if f, err := history.FormatOf(p); err == nil && f == "zsh" {
+						target = p
+						break
+					}
 				}
 			}
 			if target == "" {
-				return errors.New("history sync requires a zsh history file in shell_history.files")
+				return errors.New("no zsh history among shell_history.files; name one with --file")
+			}
+			plan, err := history.PlanSync(c.Context(), o.HistDB, target)
+			if err != nil {
+				return err
+			}
+			say(a.out, "histdb has %d entries; %s has %d.\n", plan.HistDB, target, plan.File)
+			if plan.HistDB == 0 || (plan.Refusal != "" && !force) {
+				return errors.New(plan.Refusal)
 			}
 			if !yes {
 				ok, err := a.confirm("Replace " + target + " from histdb (private backup kept)?")
@@ -58,15 +83,17 @@ func newHistorySyncCmd(a *app) *cobra.Command {
 					return nil
 				}
 			}
-			n, err := history.ExportHistDB(c.Context(), o.HistDB, target)
+			backup, err := history.ApplySync(c.Context(), plan, force)
 			if err != nil {
 				return err
 			}
-			say(a.out, "Wrote %d histdb entries to %s\n", n, target)
+			say(a.out, "Wrote %d histdb entries to %s; the previous file is in %s.\n", plan.HistDB, target, backup)
 			_, err = a.engine.Execute(context.WithoutCancel(c.Context()), core.NewHistory(a.cfg, a.env), a.progress(true))
 			return err
 		}}
 	c.Flags().BoolVarP(&yes, "yes", "y", false, "replace without asking; keep a private backup")
+	c.Flags().BoolVarP(&force, "force", "F", false, "replace even when histdb has fewer entries than the file")
+	c.Flags().StringVarP(&file, "file", "f", "", "the zsh history file to rebuild (default: the first zsh file in shell_history.files)")
 	return c
 }
 

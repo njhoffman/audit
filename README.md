@@ -30,7 +30,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit todo` | the tasks scans create, plus tasks added by hand; `todo explain ID` asks the AI about one, `todo fix ID` has it fix one |
 | `audit analyze` | AI review across every command's saved results, open tasks and failed updates; `-t` files AI suggestions as tasks |
 | `audit history` | shell history: large multiline entries and configured literal substring matches; histdb total, host and session statistics in the history summary; repeated commands are retained without issues |
-| `audit history sync` | rebuild the configured zsh history file from histdb, preserving its timestamps and durations and keeping a private backup |
+| `audit history sync` | rebuild a zsh history file from histdb, preserving its timestamps and durations and keeping a private backup; refuses when histdb has fewer entries than the file unless `-F`; `-f` names the file |
 | `audit history prune` | preview and remove duplicates or selected unwanted entries, preserving whole records and keeping private backups; `-O patterns,multiline` selects other checks |
 | `audit history runs` | saved audit runs (formerly `audit history`) |
 | `audit config` | the effective configuration; `--init` rewrites the default file |
