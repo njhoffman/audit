@@ -388,3 +388,28 @@ func TestMigrationLadder(t *testing.T) {
 		t.Errorf("resuming at version 2 runs only the later step: %v ran %v version %s", err, ran, version())
 	}
 }
+
+func TestPreviousRun(t *testing.T) {
+	s := open(t)
+	base := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	first := sampleRun("packages", base, finding.Finding{Command: "packages", Check: "a", Severity: finding.Notice})
+	scoped := sampleRun("packages", base.Add(time.Hour))
+	scoped.Scope = "uv"
+	other := sampleRun("system", base.Add(2*time.Hour))
+	second := sampleRun("packages", base.Add(3*time.Hour))
+	for _, r := range []*run.Run{first, scoped, other, second} {
+		if err := s.SaveRun(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	prev, err := s.PreviousRun(ctx, second)
+	if err != nil || prev == nil || prev.ID != first.ID || len(prev.Findings) != 1 {
+		t.Fatalf("the previous full packages run, with findings: %+v %v", prev, err)
+	}
+	if prev, err := s.PreviousRun(ctx, first); err != nil || prev != nil {
+		t.Errorf("the first run has none: %+v %v", prev, err)
+	}
+	if prev, err := s.PreviousRun(ctx, scoped); err != nil || prev != nil {
+		t.Errorf("a scoped run compares with its own scope only: %+v %v", prev, err)
+	}
+}

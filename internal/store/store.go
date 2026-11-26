@@ -424,6 +424,20 @@ func (s *Store) LatestRun(ctx context.Context, command, scope string) (*run.Run,
 	return r, s.loadFindings(ctx, r)
 }
 
+// PreviousRun returns the run of r's command and scope saved just before
+// r, or nil, nil when r is the first one kept.
+func (s *Store) PreviousRun(ctx context.Context, r *run.Run) (*run.Run, error) {
+	q := `SELECT ` + runCols + ` FROM runs WHERE command=? AND scope=? AND id<? ORDER BY id DESC LIMIT 1`
+	prev, err := scanRun(s.db.QueryRowContext(ctx, q, r.Command, r.Scope, r.ID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return prev, s.loadFindings(ctx, prev)
+}
+
 // GetRun returns one run by id, or nil, nil when absent.
 func (s *Store) GetRun(ctx context.Context, id int64) (*run.Run, error) {
 	r, err := scanRun(s.db.QueryRowContext(ctx, `SELECT `+runCols+` FROM runs WHERE id=?`, id))

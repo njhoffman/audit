@@ -79,6 +79,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **history runs** [_command_] [**-l** _n_] [**-j**]
 
+**audit** **history runs diff** _A_ [_B_] [**-j**]
+
 **audit** **config** [**-i** [**-f**]] [**-p**]
 
 **audit** **export** [**-d** _dir_]
@@ -216,6 +218,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 **history runs** [_command_]
 :   Lists saved audit runs, newest first. This was previously **audit history**. **-l** limits the count (20 by default, 0 for all); **-j** prints JSON. The top-level **history** configuration key still controls saved run retention.
 
+**history runs diff** _A_ [_B_]
+:   Compares saved run _A_ with run _B_, or with the run of the same command and scope saved just before _A_ when _B_ is left out, and prints the findings added, resolved and changed in severity, keyed by command, check and subject as ignore rules and tasks are. The older run is the baseline whatever the order. Both runs must be of one command. **-j** prints **{from, to, delta}** with **delta.added**, **delta.resolved**, **delta.changed** (each finding with its earlier severity in **from**) and **delta.unchanged**.
+
 **config**
 :   Prints the effective configuration and the file it came from. **-i** writes the default file (**-f** overwrites), **-p** prints the path.
 
@@ -316,6 +321,9 @@ These apply to **system**, **environment** and **packages**. Without an output o
 
 **-k**, **\-\-check** _prefix_
 :   Show only findings whose check id starts with _prefix_.
+
+**-w**, **\-\-diff**
+:   Show what changed since the previous saved run of the same command and scope: findings added, resolved and changed in severity, with **-m** and **-k** applied to both runs. Does not scan unless **-r** is given, so **-r -w** scans and then shows what the scan changed. With **-j**, the same JSON as **history runs diff**; **from** and **delta** are null when no earlier run is kept. Exclusive with **-R**, **-l** and **-s**.
 
 **-O**, **\-\-only** _parts_ (system)
 :   Scan only these parts: **procs**, **services**, **users**, **logs**, **programs**, **storage**, **resources**, **updates**, **security**.

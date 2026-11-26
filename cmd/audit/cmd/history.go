@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/njhoffman/audit/internal/core"
+	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/history"
+	"github.com/njhoffman/audit/internal/run"
 	"github.com/njhoffman/audit/internal/store"
 )
 
@@ -264,5 +267,57 @@ func newHistoryRunsCmd(a *app) *cobra.Command {
 	}
 	c.Flags().IntVarP(&limit, "limit", "l", 20, "show at most this many runs (0 for all)")
 	c.Flags().BoolVarP(&asJSON, "json", "j", false, "print runs as JSON")
+	c.AddCommand(newHistoryRunsDiffCmd(a))
+	return c
+}
+
+func newHistoryRunsDiffCmd(a *app) *cobra.Command {
+	var asJSON bool
+	c := &cobra.Command{
+		Use:   "diff A [B]",
+		Short: "Show findings added, resolved and changed between two saved runs",
+		Long: `Compare saved run A with run B (IDs from audit history runs), or with the
+run of the same command and scope saved just before A when B is left out.
+The older run is the baseline whatever the order given. Both runs must be
+of the same command.`,
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(c *cobra.Command, args []string) error {
+			ids := make([]int64, len(args))
+			for i, s := range args {
+				id, err := strconv.ParseInt(s, 10, 64)
+				if err != nil || id <= 0 {
+					return fmt.Errorf("%q is not a run ID; audit history runs lists them", s)
+				}
+				ids[i] = id
+			}
+			if err := a.load(); err != nil {
+				return err
+			}
+			ctx := c.Context()
+			runs := make([]*run.Run, len(ids))
+			for i, id := range ids {
+				r, err := a.store.GetRun(ctx, id)
+				if err != nil {
+					return err
+				}
+				if r == nil {
+					return fmt.Errorf("no saved run %d; audit history runs lists the kept ones", id)
+				}
+				runs[i] = r
+			}
+			if len(runs) == 1 {
+				return a.printDiff(ctx, runs[0], finding.Filter{}, asJSON)
+			}
+			from, to := runs[0], runs[1]
+			if from.Command != to.Command {
+				return fmt.Errorf("run %d is %s and run %d is %s; compare runs of one command", from.ID, from.Command, to.ID, to.Command)
+			}
+			if from.ID > to.ID {
+				from, to = to, from
+			}
+			return a.showDiff(from, to, finding.Filter{}, asJSON)
+		},
+	}
+	c.Flags().BoolVarP(&asJSON, "json", "j", false, "print the difference as JSON")
 	return c
 }

@@ -58,6 +58,9 @@ audit history prune            # confirm, back up, remove duplicates, then resca
 audit history prune -O all -N  # preview duplicates, large entries and pattern matches
 audit history prune -O patterns # remove configured substring matches after confirmation
 audit history runs packages    # list saved audit runs for packages
+audit repos -w                 # findings added, resolved and changed since the previous repos run
+audit packages -r -w           # scan, then show what the scan changed
+audit history runs diff 93 87  # compare two saved runs
 audit packages registry        # refresh the registry cache (entries younger than 24h are reused), then report
 audit packages registry -a     # also AI-tag packages that have no AI tags yet
 audit packages update -N       # show what would be updated and the commands

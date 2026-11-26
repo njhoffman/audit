@@ -38,7 +38,7 @@ money per run unless the cache hits).
 Runs are pruned to `history` per command, but nothing compares them. Tasks
 show the current state, not what moved.
 
-- [ ] **`audit <command> --diff`** (p2) [feature] (and `audit history runs diff A B`): findings
+- [x] **`audit <command> --diff`** (`-w`, since -d is repos' --dirty; also reports severity changes) (p2) [feature] (and `audit history runs diff A B`): findings
   added and resolved between the last two runs (or two run IDs), keyed by
   command, check and subject, the same key ignore rules use.
 - [ ] **Deltas on the dashboard and summary.** (p3) [feature] `+3 / -5` next to each

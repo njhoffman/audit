@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -31,6 +32,7 @@ type scanFlags struct {
 	level       string
 	minSeverity string
 	check       string
+	diff        bool
 	// impliesList, when set and true, turns a plain run into --list (the
 	// packages query flags).
 	impliesList func() bool
@@ -64,14 +66,16 @@ func (f *scanFlags) register(c *cobra.Command) {
 	fl.StringVarP(&f.level, "level", "L", "", "AI analysis level: brief, standard or deep (default from config)")
 	fl.StringVarP(&f.minSeverity, "min-severity", "m", "", "hide findings below this severity (critical, error, warning, notice, info)")
 	fl.StringVarP(&f.check, "check", "k", "", "show only findings whose check id starts with this prefix")
+	fl.BoolVarP(&f.diff, "diff", "w", false, "show what changed since the previous run: findings added, resolved and changed in severity (no scan unless --rescan)")
 	c.MarkFlagsMutuallyExclusive("report", "list", "summary", "json")
+	c.MarkFlagsMutuallyExclusive("diff", "report", "list", "summary")
 }
 
 func (f *scanFlags) mode() core.Mode {
 	switch {
 	case f.rescan:
 		return core.Rescan
-	case f.report || f.list || f.summary || f.json:
+	case f.report || f.list || f.summary || f.json || f.diff:
 		return core.SavedOnly
 	}
 	return core.Auto
@@ -96,7 +100,7 @@ func (a *app) scanNeeded(ctx context.Context, command string, f *scanFlags) (boo
 	switch {
 	case f.rescan:
 		return true, nil
-	case f.report || list || f.summary || f.json:
+	case f.report || list || f.summary || f.json || f.diff:
 		return false, nil
 	}
 	r, err := a.engine.Saved(ctx, command, "")
@@ -188,6 +192,9 @@ func (a *app) runScan(ctx context.Context, s core.Scanner, f *scanFlags, view vi
 		}
 	}
 
+	if f.diff {
+		return a.printDiff(ctx, r, flt, f.json)
+	}
 	if f.json {
 		var extra any
 		if f.jsonExtra != nil {
@@ -280,4 +287,50 @@ are sourced, then check PATH, environment variables and the startup scripts
 			return nil
 		})
 	return c
+}
+
+// printDiff prints what changed from the run saved before r to r, with
+// the finding filter applied to both.
+func (a *app) printDiff(ctx context.Context, r *run.Run, flt finding.Filter, asJSON bool) error {
+	prev, err := a.store.PreviousRun(ctx, r)
+	if err != nil {
+		return err
+	}
+	if prev == nil {
+		if asJSON {
+			return a.writeJSON(diffJSON{To: runRef(r)})
+		}
+		say(a.out, "No earlier %s run is kept to compare with; `%s` makes one.\n", r.Command, core.RescanHint(r.Command, r.Scope))
+		return nil
+	}
+	return a.showDiff(prev, r, flt, asJSON)
+}
+
+func (a *app) showDiff(from, to *run.Run, flt finding.Filter, asJSON bool) error {
+	d := finding.Diff(flt.Apply(from.Findings), flt.Apply(to.Findings))
+	if asJSON {
+		ref := runRef(from)
+		return a.writeJSON(diffJSON{From: &ref, To: runRef(to), Delta: &d})
+	}
+	a.printer().Diff(from, to, d)
+	return nil
+}
+
+// diffJSON is the --diff --json output; From and Delta are null when no
+// earlier run is kept.
+type diffJSON struct {
+	From  *diffRun       `json:"from"`
+	To    diffRun        `json:"to"`
+	Delta *finding.Delta `json:"delta"`
+}
+
+type diffRun struct {
+	ID         int64     `json:"id"`
+	Command    string    `json:"command"`
+	Scope      string    `json:"scope"`
+	FinishedAt time.Time `json:"finished_at"`
+}
+
+func runRef(r *run.Run) diffRun {
+	return diffRun{ID: r.ID, Command: r.Command, Scope: r.Scope, FinishedAt: r.FinishedAt}
 }
