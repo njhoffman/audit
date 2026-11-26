@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.8] - 2026-11-26
+
 ### Fixed
 
 - `audit environment` writes the login shell's environment dump and its timing and stats files inside a private (0700) temporary directory. The side files used to be created by the shell in shared `/tmp` under names derived from a visible file, open to a planted symlink.
