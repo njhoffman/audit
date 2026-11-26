@@ -413,7 +413,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
   expandHome, `data_dir` does not (internal/config/config.go:511), so `~/...` or a
   relative path creates a separate database under the working directory. Expand `~`
   and `$VAR`, reject relative paths in validate(), test it.
-- [ ] **Warn on unknown config keys.** (p2) [feature] `v.Unmarshal(cfg)` ignores typos
+- [x] **Warn on unknown config keys.** (p2) [feature] `v.Unmarshal(cfg)` ignores typos
   such as `packages.registery.max_age`. Decode with ErrorUnused (or diff
   `v.AllKeys()` against the struct); warn on load, fail in `audit config`.
 - [ ] **Handle a symlinked binary in `bins install`.** (p3) [bug] findBin

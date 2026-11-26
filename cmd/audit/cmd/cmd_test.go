@@ -652,3 +652,21 @@ func TestPackagesAITag(t *testing.T) {
 		t.Errorf("missing command: %v", err)
 	}
 }
+
+func TestUnknownConfigKeys(t *testing.T) {
+	cfgHome, _ := env(t)
+	if err := os.WriteFile(filepath.Join(cfgHome, "audit.yaml"), []byte("histroy: 3\nai: {model: x}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := runArgs(t, "config")
+	if r.e == nil || !strings.Contains(r.e.Error(), "histroy") || !strings.Contains(r.e.Error(), "ai.model (now ai.claude.model)") {
+		t.Fatalf("audit config fails on unknown keys: %v", r.e)
+	}
+	if !strings.Contains(r.out, "history: 20") {
+		t.Error("audit config still prints the effective config")
+	}
+	r = runArgs(t, "todo")
+	if r.e != nil || !strings.Contains(r.err, "unknown config keys") || !strings.Contains(r.err, "histroy") {
+		t.Errorf("other commands warn and carry on: %v %q", r.e, r.err)
+	}
+}

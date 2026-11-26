@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 
 	"github.com/njhoffman/audit/internal/keys"
@@ -19,9 +20,12 @@ import (
 // Config is the merged view of defaults, the YAML file and AUDIT_* variables.
 // Command-line flags are applied on top by the cmd package.
 type Config struct {
-	DataDir string `mapstructure:"data_dir" yaml:"data_dir"`
-	History int    `mapstructure:"history" yaml:"history"`
-	NoColor bool   `mapstructure:"no_color" yaml:"no_color"`
+	// Unknown lists the keys in the file (or AUDIT_* variables bound to
+	// them) that match no setting, usually typos; they are otherwise ignored.
+	Unknown []string `mapstructure:"-" yaml:"-"`
+	DataDir string   `mapstructure:"data_dir" yaml:"data_dir"`
+	History int      `mapstructure:"history" yaml:"history"`
+	NoColor bool     `mapstructure:"no_color" yaml:"no_color"`
 	// GitHubUser is the login whose repositories are tagged "mine"; empty
 	// means ask gh once and remember the answer.
 	GitHubUser   string             `mapstructure:"github_user" yaml:"github_user"`
@@ -478,6 +482,25 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("repos.meta_max_age", 7*24*time.Hour)
 }
 
+// renamed maps keys earlier versions read to where the setting lives now.
+var renamed = map[string]string{
+	"ai.command": "ai.claude.command",
+	"ai.model":   "ai.claude.model",
+}
+
+// UnknownDescribed lists Unknown, naming the current key of a renamed one
+// ("ai.model (now ai.claude.model)").
+func (c *Config) UnknownDescribed() []string {
+	out := make([]string, len(c.Unknown))
+	for i, k := range c.Unknown {
+		out[i] = k
+		if to, ok := renamed[k]; ok {
+			out[i] += " (now " + to + ")"
+		}
+	}
+	return out
+}
+
 // Load reads the config. explicit, when non-empty, must exist; otherwise the
 // default path is used if present. It returns the config and the path it read
 // ("" when no file was found). Load never writes; see EnsureDefault.
@@ -509,9 +532,11 @@ func Load(explicit string) (*Config, string, error) {
 	}
 
 	cfg := &Config{}
-	if err := v.Unmarshal(cfg); err != nil {
+	var md mapstructure.Metadata
+	if err := v.Unmarshal(cfg, func(dc *mapstructure.DecoderConfig) { dc.Metadata = &md }); err != nil {
 		return nil, "", fmt.Errorf("parse config %s: %w", path, err)
 	}
+	cfg.Unknown = slices.Sorted(slices.Values(md.Unused))
 	// ~ and $VARS are expanded like a shell would; a relative path is
 	// rejected by validate, since it would name a different database in
 	// each working directory.

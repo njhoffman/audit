@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -24,7 +25,9 @@ func newConfigCmd(a *app) *cobra.Command {
 		Long: `Print the configuration in effect (defaults, the YAML file and AUDIT_*
 environment variables merged). The default file is created with every
 setting at its default on the first run of any command. --init writes that
-file again to the default location, or to --config when given.`,
+file again to the default location, or to --config when given. Keys that
+match no setting (usually typos) are listed and make it exit 1; other
+commands warn about them and carry on.`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			path := a.flags.config
@@ -54,8 +57,13 @@ file again to the default location, or to --config when given.`,
 			if err != nil {
 				return err
 			}
-			_, err = a.out.Write(b)
-			return err
+			if _, err = a.out.Write(b); err != nil {
+				return err
+			}
+			if len(cfg.Unknown) > 0 {
+				return fmt.Errorf("%s has unknown keys, ignored: %s", used, strings.Join(cfg.UnknownDescribed(), ", "))
+			}
+			return nil
 		},
 	}
 	fl := c.Flags()

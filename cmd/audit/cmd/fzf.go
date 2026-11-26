@@ -81,6 +81,7 @@ func newFzfHelperCmd(a *app) *cobra.Command {
 		Hidden: true,
 		Args:   cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			a.helper = true
 			if err := a.load(); err != nil {
 				return err
 			}

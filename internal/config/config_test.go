@@ -130,6 +130,37 @@ func TestLoadDataDirExpanded(t *testing.T) {
 	}
 }
 
+func TestLoadUnknownKeys(t *testing.T) {
+	dir := isolate(t)
+	path := filepath.Join(dir, "c.yaml")
+	write(t, path, "histroy: 5\npackages:\n  registery: {max_age: 1h}\n  registry: {max_age: 2h}\ntui:\n  keys: {quit: [q]}\n") //nolint:misspell // deliberate typos under test
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"histroy", "packages.registery"}; !reflect.DeepEqual(cfg.Unknown, want) {
+		t.Errorf("unknown = %v, want %v", cfg.Unknown, want)
+	}
+	if cfg.Packages.Registry.MaxAge != 2*time.Hour {
+		t.Error("known keys still apply")
+	}
+	write(t, path, "ai: {model: x}\n")
+	if cfg, _, _ := Load(path); !reflect.DeepEqual(cfg.UnknownDescribed(), []string{"ai.model (now ai.claude.model)"}) {
+		t.Errorf("a renamed key names its new place: %v", cfg.UnknownDescribed())
+	}
+	write(t, path, "history: 5\n")
+	if cfg, _, _ := Load(path); len(cfg.Unknown) != 0 {
+		t.Errorf("a clean file has no unknown keys: %v", cfg.Unknown)
+	}
+	write(t, path, Template)
+	if cfg, _, err := Load(path); err != nil || len(cfg.Unknown) != 0 {
+		t.Errorf("the shipped template has unknown keys: %v %v", cfg.Unknown, err)
+	}
+	if cfg, _, err := Load(""); err != nil || len(cfg.Unknown) != 0 {
+		t.Errorf("the defaults alone: %v %v", cfg.Unknown, err)
+	}
+}
+
 func TestLoadErrors(t *testing.T) {
 	dir := isolate(t)
 	if _, _, err := Load(filepath.Join(dir, "missing.yaml")); err == nil {

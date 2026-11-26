@@ -8,6 +8,7 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	clog "github.com/charmbracelet/log"
@@ -49,6 +50,9 @@ type globalFlags struct {
 // app is the state every subcommand shares. It is built lazily so that
 // --help and --version never touch the config or the database.
 type app struct {
+	// helper marks fzf's callbacks, which run on every keypress: they skip
+	// startup warnings that would land in fzf's preview.
+	helper  bool
 	flags   globalFlags
 	out     io.Writer
 	errOut  io.Writer
@@ -114,6 +118,9 @@ func (a *app) load() error {
 	}
 	if path != "" {
 		a.log.Debug("config", "path", path)
+	}
+	if len(cfg.Unknown) > 0 && !a.helper {
+		a.log.Warn("unknown config keys are ignored (check for typos; audit config lists the valid ones)", "path", path, "keys", strings.Join(cfg.UnknownDescribed(), ", "))
 	}
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("create data dir: %w", err)

@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/log v1.0.0
 	github.com/charmbracelet/x/ansi v0.10.2
 	github.com/creack/pty v1.1.24
+	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/shirou/gopsutil/v4 v4.26.3
@@ -41,7 +42,6 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logfmt/logfmt v0.6.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
