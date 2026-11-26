@@ -112,7 +112,7 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
     Loose binaries are the regular executable files in **packages.scan_dirs** (symlinks belong to the managers that made them), with their kind (**elf** or **script**, also an automatic tag). A binary tracked with **packages bins track** carries its GitHub repo and installed release, so the registry lookup finds its latest release and **packages update** plans it like any package. **bins.untracked** (info, one task) lists compiled binaries with no recorded origin.
 
-    The inventory (**\-\-list**) shows each package's latest release, how long ago it was published and its tags, read from the registry cache. The header says when the cache was last refreshed; a plain scan never contacts a registry. Cached data adds the checks **registry.outdated** (info, one task per manager), **registry.major_behind** (notice), **registry.deprecated**, **registry.yanked** and **registry.archived** (warnings), **registry.unmaintained** (a suggestion when the latest release is older than **packages.registry.unmaintained_after**) and **registry.error** (info, a failed lookup).
+    The inventory (**\-\-list**) shows each package's latest release, how long ago it was published and its tags, read from the registry cache. The header says when the cache was last refreshed. A scan also looks up the entries older than **packages.registry.max_age** (unless **packages.registry.refresh_on_scan** is false); **-l**, **-R**, **-s** and **-j** on saved results only read the cache. Cached data adds the checks **registry.outdated** (info, one task per manager), **registry.major_behind** (notice), **registry.deprecated**, **registry.yanked** and **registry.archived** (warnings), **registry.unmaintained** (a suggestion when the latest release is older than **packages.registry.unmaintained_after**) and **registry.error** (info, a failed lookup).
 
     Runtime checks: **runtime.drift** reports packages installed against another version of their runtime (a notice for uv tools and pnpm globals, info for cargo and go binaries, which are self-contained) with the **runtimes migrate** command that moves them; **runtime.outdated** reports, from the runtime cache, a runtime behind the newest release of its line (a notice when uv, pnpm or rustup owns it, info for a system or manual install) or with a newer line available (info). pnpm records no node version per global, so audit remembers the node major the globals were installed under, starting with the major it first sees.
 
@@ -568,6 +568,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
         concurrency: 8
         timeout: 10s           # per package
         unmaintained_after: 26280h  # 3 years; 0 disables registry.unmaintained
+        refresh_on_scan: true       # packages scans look up entries older than max_age
       update:
         timeout: 15m           # per package update command
         exclude: []            # packages never updated, e.g. [cargo:ripgrep, black]

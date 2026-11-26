@@ -230,7 +230,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   `{"<manager>": {"available", "installed", "outdated", "gaps": {...},
   "unchecked", "checked_at"}}`, with `schema_version` bumped, so other programs
   read a few hundred bytes instead.
-- [ ] **Refresh registry data on a normal packages rescan.** (p2) [bug] Only `outdated`,
+- [x] **Refresh registry data on a normal packages rescan.** (decided 2026-11-26: refresh entries past max_age; `packages.registry.refresh_on_scan`, default on) (p2) [bug] Only `outdated`,
   `update`, `registry` and `bins` set Scanner.Refresh. `audit packages -r` and the
   dashboard rescan only read the cache, so a machine that never ran those shows
   `unchecked` in LATEST with no `registry.*` findings (seen on the 2026-10-30 run:

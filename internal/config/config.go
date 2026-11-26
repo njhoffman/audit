@@ -305,6 +305,9 @@ type RegistryConfig struct {
 	// UnmaintainedAfter flags packages with no release for this long; 0
 	// disables the check.
 	UnmaintainedAfter time.Duration `mapstructure:"unmaintained_after" yaml:"unmaintained_after"`
+	// RefreshOnScan makes every packages scan (audit packages -r, the
+	// dashboard, audit -r) look up the entries older than MaxAge.
+	RefreshOnScan bool `mapstructure:"refresh_on_scan" yaml:"refresh_on_scan"`
 }
 
 // UpdateConfig configures `audit packages update`.
@@ -423,6 +426,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("packages.registry.concurrency", 8)
 	v.SetDefault("packages.registry.timeout", 10*time.Second)
 	v.SetDefault("packages.registry.unmaintained_after", 3*365*24*time.Hour)
+	v.SetDefault("packages.registry.refresh_on_scan", true)
 	v.SetDefault("packages.update.timeout", 15*time.Minute)
 	v.SetDefault("packages.update.exclude", []string{})
 	v.SetDefault("packages.tags", DefaultTags)
@@ -868,14 +872,16 @@ packages:
   # their regular files (not symlinks) are the bins manager's inventory.
   scan_dirs: [~/.local/bin]
   # audit packages registry looks packages up in their registries (PyPI,
-  # npm, crates.io, the Go proxy, rubygems.org, GitHub) and caches the answer;
-  # other scans and the inventory read the cache without network access.
+  # npm, crates.io, the Go proxy, rubygems.org, GitHub) and caches the answer.
+  # Every packages scan also looks up the entries older than max_age, unless
+  # refresh_on_scan is false; the inventory views only read the cache.
   registry:
     max_age: 24h             # refetch versions older than this
     metadata_max_age: 168h   # refetch descriptions where that costs extra requests
     concurrency: 8
     timeout: 10s             # per package
     unmaintained_after: 26280h   # 3 years without a release; 0 disables
+    refresh_on_scan: true    # packages scans look up entries older than max_age
   # audit packages update runs each manager's own update command per package.
   update:
     timeout: 15m             # per package; cargo builds from source

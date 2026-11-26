@@ -175,3 +175,30 @@ func TestOutdatedUpdateHintQuotesShellArguments(t *testing.T) {
 		t.Fatalf("hint = %q, want %q", got, want)
 	}
 }
+
+// A plain packages rescan refreshes registry entries past max_age, so its
+// versions are not as old as the last `outdated` run; saved views stay
+// offline, and refresh_on_scan: false keeps scans offline too.
+func TestPackagesRescanRefreshesStaleRegistry(t *testing.T) {
+	gh := updateEnv(t)
+	looker := &countingLatestLooker{}
+	setup := func(a *app) { a.runner, a.looker = gh, looker }
+	t.Setenv("AUDIT_PACKAGES_REGISTRY_REFRESH_ON_SCAN", "true")
+	if r := runArgsWith(t, setup, "packages", "-r"); r.e != nil || looker.calls.Load() == 0 {
+		t.Fatalf("rescan should look up never-checked packages: calls %d err %v", looker.calls.Load(), r.e)
+	}
+	n := looker.calls.Load()
+	if r := runArgsWith(t, setup, "packages", "-r"); r.e != nil || looker.calls.Load() != n {
+		t.Errorf("entries younger than max_age are reused: calls %d -> %d %v", n, looker.calls.Load(), r.e)
+	}
+	if r := runArgsWith(t, setup, "packages", "-l"); r.e != nil || looker.calls.Load() != n {
+		t.Errorf("a saved view never looks anything up: %d -> %d %v", n, looker.calls.Load(), r.e)
+	}
+
+	gh2 := updateEnv(t)
+	off := &countingLatestLooker{}
+	t.Setenv("AUDIT_PACKAGES_REGISTRY_REFRESH_ON_SCAN", "false")
+	if r := runArgsWith(t, func(a *app) { a.runner, a.looker = gh2, off }, "packages", "-r"); r.e != nil || off.calls.Load() != 0 {
+		t.Errorf("refresh_on_scan false keeps scans offline: calls %d err %v", off.calls.Load(), r.e)
+	}
+}

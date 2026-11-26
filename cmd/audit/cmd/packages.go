@@ -47,8 +47,9 @@ directories and misplaced installs. --list prints the inventory with the
 latest release of each package, how long ago it was published and its tags.
 
 Registry data (latest versions, descriptions, deprecations) is cached by
-audit packages registry; this command only reads the cache and shows how
-old it is. --tag, --find and --outdated filter the inventory and imply
+audit packages registry. A scan also looks up the entries older than
+packages.registry.max_age (set packages.registry.refresh_on_scan: false to
+keep scans offline); the saved views only read the cache and show its age. --tag, --find and --outdated filter the inventory and imply
 --list.`,
 		func() (core.Scanner, error) {
 			if len(splitList(managers)) == 0 && !a.systemFlag(cmd, system) {
@@ -98,6 +99,12 @@ func (a *app) packagesScanner(managers []string) (*core.PackagesScanner, error) 
 	}
 	s.Meta, s.Updates, s.Runtimes, s.Now = a.store, a.store, a.store, timeNow()
 	s.Carried = a.store
+	// A plain scan refreshes what is past registry.max_age, so the versions
+	// it reports (and the export's checked_at) are not weeks old. Commands
+	// with their own refresh (outdated, update, registry) replace this.
+	if a.cfg.Packages.Registry.RefreshOnScan {
+		s.Refresh = a.registryRefresh(nil, false)
+	}
 	for i, m := range s.Managers {
 		if b, ok := m.(packages.Bins); ok {
 			b.Tracked = func() (map[string]packages.TrackedBin, error) { return a.store.TrackedBins(context.Background()) }

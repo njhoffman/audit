@@ -31,6 +31,8 @@ func env(t *testing.T) (cfgHome, dataHome string) {
 	t.Setenv("XDG_CONFIG_HOME", cfgHome)
 	t.Setenv("XDG_DATA_HOME", dataHome)
 	t.Setenv("NO_COLOR", "1")
+	// Scans would otherwise look packages up in the real registries.
+	t.Setenv("AUDIT_PACKAGES_REGISTRY_REFRESH_ON_SCAN", "false")
 	old := timeNow
 	timeNow = func() time.Time { return testNow }
 	t.Cleanup(func() { timeNow = old })

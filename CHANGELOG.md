@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Every packages scan (`audit packages -r`, the dashboard's rescan, `audit -r`) now looks up the registry entries older than `packages.registry.max_age`, as `outdated` does, instead of only reading the cache. A plain rescan used to leave uv, pnpm, cargo, go, gem and gh versions (and the export's `checked_at`) as old as the last `outdated` or `registry` run. Saved views (`-l`, `-R`, `-s`, `-j` without `-r`) still only read the cache.
+
+### Added
+
+- `packages.registry.refresh_on_scan` (default `true`): set it to `false` to keep packages scans offline, as before.
+
 ## [0.29.2] - 2026-11-26
 
 ### Fixed
