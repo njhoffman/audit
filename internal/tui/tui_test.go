@@ -206,6 +206,21 @@ func TestDashboardShowsCommandsAndAges(t *testing.T) {
 	}
 }
 
+func TestDashboardDescribesSelectedCommand(t *testing.T) {
+	m := start(t, newFake(), WithDescriptions(map[string]string{"system": "Scan processes", "environment": "Check the shell"}))
+	if v := m.View(); !strings.Contains(v, "Scan processes") || strings.Contains(v, "Check the shell") {
+		t.Errorf("the first row's description:\n%s", v)
+	}
+	key(t, m, "j")
+	if v := m.View(); !strings.Contains(v, "Check the shell") || strings.Contains(v, "Scan processes") {
+		t.Errorf("the description follows the cursor:\n%s", v)
+	}
+	key(t, m, "j") // packages: no description, no line
+	if v := m.View(); strings.Contains(v, "Check the shell") || strings.Contains(v, "Scan processes") {
+		t.Errorf("no description for packages:\n%s", v)
+	}
+}
+
 func TestDashboardOpensReport(t *testing.T) {
 	f := newFake()
 	m := start(t, f)

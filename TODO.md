@@ -386,7 +386,7 @@ them from being noise (one per check, dismissable like ignore rules).
 
 ## 13. Dashboard readability
 
-- [ ] **Describe the selected command under the list.** (p3) [feature] As the cursor
+- [x] **Describe the selected command under the list.** (p3) [feature] As the cursor
   moves over the top-level rows (system, packages, repos, ...), show one line
   below the table on what that command scans for, taken from each cobra
   command's Short so the two cannot drift.

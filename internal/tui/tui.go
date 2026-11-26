@@ -123,6 +123,8 @@ type Model struct {
 	home string
 	// glyphs are the markers and icons.
 	glyphs render.Glyphs
+	// descriptions say what each dashboard command scans for.
+	descriptions map[string]string
 	// expanded shows reports' findings in full; keepScroll restores the
 	// scroll position, as a fraction, once the toggled report arrives.
 	expanded   bool
@@ -144,6 +146,10 @@ func WithKeys(km keys.Map) Option {
 		}
 	}
 }
+
+// WithDescriptions sets the line shown under the dashboard for the command
+// the cursor is on, by command name (cobra's Short, so the two agree).
+func WithDescriptions(d map[string]string) Option { return func(m *Model) { m.descriptions = d } }
 
 // WithGlyphs sets the markers and icons (render.UnicodeGlyphs by default).
 func WithGlyphs(g render.Glyphs) Option { return func(m *Model) { m.glyphs = g } }
@@ -852,6 +858,11 @@ func (m *Model) dashboardView() string {
 			name = titleStyle.Render(name)
 		}
 		b.WriteString(marker + name + "  " + pad(l.last, 16) + "  " + pad(l.age, 8) + "  " + pad(l.findings, findW) + "  " + l.tasks + "\n")
+	}
+	if m.cursor < len(m.rows) {
+		if d := m.descriptions[m.rows[m.cursor].Command]; d != "" {
+			b.WriteString("\n  " + faintStyle.Render(d) + "\n")
+		}
 	}
 	return b.String()
 }

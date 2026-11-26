@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -668,5 +669,14 @@ func TestUnknownConfigKeys(t *testing.T) {
 	r = runArgs(t, "todo")
 	if r.e != nil || !strings.Contains(r.err, "unknown config keys") || !strings.Contains(r.err, "histroy") {
 		t.Errorf("other commands warn and carry on: %v %q", r.e, r.err)
+	}
+}
+
+func TestEveryScanningCommandHasAShort(t *testing.T) {
+	shorts := commandShorts(newRootCmd(newApp(io.Discard, io.Discard)))
+	for _, c := range core.Commands {
+		if shorts[c] == "" {
+			t.Errorf("%s has no Short for the dashboard to describe it with", c)
+		}
 	}
 }

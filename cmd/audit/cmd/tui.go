@@ -7,6 +7,8 @@ import (
 	"os"
 	osexec "os/exec"
 
+	"github.com/spf13/cobra"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
@@ -26,8 +28,17 @@ type tuiBackend struct {
 	forceColor bool
 }
 
-func runDashboard(ctx context.Context, a *app) error {
-	return tui.Run(ctx, tuiBackend{a: a}, a.tuiOptions()...)
+func runDashboard(ctx context.Context, a *app, root *cobra.Command) error {
+	return tui.Run(ctx, tuiBackend{a: a}, append(a.tuiOptions(), tui.WithDescriptions(commandShorts(root)))...)
+}
+
+// commandShorts maps each subcommand's name to its one-line description.
+func commandShorts(root *cobra.Command) map[string]string {
+	out := map[string]string{}
+	for _, c := range root.Commands() {
+		out[c.Name()] = c.Short
+	}
+	return out
 }
 
 func runTodoEditor(ctx context.Context, a *app, f todo.Filter) error {

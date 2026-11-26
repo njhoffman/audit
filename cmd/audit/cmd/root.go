@@ -95,7 +95,7 @@ Run without a command in a terminal for the interactive dashboard, or with
 				if a.useFzf(c) {
 					return runFzfDashboard(ctx, a)
 				}
-				return runDashboard(ctx, a)
+				return runDashboard(ctx, a, c.Root())
 			}
 			st, err := a.statuses(ctx)
 			if err != nil {
