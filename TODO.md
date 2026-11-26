@@ -431,7 +431,7 @@ From a source review; items 2 onward are read from the code, not reproduced.
 - [x] **Create the environment capture's side files in a private directory.** (p3) [bug]
   internal/environment/capture.go creates `$AUDIT_ENV_OUT.t` and `.s` by shell
   redirection in shared /tmp with guessable names. Use os.MkdirTemp (0700) for all three.
-- [x] **Gate the release workflow and refresh its metadata.** (LICENSE* left in place: which license to add is an open decision) (p3) [chore]
+- [x] **Gate the release workflow and refresh its metadata.** (MIT LICENSE added 2026-11-26) (p3) [chore]
   .github/workflows/release.yml runs goreleaser on a tag with no test step; the
   `go mod tidy` hook mutates the tree (use `go mod tidy -diff`); .goreleaser.yml's
   header describes the old sysaudit tool and archives `LICENSE*`, which does not exist.

@@ -168,3 +168,7 @@ just cover              # coverage.html
 ```
 
 Lint and tests must pass before any commit. See [`man/audit.1.md`](man/audit.1.md) for every option and [`CHANGELOG.md`](CHANGELOG.md) for history.
+
+## License
+
+MIT; see [`LICENSE`](LICENSE).
