@@ -133,7 +133,7 @@ coverage run.
   `scan/logs`, `scan/programs` (the sysaudit-era code). The newer
   `scan/resources`, `scan/updates`, `scan/security` are at 88-94%; bring the
   old ones up with the same fixture style.
-- [ ] **`tools/release` at 36.7%.** (p2) [test] It bumps versions, commits, tags and
+- [x] **`tools/release` at 36.7%.** (now 81.7%: run() against a temp repo and bare remote) (p2) [test] It bumps versions, commits, tags and
   pushes. The bump-inference from CHANGELOG headings and the pre-1.0 rule
   are pure functions worth table tests; the git side can go through a fake.
 
