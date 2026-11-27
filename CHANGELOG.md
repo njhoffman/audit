@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.67.1] - 2026-11-26
+
 ### Fixed
 
 - The dashboard's and `audit --summary`'s red `+N` (findings new since the command's previous run) and green `-N` (findings resolved since then) now line up in their own columns: they start at the same place on every row, and a row with only resolved findings leaves the `+` column blank instead of putting its `-N` there. The legend names them.
