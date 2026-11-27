@@ -35,6 +35,26 @@ import (
 // Commands lists the audit commands in dashboard order.
 var Commands = []string{system.Command, environment.Command, packages.Command, repos.Command, files.Command, backups.Command, configs.Command, scripts.Command, "history", ai.Command}
 
+// Action is a command's built-in fix: an audit subcommand that previews
+// what it will change, asks first and reports failures (and backups).
+type Action struct {
+	// Label names it in key hints: update, prune, clean, sync.
+	Label string
+	// Args follow audit.
+	Args []string
+	// Rescans says the action rescans its command itself afterwards.
+	Rescans bool
+}
+
+// Actions are the commands with a built-in action.
+var Actions = map[string]Action{
+	packages.Command: {Label: "update", Args: []string{"packages", "update"}, Rescans: true},
+	"history":        {Label: "prune", Args: []string{"history", "prune"}, Rescans: true},
+	repos.Command:    {Label: "sync", Args: []string{"repos", "sync"}, Rescans: true},
+	files.Command:    {Label: "clean", Args: []string{"files", "clean"}},
+	configs.Command:  {Label: "clean", Args: []string{"configs", "clean"}},
+}
+
 // ScopeFlags names the flag that selects each command's scope.
 var ScopeFlags = map[string]string{system.Command: "--only", packages.Command: "--manager"}
 

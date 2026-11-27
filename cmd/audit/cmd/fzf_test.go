@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/njhoffman/audit/internal/core"
 )
 
 func TestFzfHelperLinesAndState(t *testing.T) {
@@ -84,5 +87,22 @@ func TestUseFzf(t *testing.T) {
 	r = runArgs(t, "todo", "-i", "--fzf=false")
 	if r.e == nil || strings.Contains(r.e.Error(), "--fzf") {
 		t.Errorf("--fzf=false picks the TUI: %v", r.e)
+	}
+}
+
+func TestFzfHelperAction(t *testing.T) {
+	env(t)
+	// Interactive helper errors go to the terminal, then wait for enter.
+	if r := runArgs(t, "fzf-helper", "action", "system"); r.e != nil || !strings.Contains(r.err, "system has no action") {
+		t.Errorf("no action: %v %q", r.e, r.err)
+	}
+	for c, act := range core.Actions {
+		if act.Label == "" || len(act.Args) != 2 || act.Args[0] != c {
+			t.Errorf("%s: %+v", c, act)
+		}
+		root := newRootCmd(newApp(io.Discard, io.Discard))
+		if sub, _, err := root.Find(act.Args); err != nil || sub.Name() != act.Args[1] {
+			t.Errorf("%s: audit %v is not a command (%v)", c, act.Args, err)
+		}
 	}
 }

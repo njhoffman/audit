@@ -78,7 +78,7 @@ func TestValidateFzf(t *testing.T) {
 		{"plain letter", Map{StatusDone: {"d"}}, `"d" would stop typing it into the query`},
 		{"leaves fzf", Map{Note: {"esc"}}, "esc leaves fzf"},
 		{"same screen", Map{Note: {"alt-d"}}, `"alt-d" is bound to both status_done and note on the tasks screen`},
-		{"disjoint screens share", Map{Rescan: {"alt-x"}, Note: {"alt-x"}}, ""},
+		{"disjoint screens share", Map{Rescan: {"alt-q"}, Note: {"alt-q"}}, ""},
 		{"several keys", Map{StatusDone: {"alt-d", "ctrl-d"}}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -177,6 +177,21 @@ func (b tuiBackend) Packages(ctx context.Context) ([]packages.Annotated, error) 
 	return b.a.annotated(ctx, r, packages.Query{})
 }
 
+// Action implements tui.Backend from core.Actions.
+func (b tuiBackend) Action(command string) (string, bool) {
+	act := core.Actions[command]
+	return act.Label, act.Rescans
+}
+
+// ActionSession implements tui.Backend: this binary running the action.
+func (b tuiBackend) ActionSession(_ context.Context, command string) (*osexec.Cmd, error) {
+	act, ok := core.Actions[command]
+	if !ok {
+		return nil, fmt.Errorf("%s has no action", command)
+	}
+	return osexec.Command(packages.SelfCommand, act.Args...), nil // #nosec G204 -- this binary with fixed arguments
+}
+
 // UpdateSession implements tui.Backend: this binary's packages update for
 // refs, on the terminal, so it plans, asks and prompts for sudo itself.
 func (b tuiBackend) UpdateSession(_ context.Context, refs []string) (*osexec.Cmd, error) {

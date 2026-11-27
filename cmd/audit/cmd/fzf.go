@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/render"
 
 	"github.com/spf13/cobra"
@@ -178,6 +179,27 @@ func (a *app) fzfInteractive(ctx context.Context, op string, args []string) erro
 		}
 		sayln(a.errOut, fmt.Sprintf("%s scanned; %d task(s) updated", args[0], res.TaskChanges))
 		return nil
+	case op == "action" && len(args) == 1:
+		// In fzf's execute, on the terminal: the action previews and asks
+		// itself; one that does not rescan is followed by a rescan.
+		act, ok := core.Actions[args[0]]
+		if !ok {
+			return fmt.Errorf("%s has no action; its report says what to do", args[0])
+		}
+		c := osexec.CommandContext(ctx, packages.SelfCommand, act.Args...) // #nosec G204 -- this binary with fixed arguments
+		c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+		if err := c.Run(); err != nil {
+			return fmt.Errorf("audit %s: %w", strings.Join(act.Args, " "), err)
+		}
+		if act.Rescans {
+			return nil
+		}
+		s, err := a.defaultScanner(args[0])
+		if err != nil {
+			return err
+		}
+		_, err = a.engine.Execute(ctx, s, a.progress(true))
+		return err
 	case op == "note" && len(args) == 1:
 		t, err := a.fzfTask(ctx, args[0])
 		if err != nil {

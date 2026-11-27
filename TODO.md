@@ -344,7 +344,7 @@ Still open: whether format detection should refuse pruning ambiguous histories.
 
 ## 10. Dashboard actions
 
-- [ ] **Preview package updates and history pruning from reports.** [feature] (p3)
+- [x] **Preview package updates and history pruning from reports.** (`a` on a dashboard row or report, `alt-x` in fzf: the command's action on the terminal; the packages screen covers selected updates) [feature] (p3)
   Offer outdated-only inventory, selected-package update plans and history
   prune plans from the dashboard/fzf interfaces. Keep scope visible, require
   confirmation for changes, and display failures and backup locations.

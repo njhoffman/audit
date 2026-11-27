@@ -43,9 +43,27 @@ type fake struct {
 	failScan string // the command whose rescan fails
 	pkgs     []packages.Annotated
 	updates  [][]string
+	actions  []string
 }
 
 func (f *fake) Packages(context.Context) ([]packages.Annotated, error) { return f.pkgs, nil }
+
+// Action: system's action rescans itself, environment's does not, the rest
+// have none.
+func (f *fake) Action(c string) (string, bool) {
+	switch c {
+	case "system":
+		return "update", true
+	case "environment":
+		return "clean", false
+	}
+	return "", false
+}
+
+func (f *fake) ActionSession(_ context.Context, c string) (*osexec.Cmd, error) {
+	f.actions = append(f.actions, c)
+	return osexec.Command("true"), nil
+}
 
 func (f *fake) UpdateSession(_ context.Context, refs []string) (*osexec.Cmd, error) {
 	f.updates = append(f.updates, refs)
@@ -874,5 +892,46 @@ func TestTasksNewFilter(t *testing.T) {
 	key(t, m, "N")
 	if len(m.tasks) != 2 {
 		t.Errorf("N again shows them all: %d", len(m.tasks))
+	}
+}
+
+func TestRunAction(t *testing.T) {
+	f := newFake()
+	m := start(t, f)
+	key(t, m, "a")
+	if !reflect.DeepEqual(f.actions, []string{"system"}) {
+		t.Fatalf("a runs the selected command's action: %v", f.actions)
+	}
+	_, cmd := m.Update(actionMsg{command: "system"})
+	drive(t, m, cmd)
+	if len(f.rescans) != 0 || !strings.Contains(m.status, "system update finished") {
+		t.Errorf("an action that rescans itself is not rescanned again: %v %q", f.rescans, m.status)
+	}
+	_, cmd = m.Update(actionMsg{command: "environment"})
+	drive(t, m, cmd)
+	if !reflect.DeepEqual(f.rescans, []string{"environment"}) {
+		t.Errorf("one that does not is rescanned: %v", f.rescans)
+	}
+	_, cmd = m.Update(actionMsg{command: "environment", err: errors.New("exit status 1")})
+	drive(t, m, cmd)
+	if !m.statusErr || len(f.rescans) != 1 {
+		t.Errorf("a failed action shows and is not rescanned: %q %v", m.status, f.rescans)
+	}
+	key(t, m, "j")
+	key(t, m, "j")
+	key(t, m, "a")
+	if len(f.actions) != 1 || !strings.Contains(m.status, "packages has no action") {
+		t.Errorf("no action: %v %q", f.actions, m.status)
+	}
+	// On a report, the hint names the action.
+	key(t, m, "k")
+	key(t, m, "k")
+	key(t, m, "enter")
+	if v := m.View(); !strings.Contains(v, "a update") {
+		t.Errorf("report hint:\n%s", v)
+	}
+	key(t, m, "a")
+	if len(f.actions) != 2 {
+		t.Errorf("a on a report: %v", f.actions)
 	}
 }

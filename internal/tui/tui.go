@@ -65,6 +65,37 @@ type Backend interface {
 	// UpdateSession is audit packages update for refs (manager:name), to run
 	// on the terminal with its own plan, question and sudo prompt.
 	UpdateSession(ctx context.Context, refs []string) (*osexec.Cmd, error)
+	// Action names command's built-in action (update, prune, clean, sync),
+	// "" for none, and whether it rescans the command itself.
+	Action(command string) (label string, rescans bool)
+	// ActionSession is that action on the terminal: it previews, asks and
+	// reports failures and backups itself.
+	ActionSession(ctx context.Context, command string) (*osexec.Cmd, error)
+}
+
+type actionMsg struct {
+	command string
+	err     error
+}
+
+// runAction hands the terminal to command's action; when it exits the
+// command is rescanned unless the action did so itself.
+func (m *Model) runAction(command string) tea.Cmd {
+	if m.busy != "" {
+		m.setStatus("wait for "+m.busy+" to finish", true)
+		return nil
+	}
+	label, _ := m.b.Action(command)
+	if label == "" {
+		m.setStatus(command+" has no action; its report says what to do", true)
+		return nil
+	}
+	c, err := m.b.ActionSession(m.ctx, command)
+	if err != nil {
+		m.setStatus(err.Error(), true)
+		return nil
+	}
+	return tea.ExecProcess(c, func(err error) tea.Msg { return actionMsg{command, err} })
 }
 
 type screen int
@@ -559,6 +590,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pkg.all = msg.items
 		m.filterPackages()
 		return m, nil
+	case actionMsg:
+		label, rescans := m.b.Action(msg.command)
+		if msg.err != nil {
+			m.setStatus(msg.command+" "+label+": "+msg.err.Error(), true)
+		} else {
+			m.setStatus(msg.command+" "+label+" finished", false)
+		}
+		if !rescans && msg.err == nil && m.busy == "" {
+			return m, m.rescan(msg.command)
+		}
+		cmds := []tea.Cmd{m.loadStatuses(), m.loadTodos()}
+		if m.screen == screenReport && m.reportCmd == msg.command {
+			cmds = append(cmds, m.loadReport(msg.command))
+		}
+		return m, tea.Batch(cmds...)
 	case updateMsg:
 		if msg.err != nil {
 			m.setStatus("update: "+msg.err.Error(), true)
@@ -692,6 +738,10 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case m.is(k, keys.ShowPackages):
 		return m, m.openPackages()
+	case m.is(k, keys.RunAction):
+		if len(m.rows) > 0 {
+			return m, m.runAction(m.rows[m.cursor].Command)
+		}
 	case m.is(k, keys.RescanStale):
 		if m.busy != "" {
 			m.setStatus("wait for "+m.busy+" to finish", true)
@@ -709,6 +759,8 @@ func (m *Model) reportKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.requestRescan(m.reportCmd)
 		}
 		return m, nil
+	case m.is(k, keys.RunAction):
+		return m, m.runAction(m.reportCmd)
 	case m.is(k, keys.Details):
 		m.expanded = !m.expanded
 		m.keepScroll = m.report.ScrollPercent()
@@ -1082,13 +1134,17 @@ func (m *Model) help() string {
 		return "enter keep  esc clear"
 	case m.screen == screenDashboard:
 		hints = [][]string{{"move", keys.Down, keys.Up}, {"report", keys.Open}, {"rescan", keys.Rescan},
-			{"rescan stale", keys.RescanStale}, {"packages", keys.ShowPackages}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
+			{"rescan stale", keys.RescanStale}, {"action", keys.RunAction}, {"packages", keys.ShowPackages}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
 	case m.screen == screenPackages:
 		hints = [][]string{{"move", keys.Down, keys.Up}, {"mark", keys.Mark}, {"update", keys.Update},
 			{"all/outdated", keys.ToggleAll}, {"back", keys.Back}, {"quit", keys.Quit}}
 	case m.screen == screenReport:
 		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
-			{"details", keys.Details}, {"rescan", keys.Rescan}, {"back", keys.Back}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
+			{"details", keys.Details}, {"rescan", keys.Rescan}}
+		if label, _ := m.b.Action(m.reportCmd); label != "" {
+			hints = append(hints, []string{label, keys.RunAction})
+		}
+		hints = append(hints, [][]string{{"back", keys.Back}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}...)
 	case m.screen == screenExplain:
 		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
 			{"ask again", keys.Reask}, {"back to tasks", keys.Back}, {"quit", keys.Quit}}

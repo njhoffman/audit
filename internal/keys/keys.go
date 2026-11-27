@@ -67,6 +67,7 @@ const (
 	Update       = "update"
 	ToggleAll    = "toggle_outdated"
 	ToggleNew    = "toggle_new"
+	RunAction    = "action"
 )
 
 // Action is something a key does.
@@ -92,6 +93,7 @@ var Actions = []Action{
 	{Bottom, "bottom", scrolling, []string{"end", "G"}},
 	{Open, "open", []Screen{Dashboard, Tasks}, []string{"enter", "l", "right"}},
 	{Rescan, "rescan", []Screen{Dashboard, Report}, []string{"r"}},
+	{RunAction, "action", []Screen{Dashboard, Report}, []string{"a"}},
 	{RescanStale, "rescan stale", []Screen{Dashboard}, []string{"R"}},
 	{Details, "details", []Screen{Report}, []string{"x"}},
 	{Reask, "ask again", []Screen{Explain}, []string{"r"}},
@@ -213,6 +215,7 @@ var FzfScreens = []Screen{Dashboard, Tasks}
 var fzfDefaults = Map{
 	Open:         {"enter"},
 	Rescan:       {"alt-r"},
+	RunAction:    {"alt-x"},
 	ShowTasks:    {"alt-t"},
 	ExplainTask:  {"alt-e"},
 	Editor:       {"alt-v"},

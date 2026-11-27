@@ -1020,6 +1020,7 @@ tui:
     open: [enter, l, right]        # dashboard: report; tasks: details
     rescan: [r]                    # dashboard, report
     rescan_stale: [R]              # dashboard: every stale or never-run command, like audit -r
+    action: [a]                    # dashboard, report: the command's action (packages update, history prune, files/configs clean, repos sync)
     toggle_details: [x]            # report: expand or collapse findings
     reask: [r]                     # explain: ask the AI again
     explain: [e]                   # tasks, task
@@ -1044,6 +1045,7 @@ tui:
   fzf_keys:
     open: [enter]                  # command list: report in $PAGER; tasks: details
     rescan: [alt-r]                # command list
+    action: [alt-x]                # command list: the command's action
     tasks: [alt-t]                 # command list: open the task list
     explain: [alt-e]               # this one and the rest: task list
     editor: [alt-v]

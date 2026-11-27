@@ -91,6 +91,9 @@ func TestDashboardArgs(t *testing.T) {
 	if !strings.Contains(bindFor(args, "alt-r"), "'rescan' {1}") || !strings.Contains(bindFor(args, "alt-t"), `'todo' '--fzf'`) {
 		t.Errorf("dashboard binds: %q", args)
 	}
+	if !strings.Contains(bindFor(args, "alt-x"), "'action' {1}") {
+		t.Errorf("the command's action: %q", bindFor(args, "alt-x"))
+	}
 	if bindFor(args, "alt-d") != "" {
 		t.Error("task actions are not bound on the command list")
 	}

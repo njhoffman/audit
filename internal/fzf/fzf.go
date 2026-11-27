@@ -129,11 +129,12 @@ func common(prompt, header string) []string {
 func (in Interface) DashboardArgs() []string {
 	reload := act("reload", in.helper("lines", "dashboard"))
 	args := common("audit> ", in.header([][2]string{
-		{keys.Open, "report"}, {keys.Rescan, "rescan"}, {keys.ShowTasks, "tasks"},
+		{keys.Open, "report"}, {keys.Rescan, "rescan"}, {keys.RunAction, "action"}, {keys.ShowTasks, "tasks"},
 	}))
 	args = append(args, "--preview", in.helper("preview", "report", "{1}"))
 	args = append(args, in.bind(keys.Open, act("execute", in.helper("page", "report", "{1}")))...)
 	args = append(args, in.bind(keys.Rescan, act("execute", in.helper("rescan", "{1}")), reload, "refresh-preview")...)
+	args = append(args, in.bind(keys.RunAction, act("execute", in.helper("action", "{1}")), reload, "refresh-preview")...)
 	args = append(args, in.bind(keys.ShowTasks, act("execute", in.self("todo", "--fzf")), reload, "refresh-preview")...)
 	return args
 }

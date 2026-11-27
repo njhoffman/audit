@@ -483,6 +483,7 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     open                enter l right         dashboard (report), tasks (details)
     rescan              r                     dashboard, report
     rescan_stale        R                     dashboard (every stale or never-run command, one at a time, like audit -r)
+    action              a                     dashboard, report (the command's action, below)
     toggle_details      x                     report (expand or collapse findings)
     reask               r                     explain (ask the AI again)
     explain             e                     tasks, task
@@ -502,6 +503,8 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     update              U                     packages
     toggle_outdated     a                     packages
 
+**action** on a dashboard row or a report leaves the dashboard for the command's built-in action: **audit packages update**, **audit history prune**, **audit repos sync**, **audit files clean** or **audit configs clean**, each with its own preview, question, failure report and backup locations. When it exits the dashboard reloads, rescanning first for files and configs, whose actions do not rescan themselves. Other commands have no action. fzf's command list runs it the same way.
+
 **packages** on the dashboard opens the package inventory of the last full **audit packages** run: one row per package across managers with version, latest, gap and release age, outdated ones only until **toggle_outdated** lists them all. **mark** marks rows; **update** leaves the dashboard for **audit packages update** _manager:name_ ... with the marked packages (or the one under the cursor), which shows its own plan, asks, and prompts for sudo where apt, snap or flatpak need it. When it exits, packages is rescanned and the list reloaded.
 
 The dashboard and **audit \-\-summary** line finding counts up in one column per severity (**◉** critical, **●** error, **▲** warning, **◆** notice, **○** info) and, after a **│**, open task counts in one per priority (**●** high, **▲** medium, **◆** low, **◇** suggestion), each in its color. A priority shares the marker and color of the severity whose findings become its tasks (error high, warning medium, notice low), so only critical, info and suggestion have markers of their own; a legend under the table names the markers in use; a run that found nothing shows **✓ none**. After the counts, **+**_n_ (red) and **-**_n_ (green) say how many findings the latest run added and resolved against the run before it of the same scope, as **\-\-diff** reports them. With **display.nerd_fonts** these markers are Nerd Font icons, and commands, report sections and summary groups get icons too. A report opens collapsed, one line per finding with its severity marker and with a compact summary: each group on as few lines as fit (**540 aliases  1890 functions ...**), without notes and without the lines of shells other than **$SHELL**; **toggle_details** expands every finding, with all its detail lines, and collapses them again, keeping the scroll position. Printed reports are always expanded. The note and find fields always use **enter** and **esc**. An unknown action, a blank key, **ctrl+c** or two actions sharing a key on one screen is a config error.
@@ -514,6 +517,7 @@ Typing goes to fzf's query, so actions are bound to alt- keys under **tui.fzf_ke
 
     open                enter    command list: report in $PAGER; tasks: details in $PAGER
     rescan              alt-r    command list
+    action              alt-x    command list
     tasks               alt-t    command list: open the task list
     explain             alt-e    tasks: AI explanation in $PAGER
     editor              alt-v    tasks: file locations in $EDITOR
