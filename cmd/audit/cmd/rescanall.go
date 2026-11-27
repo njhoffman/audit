@@ -146,6 +146,10 @@ func (a *app) rescanAll(ctx context.Context, f rescanFlags) error {
 	if f.ai {
 		a.engine.AI = a.aiClient("")
 	}
+	var openBefore map[int64]bool
+	if a.cfg.Notify.Enabled {
+		openBefore = a.openTaskIDs(ctx)
+	}
 	scan := func(c string) {
 		start := time.Now()
 		changes, err := a.scanOne(ctx, c, d.reporter(c), f.ai)
@@ -182,6 +186,7 @@ func (a *app) rescanAll(ctx context.Context, f rescanFlags) error {
 	}
 	wg.Wait()
 	d.stop()
+	a.notifyNewTasks(context.WithoutCancel(ctx), openBefore)
 	if err := ctx.Err(); err != nil {
 		return err
 	}

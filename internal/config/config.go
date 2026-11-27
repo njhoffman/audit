@@ -48,6 +48,15 @@ type Config struct {
 	ShellHistory ShellHistoryConfig `mapstructure:"shell_history" yaml:"shell_history"`
 	Todo         TodoConfig         `mapstructure:"todo" yaml:"todo"`
 	Schedule     ScheduleConfig     `mapstructure:"schedule" yaml:"schedule"`
+	Notify       NotifyConfig       `mapstructure:"notify" yaml:"notify"`
+}
+
+// NotifyConfig controls the desktop notification after an unattended
+// audit -r (the schedule timer, or any run without a terminal).
+type NotifyConfig struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
+	// MinPriority is the least urgent priority a new task needs to count.
+	MinPriority string `mapstructure:"min_priority" yaml:"min_priority"`
 }
 
 // ScheduleConfig is the unattended run audit schedule install sets up.
@@ -480,6 +489,8 @@ func defaults(v *viper.Viper) {
 	// packages reaches the registries; the others stay local by default.
 	v.SetDefault("schedule.commands", []string{"system", "environment", "repos", "files", "configs", "scripts", "history", "ai"})
 	v.SetDefault("schedule.ai", false)
+	v.SetDefault("notify.enabled", false)
+	v.SetDefault("notify.min_priority", "high")
 	v.SetDefault("system.journal", DefaultJournalFlags)
 	v.SetDefault("system.logs", DefaultLogs)
 	v.SetDefault("system.log_max_lines", 5000)
@@ -714,6 +725,9 @@ func (c *Config) validate() error {
 	if c.System.Services.HighRestarts < 0 {
 		return fmt.Errorf("system.services.high_restarts must be 0 (off) or more, got %d", c.System.Services.HighRestarts)
 	}
+	if !slices.Contains([]string{"high", "medium", "low", "suggestion"}, c.Notify.MinPriority) {
+		return fmt.Errorf("notify.min_priority must be high, medium, low or suggestion, got %q", c.Notify.MinPriority)
+	}
 	if strings.TrimSpace(c.Schedule.Calendar) == "" || strings.ContainsAny(c.Schedule.Calendar, "\n\r") {
 		return fmt.Errorf("schedule.calendar must be a systemd OnCalendar spec on one line, got %q", c.Schedule.Calendar)
 	}
@@ -881,6 +895,13 @@ schedule:
   calendar: daily
   commands: [system, environment, repos, files, configs, scripts, history, ai]
   ai: false
+
+# After an unattended audit -r (the schedule timer, or no terminal), send a
+# desktop notification (notify-send) when tasks at or above min_priority
+# are new or reopened. Needs a session bus; off by default.
+notify:
+  enabled: false
+  min_priority: high
 
 # Findings to hide. Each entry is a full key (command:check:subject), a
 # command-qualified check (packages:pnpm.legacy_shim) or a bare check id.

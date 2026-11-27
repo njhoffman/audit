@@ -234,7 +234,7 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 :   Prints the effective configuration and the file it came from. **-i** writes the default file (**-f** overwrites), **-p** prints the path.
 
 **schedule**
-:   Shows the systemd user timer that rescans unattended: whether **audit.timer** is installed and enabled, what it runs, when it runs next and how its last run ended (**-j** for JSON). **install** writes **audit.service** and **audit.timer** under **$XDG_CONFIG_HOME/systemd/user** and enables the timer (**-N** prints the files instead). On **schedule.calendar** (a systemd OnCalendar spec, default **daily**; missed runs happen at the next boot) it runs this binary as **audit -r -q -O** _schedule.commands_, which rescans the stale ones. **packages** is left out of the default command list because it asks the registries. With **schedule.ai** it adds **-A**, an AI review per rescanned command, which costs money unless the results are unchanged. No sudo is needed. **remove** disables the timer and deletes both files. Run **install** again after changing the settings.
+:   Shows the systemd user timer that rescans unattended: whether **audit.timer** is installed and enabled, what it runs, when it runs next and how its last run ended (**-j** for JSON). **install** writes **audit.service** and **audit.timer** under **$XDG_CONFIG_HOME/systemd/user** and enables the timer (**-N** prints the files instead). On **schedule.calendar** (a systemd OnCalendar spec, default **daily**; missed runs happen at the next boot) it runs this binary as **audit -r -q -O** _schedule.commands_, which rescans the stale ones. **packages** is left out of the default command list because it asks the registries. With **schedule.ai** it adds **-A**, an AI review per rescanned command, which costs money unless the results are unchanged. No sudo is needed. **remove** disables the timer and deletes both files. Run **install** again after changing the settings. With **notify.enabled**, a run that opens tasks at or above **notify.min_priority** (new ones, or ones a finding reopened) sends one desktop notification listing them through **notify-send**, when a session bus is reachable.
 
 **export**
 :   Writes the export files (see **EXPORT FILES**) into **export.dir**, or into _dir_ with **-d**, and prints the directory. Nothing is scanned. With **export.enabled**, the default, the files are already rewritten after every command that saves something, including one that then fails; this writes them on demand.
@@ -564,6 +564,9 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       commands:
         files: {warn: 168h, old: 720h}
     ignore: []                 # command:check:subject, command:check or check
+    notify:
+      enabled: false           # after an unattended audit -r (no terminal, e.g. the schedule timer): notify-send about new or reopened tasks
+      min_priority: high       # the least urgent priority that counts
     schedule:
       calendar: daily          # systemd OnCalendar spec for audit schedule install
       commands: [system, environment, repos, files, configs, scripts, history, ai]   # rescanned when stale; [] for all

@@ -13,8 +13,10 @@ import (
 	"time"
 
 	"github.com/njhoffman/audit/internal/core"
+	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/finding"
 	"github.com/njhoffman/audit/internal/progress"
+	"github.com/njhoffman/audit/internal/todo"
 )
 
 // fakeScans records the scans of fake scanners.
@@ -142,5 +144,65 @@ func TestRescanAllWithAIReview(t *testing.T) {
 	saved, err := a.engine.Saved(context.Background(), "system", "")
 	if err != nil || saved == nil || saved.Analysis == nil {
 		t.Errorf("the review is saved with the run: %+v %v", saved, err)
+	}
+}
+
+func TestRescanAllNotifies(t *testing.T) {
+	cfgHome, _ := env(t)
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1000/bus")
+	f := &fakeScans{}
+	fake := &exec.Fake{}
+	fake.AddOutput("", "notify-send")
+	setup := func(a *app) { f.setup(a); a.runner = fake }
+	notified := func() []string {
+		var out []string
+		for _, c := range fake.Calls {
+			if c[0] == "notify-send" {
+				out = append(out, strings.Join(c[1:], " | "))
+			}
+		}
+		fake.Calls = nil
+		return out
+	}
+
+	// Off by default.
+	if r := runArgsWith(t, setup, "-r", "-O", "system"); r.e != nil || len(notified()) != 0 {
+		t.Fatalf("disabled: %v %v", r.e, notified())
+	}
+	writeConfig(t, cfgHome, "notify: {enabled: true, min_priority: medium}\n")
+	// The system task is open already; repos' warning makes a new medium one.
+	r := runArgsWith(t, setup, "-r", "-a", "-O", "system,repos")
+	n := notified()
+	if r.e != nil || len(n) != 1 || !strings.Contains(n[0], "audit: 1 new task(s) at medium or above") || !strings.Contains(n[0], "repos:") ||
+		strings.Contains(n[0], "system:") {
+		t.Fatalf("one new task: %v %v", r.e, n)
+	}
+	if r := runArgsWith(t, setup, "-r", "-a", "-O", "repos"); r.e != nil || len(notified()) != 0 {
+		t.Errorf("nothing new, no notification: %v", r.e)
+	}
+	writeConfig(t, cfgHome, "notify: {enabled: true}\n")
+	if r := runArgsWith(t, setup, "-r", "-a", "-O", "files"); r.e != nil || len(notified()) != 0 {
+		t.Errorf("a new medium task is below the default high: %v", r.e)
+	}
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "")
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	writeConfig(t, cfgHome, "notify: {enabled: true, min_priority: low}\n")
+	if r := runArgsWith(t, setup, "-r", "-a", "-O", "ai"); r.e != nil || len(notified()) != 0 {
+		t.Errorf("no session bus, no notification: %v", r.e)
+	}
+}
+
+func TestNewUrgentTasks(t *testing.T) {
+	before := map[int64]bool{1: true}
+	after := []todo.Todo{
+		{ID: 1, Priority: todo.High, Status: todo.Open},
+		{ID: 2, Priority: todo.High, Status: todo.Open},
+		{ID: 3, Priority: todo.Low, Status: todo.Open},
+		{ID: 4, Priority: todo.High, Status: todo.Resolved},
+		{ID: 5, Priority: todo.Medium, Status: todo.InProgress},
+	}
+	got := newUrgentTasks(before, after, todo.Medium)
+	if len(got) != 2 || got[0].ID != 5 || got[1].ID != 2 { // todo.Sort: in progress first
+		t.Errorf("%+v", got)
 	}
 }

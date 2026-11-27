@@ -22,7 +22,7 @@ nothing tells you when a scan would turn up something new.
   install|remove|status` writes `~/.config/systemd/user/audit.{service,timer}`
   running `audit -r -q`. Config key for the calendar spec (default daily) and
   which commands it covers. No sudo, no network-heavy commands by default.
-- [ ] **Notify on new high-priority tasks.** (p3) [feature] After an unattended scan,
+- [x] **Notify on new high-priority tasks.** (p3) [feature] After an unattended scan,
   `notify-send` (when a session bus exists) with the count of tasks that are
   new since the previous run, and a pointer to `audit todo`. Opt-in
   `notify.enabled`, `notify.min_priority`.
