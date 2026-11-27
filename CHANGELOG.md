@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.67.2] - 2026-11-26
+
 ### Changed
 
 - Internal: assembling the `audit packages update` plan, planning the stale-runtime cleanup from the saved run and the runtime cache, listing installed pythons and remembering the node major moved from the command layer into `internal/core` (`PackagesScanner.UpdatePlan`, `RuntimeCleanupPlan`, `InstalledPythons`, `RememberNodeMajor`) with their own tests. No user-visible change.
