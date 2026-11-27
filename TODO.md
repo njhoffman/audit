@@ -348,6 +348,7 @@ Still open: whether format detection should refuse pruning ambiguous histories.
   rows from `audit packages list -u -T` (every manager, colored by level), alt-u upgrades the marked rows
   through `audit packages update REFS`, toggles for patch/minor/major and per manager. Waiting for the
   uncommitted work in the fzx checkout (VERSION 0.119.0, menu/session changes) to be committed first.
+  In the same change, replace fzx's pipx mode with uv (uv tool list / upgrade / uninstall), as asked 2026-11-26.
 - [x] **One aligned package list with update levels, and fzf selection.** (p2) [feature] (2026-11-26, asked for: `audit packages list` with -M/-g/-u/-T, `update -g/--all/--pick`; ctrl+f/ctrl+b paging)
 
 - [x] **Preview package updates and history pruning from reports.** (`a` on a dashboard row or report, `alt-x` in fzf: the command's action on the terminal; the packages screen covers selected updates) [feature] (p3)
