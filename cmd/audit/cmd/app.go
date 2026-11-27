@@ -354,6 +354,13 @@ func (a *app) statuses(ctx context.Context) ([]render.CommandStatus, error) {
 		out[i] = render.CommandStatus{Command: c, Thresholds: a.cfg.Stale.For(c), Open: render.OpenCounts(byCmd[c])}
 		if ri, ok := latest[c]; ok {
 			out[i].Latest = &ri
+			added, resolved, ok, err := a.store.RunDelta(ctx, ri.ID)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				out[i].Delta = &render.Delta{Added: added, Resolved: resolved}
+			}
 		}
 	}
 	return out, nil

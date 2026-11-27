@@ -460,6 +460,30 @@ func (s *Store) PreviousRun(ctx context.Context, r *run.Run) (*run.Run, error) {
 	return prev, s.loadFindings(ctx, prev)
 }
 
+// RunDelta counts the findings run id added and resolved against the run
+// of its command and scope saved just before it, keyed by command, check
+// and subject as finding.Diff is. ok is false when there is no earlier run.
+func (s *Store) RunDelta(ctx context.Context, id int64) (added, resolved int, ok bool, err error) {
+	var prev int64
+	err = s.db.QueryRowContext(ctx, `SELECT p.id FROM runs r JOIN runs p ON p.command=r.command AND p.scope=r.scope AND p.id<r.id
+		WHERE r.id=? ORDER BY p.id DESC LIMIT 1`, id).Scan(&prev)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, false, nil
+	}
+	if err != nil {
+		return 0, 0, false, err
+	}
+	const only = `SELECT COUNT(*) FROM (SELECT DISTINCT command, check_id, subject FROM findings f WHERE run_id=?
+		AND NOT EXISTS (SELECT 1 FROM findings g WHERE g.run_id=? AND g.command=f.command AND g.check_id=f.check_id AND g.subject=f.subject))`
+	if err = s.db.QueryRowContext(ctx, only, id, prev).Scan(&added); err != nil {
+		return 0, 0, false, err
+	}
+	if err = s.db.QueryRowContext(ctx, only, prev, id).Scan(&resolved); err != nil {
+		return 0, 0, false, err
+	}
+	return added, resolved, true, nil
+}
+
 // GetRun returns one run by id, or nil, nil when absent.
 func (s *Store) GetRun(ctx context.Context, id int64) (*run.Run, error) {
 	r, err := scanRun(s.db.QueryRowContext(ctx, `SELECT `+runCols+` FROM runs WHERE id=?`, id))

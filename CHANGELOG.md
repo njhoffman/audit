@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The dashboard and `audit --summary` show after each command's finding counts how many findings its latest run added (`+3`, red) and resolved (`-5`, green) against the run before it of the same scope, as `--diff` lists them.
+
 ## [0.54.0] - 2026-11-26
 
 ### Added

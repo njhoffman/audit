@@ -516,3 +516,19 @@ func TestPackagesCarriedHeader(t *testing.T) {
 		t.Errorf("carried header:\n%s", out)
 	}
 }
+
+func TestRunCountsDelta(t *testing.T) {
+	p, _ := printer(0)
+	rows := []CommandStatus{
+		{Command: "a", Latest: &store.RunInfo{Counts: finding.Counts{finding.Warning: 4}}, Delta: &Delta{Added: 3, Resolved: 5}},
+		{Command: "b", Latest: &store.RunInfo{Counts: finding.Counts{finding.Warning: 2}}, Delta: &Delta{Resolved: 1}},
+		{Command: "c", Latest: &store.RunInfo{Counts: finding.Counts{finding.Warning: 2}}, Delta: &Delta{}},
+		{Command: "d", Latest: &store.RunInfo{Counts: finding.Counts{finding.Warning: 2}}},
+	}
+	cc := NewCountColumns(rows)
+	for i, want := range []string{"▲ 4  +3 -5", "▲ 2  -1", "▲ 2", "▲ 2"} {
+		if got := p.RunCounts(cc, rows[i]); got != want {
+			t.Errorf("%s: %q, want %q", rows[i].Command, got, want)
+		}
+	}
+}

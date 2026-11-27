@@ -22,7 +22,13 @@ type CommandStatus struct {
 	Thresholds config.Thresholds
 	// Open counts open and in-progress tasks by priority.
 	Open map[todo.Priority]int
+	// Delta is what the latest run changed against the one before it of
+	// the same scope; nil when there is no earlier run.
+	Delta *Delta
 }
+
+// Delta counts the findings a run added and resolved.
+type Delta struct{ Added, Resolved int }
 
 // Summary prints when each command last ran, how fresh that is, what it
 // found and how many tasks are still open.
@@ -142,7 +148,23 @@ func (p *Printer) RunCounts(cc CountColumns, r CommandStatus) string {
 		}
 		return p.fg("10").Render(mark + " none")
 	}
-	return p.FindingCounts(cc, r.Latest.Counts)
+	return p.FindingCounts(cc, r.Latest.Counts) + p.deltaText(r.Delta)
+}
+
+// deltaText is "  +3 -5" after the counts: new findings in red, resolved in
+// green, each left out when zero, nothing when the run changed nothing.
+func (p *Printer) deltaText(d *Delta) string {
+	if d == nil || (d.Added == 0 && d.Resolved == 0) {
+		return ""
+	}
+	var parts []string
+	if d.Added > 0 {
+		parts = append(parts, p.fg("9").Render(fmt.Sprintf("+%d", d.Added)))
+	}
+	if d.Resolved > 0 {
+		parts = append(parts, p.fg("10").Render(fmt.Sprintf("-%d", d.Resolved)))
+	}
+	return "  " + strings.Join(parts, " ")
 }
 
 // FindingCounts is c as aligned cells: each severity's marker and count in

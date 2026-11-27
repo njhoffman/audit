@@ -496,3 +496,30 @@ func TestPruneClosedTodos(t *testing.T) {
 		t.Errorf("kept %v, want %v", keys, want)
 	}
 }
+
+func TestRunDelta(t *testing.T) {
+	s := open(t)
+	base := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	f := func(subject string, sev finding.Severity) finding.Finding {
+		return finding.Finding{Command: "repos", Check: "repo.dirty", Subject: subject, Severity: sev}
+	}
+	first := sampleRun("repos", base, f("a", finding.Notice), f("b", finding.Notice))
+	scoped := sampleRun("repos", base.Add(time.Hour), f("z", finding.Notice))
+	scoped.Scope = "x"
+	second := sampleRun("repos", base.Add(2*time.Hour), f("b", finding.Warning), f("c", finding.Notice), f("d", finding.Notice), f("d", finding.Notice))
+	for _, r := range []*run.Run{first, scoped, second} {
+		if err := s.SaveRun(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	added, resolved, ok, err := s.RunDelta(ctx, second.ID)
+	if err != nil || !ok || added != 2 || resolved != 1 {
+		t.Errorf("c and d added (d once), a resolved, b kept despite its severity: +%d -%d %v %v", added, resolved, ok, err)
+	}
+	if _, _, ok, err := s.RunDelta(ctx, first.ID); ok || err != nil {
+		t.Errorf("no earlier run: %v %v", ok, err)
+	}
+	if _, _, ok, _ := s.RunDelta(ctx, scoped.ID); ok {
+		t.Error("a scoped run compares with its own scope only")
+	}
+}

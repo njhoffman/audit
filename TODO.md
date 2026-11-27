@@ -40,9 +40,11 @@ show the current state, not what moved.
 - [x] **`audit <command> --diff`** (`-w`, since -d is repos' --dirty; also reports severity changes) (p2) [feature] (and `audit history runs diff A B`): findings
   added and resolved between the last two runs (or two run IDs), keyed by
   command, check and subject, the same key ignore rules use.
-- [ ] **Deltas on the dashboard and summary.** (p3) [feature] `+3 / -5` next to each
-  command's finding count, and a "new since last run" filter in the task
-  editor and tasks page.
+- [x] **Deltas on the dashboard and summary.** (p3) [feature] `+3 -5` next to each
+  command's finding count (Store.RunDelta, the same key as --diff).
+- [ ] **"New since last run" filter.** (p3) [feature] Split from the deltas item: a filter
+  in the task editor and tasks page for tasks the latest run of their command created
+  or reopened.
 - [ ] **Trend in the HTML index.** [feature] (p3) Finding counts per severity over the kept
   runs, as a small inline chart per command.
 - [ ] **History of fixes and what audit has done.** (p3) [feature] A log that outlives run
