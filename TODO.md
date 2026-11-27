@@ -13,10 +13,112 @@ suggestions describe proposed behavior rather than existing guarantees.
 
 Reviewed: 2026-11-26
 
-## 1. Rescan everything and run unattended
+## 11. Tips
 
-`audit -r` rescans every stale command, but only when started by hand, and
-nothing tells you when a scan would turn up something new.
+- [ ] **Proactive tips, not tied to a problem.** (p3) [feature] Advice on performance,
+  organization and good practice found while scanning (a slow startup file
+  that could be lazy-loaded, aliases scattered over many files, a cache
+  directory worth moving, a config that could use a newer option), as their
+  own lowest level below suggestions: a `tip` finding kind and a `tip` task
+  priority, hidden from counts and the dashboard's columns by default and
+  shown in their own report section. Suggestions today (`Kind ==
+  Suggestion`) still answer a detected issue; tips need no issue.
+
+Decisions to make: whether tips become tasks at all or only show in reports;
+whether they come from static checks, the AI review, or both; how to keep
+them from being noise (one per check, dismissable like ignore rules).
+
+## 12. AI review and fix workflow
+
+- [x] **Commit AI fixes made inside a git repo.** (ai.commit_fixes: ask; git status snapshot with content hashes before the session; only files clean before are committed, with --only) (p2) [feature] After `audit todo fix`
+  (fixTask in cmd/audit/cmd/ai.go) succeeds and the rescan closes the task, check
+  whether the files it changed are in a git work tree. If they are, offer a
+  commit of only those files with a message naming the task (`audit: fix #ID
+  <title>`). Today the change is left uncommitted, so it is easy to lose or to
+  mix into unrelated work.
+  Decisions: commit on its own or after a prompt (config `ai.commit_fixes`);
+  how to find the changed files (diff `git status` before and after, or ask the
+  session to report them); refuse when the tree was already dirty.
+- [x] **Pass the task's explanation to AI fix.** (p2) [feature] `audit todo explain`
+  answers are kept only in `llm_cache` under a prompt hash, and FixTaskPrompt
+  (internal/llm/prompts.go) sends just the task and its findings. Look up the
+  cached explanation for the task (or save explanations against the task id) and
+  add it to the fix prompt as context, marked as an earlier AI answer and not as
+  instructions.
+- [x] **AI review as part of scanning, with suggestions as findings.** (ai.review_on_scan, empty by default; ai.review suggestions at the lowest priority; ai.review_daily_usd cap, cached answers free) (p2) [feature]
+  `--ai`/`-a` already adds a review to a scan (Engine.Analyze), but only when
+  given, and the review is prose in `run.Analysis`, so its points never become
+  tasks. Add config `ai.review_on_scan` (off by default) and ask for structured
+  output (JSON list of issues/suggestions) that turns into findings of a
+  dedicated `ai-review` check, deduped against the existing findings.
+  Decisions: which commands it applies to; cost limit per scan; whether
+  AI-sourced findings get a lower default priority.
+- [ ] **Show remaining AI usage on the dashboard.** (p3) [feature] Before an AI
+  review or fix, show how much of the provider's usage window is left, and skip
+  automatic reviews (above) when it is under a threshold. Needs research first:
+  `claude` and `codex` report usage differently (rate-limit info in session
+  output, cost per call in our cache); the cost summed from `llm_cache` is a
+  fallback that only counts audit's own calls.
+
+## 15. Review findings (2026-11-26, second pass)
+
+- [ ] **Build on a supported Go.** (p1) [security] `govulncheck ./...` reports 36
+  vulnerabilities reachable from audit's code: most in the standard library
+  of go1.25.7 (net/http, html/template, crypto/x509, crypto/tls, net/url;
+  `htmlreport.WriteTasks`, the tasks server and `repos.ParseRemote` are on
+  the traces), plus golang.org/x/net v0.41.0 (fixed in v0.60.0),
+  golang.org/x/text v0.30.0 and github.com/yuin/goldmark v1.7.13. Several
+  fixes exist only in go1.26.x, so Go 1.25 no longer gets them. The
+  workstation's Go is go1.25.7 (`golang-go 2:1.25~0longsleep1`, and the
+  justfile's `GOTOOLCHAIN=local` holds `just install` to it), and CI and the
+  release workflow use `go-version: '1.25'`. Move go.mod, CI and release to a
+  supported Go, install it locally, update x/net, x/text and goldmark, and
+  add `govulncheck ./...` to `just check` or CI so this shows up on its own.
+- [ ] **Update the other dependencies.** (p3) [housekeeping] `go list -u -m all`
+  lists 30+ newer modules, among them charmbracelet/bubbles v1.0.0 (from
+  v0.21.0; check for API changes in the list, viewport and textinput
+  components the TUI uses), x/ansi v0.12.0, chroma v2.27.0 and gopsutil
+  v4.26.10. Update in one change after the Go move, with the TUI tests and a
+  look at the dashboard.
+- [ ] **One scan of a command at a time.** (p3) [bug] Nothing stops the schedule
+  timer's `audit -r` and a manual scan (or the dashboard's rescan) of the
+  same command from overlapping. SQLite's WAL mode and busy timeout keep the
+  writes from failing, and the fixes log reads the old status inside the
+  save transaction, so nothing is corrupted; but both runs do the full work
+  (a packages scan refreshes the registries twice), and each reconciles
+  from the tasks it read before the other saved, so the last to finish
+  decides the task rows. A per-command lock (flock on a file in the state
+  directory) held across Execute would serialize them, with the waiting run
+  saying what it waits for.
+- [ ] **Honor ctrl+c in the GitHub login lookup.** (p3) [bug] `reposScanner`
+  asks `githubUser(context.Background(), true)`, so an interrupt during the
+  first repos scan (before the login is remembered) waits up to 15s for `gh`.
+  Pass the command's context through `reposScanner`.
+- [ ] **Long flag names in the man page.** (p3) [docs] 21 flags appear in
+  `man/audit.1.md` only by their letter (`-O`, `-s`, `-P`, ...): --categories,
+  --dir, --dirty, --hint, --installed, --limit, --lines, --move, --no-fetch,
+  --note, --offline, --orphans, --owner, --path, --port, --push, --release,
+  --serve, --since, --skip-checksum, --tasks. Name both forms, and extend
+  `TestEveryFlagHasShortForm` (or a sibling) to check that every long flag
+  is in the man page.
+- [ ] **Images behind their tag in `audit containers`.** (p3) [feature] Left out
+  of the containers scanner: an image whose tag now points at a newer digest
+  in its registry (`docker manifest inspect` or `skopeo inspect` against the
+  local `RepoDigests`), reported as info with the pull command. Needs
+  network and registry auth, so off by default (`containers.check_tags`).
+- [ ] **Fixes log on the dashboard and in HTML.** (p3) [feature] `audit history
+  runs fixes` is terminal-only. A dashboard panel (the last few fixes under
+  the table, or a key that opens the log as a report) and a section on the
+  tasks page would show the same data where the tasks are.
+- [ ] **Coverage of the renderers and two scanners.** (p3) [test] Lowest
+  per-package coverage: `internal/scan/users` 66.9%, `internal/render` 70.7%,
+  `internal/scan/storage` 72.0%, `cmd/audit/cmd` 77.6%. render's report and
+  package views carry the most untested branches (empty data, narrow
+  widths, nerd-font glyphs).
+
+## Completed
+
+### Rescan everything and run unattended (completed 2026-11-26)
 
 - [x] **Scheduled scans through a systemd user timer.** (p2) [feature] `audit schedule
   install|remove|status` writes `~/.config/systemd/user/audit.{service,timer}`
@@ -26,16 +128,10 @@ nothing tells you when a scan would turn up something new.
   `notify-send` (when a session bus exists) with the count of tasks that are
   new since the previous run, and a pointer to `audit todo`. Opt-in
   `notify.enabled`, `notify.min_priority`.
-
 - [x] **Rescan every stale command from the dashboard.** (`R`, tui.keys rescan_stale: audit -r's targets one at a time, asking the system-managers question once; the TUI only, fzf has no binding) (p2) [feature] A key (say `R`) that
   runs what `audit -r` runs, with the dashboard rows as its progress.
 
-Decided 2026-11-26: scheduled runs skip the AI review unless `schedule.ai` is set.
-
-## 2. Change tracking between runs
-
-Runs are pruned to `history` per command, but nothing compares them. Tasks
-show the current state, not what moved.
+### Change tracking between runs (completed 2026-11-26)
 
 - [x] **`audit <command> --diff`** (`-w`, since -d is repos' --dirty; also reports severity changes) (p2) [feature] (and `audit history runs diff A B`): findings
   added and resolved between the last two runs (or two run IDs), keyed by
@@ -58,10 +154,7 @@ show the current state, not what moved.
   when a finding comes back, its task and the explain prompt can show that it
   was fixed before, when and how.
 
-## 3. New scanners (candidates)
-
-Each one implements `core.Scanner`, joins `core.Commands`, gets a subcommand,
-an entry in `scanEntries` (cmd/audit/cmd/scanners.go) and a config section.
+### New scanners (candidates) (completed 2026-11-26)
 
 - [x] **`audit containers`** [feature] (p3) (`containers clean` landed in 0.67.0; images behind their tag are not done): docker and podman dangling images, unused
   volumes, stopped containers older than N days, images far behind their tag,
@@ -73,13 +166,7 @@ an entry in `scanEntries` (cmd/audit/cmd/scanners.go) and a config section.
 - [x] **Firmware in `system updates`** [feature] (p3): `fwupdmgr get-updates` (no sudo
   needed to list) as `updates.firmware`.
 
-Decisions to make: which of these is worth building at all; whether
-`backups` should be config-driven only (no auto-detection).
-
-## 4. Data retention in the store
-
-Runs are bounded per command. Update runs are also pruned, but share one
-global limit; AI cache entries and closed tasks still have no age limit.
+### Data retention in the store (completed 2026-11-26)
 
 - [x] **Prune `llm_cache`.** (p2) [chore] Entries are keyed by prompt hash, so every
   changed result set adds a row that is never read again. Drop entries older
@@ -101,7 +188,7 @@ global limit; AI cache entries and closed tasks still have no age limit.
   version, each step in its own transaction, scales to the next schema change
   and makes each step testable on its own.
 
-## 5. Architecture cleanups
+### Architecture cleanups (completed 2026-11-26)
 
 - [x] **One scanner registry.** (scanEntries in cmd/audit/cmd/scanners.go builds the cobra commands and default scanners; a test keeps it in step with core.Commands and core.ScopeFlags, which stay in core for its own use) (p2) [refactor] Adding a command touches `core.Commands`,
   `core.ScopeFlags`, `defaultScanner` in `cmd/audit/cmd/tui.go`, the
@@ -130,12 +217,7 @@ global limit; AI cache entries and closed tasks still have no age limit.
   packages.TagCandidates and its batching and saving core.AITag, over
   TagStore and Asker interfaces.
 
-## 6. Test coverage gaps
-
-Latest validation in this session: `just check` passed (formatting, lint, race tests and
-build); the final bash-record pruning fix also passed focused race tests,
-lint and build. Coverage percentages below are from 2026-10-20, not a new
-coverage run.
+### Test coverage gaps (completed 2026-11-26)
 
 - [x] **`internal/core` at 90.4%** [test] (done 2026-11-26 in 0.67.4: `Engine.Store` is the `RunStore` interface, and tests cover the Prune, Todos and SaveTodos failures of Execute, the failed save of Analyze, the AI review on scan with its budget, the backups and containers adapters, dpkg ownership and the python cleanup; what stays uncovered is json.Marshal errors of the adapters) (was 41.7%; 79.6% before the 2026-11-26 tests for the history and system adapters, carried system managers and the repos cache). (p3) What is left: the
   Prune and SaveTodos failure branches of Execute (testing them needs
@@ -149,7 +231,7 @@ coverage run.
   pushes. The bump-inference from CHANGELOG headings and the pre-1.0 rule
   are pure functions worth table tests; the git side can go through a fake.
 
-## 7. Housekeeping
+### Housekeeping (completed 2026-11-26)
 
 - [x] **Refresh history-related documentation wording.** [docs] (p3) `CLAUDE.md`
   omits the history scanner and prune action from its overview and tree.
@@ -165,26 +247,17 @@ coverage run.
   still omits `internal/{ai,configs,export,files,registry,
   repos,scripts,taskserver}` and `internal/scan/{resources,security,storage,
   updates}`.
-
 - [x] **Bring CLAUDE.md and the TODO intro up to date.** (p3) [docs] CLAUDE.md's overview
   and architecture tree omit the `history` scanner and internal/history, though
   core.Commands includes it, and its "untagged is p2" (also in this file's intro)
   contradicts the rule that every open item has an explicit priority.
-
 - [x] **Fix CI lint, failing on main since at least v0.22.1.** (p1) [bug] CI pins golangci-lint
   v2.11.4 and the local copy is 2.15.0, so `just lint` passes while CI stops at two gosec
   G115 errors in internal/history/prune.go:168,171 and never reaches its test step. Fix or
   annotate those conversions and use one version in both places, since `just release`
   cannot catch what only CI reports.
 
-## 8. Package management integration
-
-The Python `pkgm` prototype is integrated into `audit packages`, starting in
-v0.2.0: persisted inventories and versions; cached registry release checks;
-updates through uv, pnpm, cargo, go, gem, gh, apt, snap and flatpak; runtime
-updates and migrations; and GitHub-tracked loose binaries. Keep these in
-`audit packages` as the single package inventory and update workflow.
-`system programs` currently checks service configuration only.
+### Package management integration (completed 2026-11-26)
 
 - [x] **List outdated packages directly.** `audit packages outdated`
   refreshes installed/registry versions; `-F` forces registry lookups,
@@ -219,7 +292,6 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   groups, manager self-updates and install/update recipes against audit's
   managers and tracked binaries; document remaining gaps before retiring
   the prototype. The original prototype was not found in this checkout.
-
 - [x] **Show the package inventory and outdated list in the dashboard.** (p2) [feature]
   tuiBackend.Report (cmd/audit/cmd/tui.go) renders findings only, and internal/tui
   has no inventory view, so installed versions and available updates cannot be
@@ -279,7 +351,6 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   then resolves the narrowed run's tasks (reproduced 2026-11-05: runs 69 and 70). Export
   already uses the latest full run. Default the saved views to that too, and keep tasks of
   explicitly requested managers open. Check whether `outdated -M` does the same.
-
 - [x] **Update git-installed crates through cargo-update.** (latest = git ls-remote of the followed branch; updated = the installed commit changed) (p3) [feature] `packages update`
   skips 31 packages installed from git or a path because they have no registry
   version. `cargo install-update -g` can update git crates, but audit has no latest
@@ -293,7 +364,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   which keeps showing the updated packages as behind until the next full scan.
   Merge a scoped run's inventories into the full view, or rescan fully after an update.
 
-## 9. Shell history follow-ups
+### Shell history follow-ups (completed 2026-11-26)
 
 - [x] **Scan shell histories.** Dashboard and `audit history` find repeated
   entries, large multiline entries and configured literal substring matches
@@ -343,12 +414,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   absolute paths and test `~`, relative paths, `$XDG_DATA_HOME` and
   `${XDG_DATA_HOME}` with the variable unset.
 
-Decided 2026-11-26: backup cleanup is manual (`audit history backups`, by age or count)
-unless a retention key is set. Patterns may be named: an entry is a string (keeps
-`pattern-N`) or `{name, match}` (subject `PATH:NAME`).
-Still open: whether format detection should refuse pruning ambiguous histories.
-
-## 10. Dashboard actions
+### Dashboard actions (completed 2026-11-26)
 
 - [x] **fzx integration: an updates mode in fzx's packages module.** (fzx 0.121.0: `fzx -m packages:updates`; pipx replaced by uv) (p2) [feature] Decided 2026-11-26:
   rows from `audit packages list -u -T` (every manager, colored by level), alt-u upgrades the marked rows
@@ -356,7 +422,6 @@ Still open: whether format detection should refuse pruning ambiguous histories.
   uncommitted work in the fzx checkout (VERSION 0.119.0, menu/session changes) to be committed first.
   In the same change, replace fzx's pipx mode with uv (uv tool list / upgrade / uninstall), as asked 2026-11-26.
 - [x] **One aligned package list with update levels, and fzf selection.** (p2) [feature] (2026-11-26, asked for: `audit packages list` with -M/-g/-u/-T, `update -g/--all/--pick`; ctrl+f/ctrl+b paging)
-
 - [x] **Preview package updates and history pruning from reports.** (`a` on a dashboard row or report, `alt-x` in fzf: the command's action on the terminal; the packages screen covers selected updates) [feature] (p3)
   Offer outdated-only inventory, selected-package update plans and history
   prune plans from the dashboard/fzf interfaces. Keep scope visible, require
@@ -366,54 +431,7 @@ Still open: whether format detection should refuse pruning ambiguous histories.
   but `audit todo` (render.Printer.Todos in internal/render/summary.go) and the fzf
   task lines still print bare words. Use the same Glyphs there so the three agree.
 
-## 11. Tips
-
-- [ ] **Proactive tips, not tied to a problem.** (p3) [feature] Advice on performance,
-  organization and good practice found while scanning (a slow startup file
-  that could be lazy-loaded, aliases scattered over many files, a cache
-  directory worth moving, a config that could use a newer option), as their
-  own lowest level below suggestions: a `tip` finding kind and a `tip` task
-  priority, hidden from counts and the dashboard's columns by default and
-  shown in their own report section. Suggestions today (`Kind ==
-  Suggestion`) still answer a detected issue; tips need no issue.
-
-Decisions to make: whether tips become tasks at all or only show in reports;
-whether they come from static checks, the AI review, or both; how to keep
-them from being noise (one per check, dismissable like ignore rules).
-
-## 12. AI review and fix workflow
-
-- [x] **Commit AI fixes made inside a git repo.** (ai.commit_fixes: ask; git status snapshot with content hashes before the session; only files clean before are committed, with --only) (p2) [feature] After `audit todo fix`
-  (fixTask in cmd/audit/cmd/ai.go) succeeds and the rescan closes the task, check
-  whether the files it changed are in a git work tree. If they are, offer a
-  commit of only those files with a message naming the task (`audit: fix #ID
-  <title>`). Today the change is left uncommitted, so it is easy to lose or to
-  mix into unrelated work.
-  Decisions: commit on its own or after a prompt (config `ai.commit_fixes`);
-  how to find the changed files (diff `git status` before and after, or ask the
-  session to report them); refuse when the tree was already dirty.
-- [x] **Pass the task's explanation to AI fix.** (p2) [feature] `audit todo explain`
-  answers are kept only in `llm_cache` under a prompt hash, and FixTaskPrompt
-  (internal/llm/prompts.go) sends just the task and its findings. Look up the
-  cached explanation for the task (or save explanations against the task id) and
-  add it to the fix prompt as context, marked as an earlier AI answer and not as
-  instructions.
-- [x] **AI review as part of scanning, with suggestions as findings.** (ai.review_on_scan, empty by default; ai.review suggestions at the lowest priority; ai.review_daily_usd cap, cached answers free) (p2) [feature]
-  `--ai`/`-a` already adds a review to a scan (Engine.Analyze), but only when
-  given, and the review is prose in `run.Analysis`, so its points never become
-  tasks. Add config `ai.review_on_scan` (off by default) and ask for structured
-  output (JSON list of issues/suggestions) that turns into findings of a
-  dedicated `ai-review` check, deduped against the existing findings.
-  Decisions: which commands it applies to; cost limit per scan; whether
-  AI-sourced findings get a lower default priority.
-- [ ] **Show remaining AI usage on the dashboard.** (p3) [feature] Before an AI
-  review or fix, show how much of the provider's usage window is left, and skip
-  automatic reviews (above) when it is under a threshold. Needs research first:
-  `claude` and `codex` report usage differently (rate-limit info in session
-  output, cost per call in our cache); the cost summed from `llm_cache` is a
-  fallback that only counts audit's own calls.
-
-## 13. Dashboard readability
+### Dashboard readability (completed 2026-11-26)
 
 - [x] **Describe the selected command under the list.** (p3) [feature] As the cursor
   moves over the top-level rows (system, packages, repos, ...), show one line
@@ -429,9 +447,7 @@ them from being noise (one per check, dismissable like ignore rules).
   and the open tasks columns, and keep the header legend matching.
   Decided 2026-11-26: as proposed (shared shape and color for mapped pairs).
 
-## 14. Review findings (2026-11-26)
-
-From a source review; items 2 onward are read from the code, not reproduced.
+### Review findings (2026-11-26) (completed 2026-11-26)
 
 - [x] **`files clean -C all` empties the trash after moving files into it.** (p1) [bug]
   PlanClean (internal/files/clean.go) appended `gio trash --empty` after the orphaned,
