@@ -2,8 +2,9 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# Build with the installed Go instead of downloading the go.mod toolchain.
-export GOTOOLCHAIN := env("GOTOOLCHAIN", "local")
+# Build with go.mod's toolchain line: an older installed Go downloads it
+# (checksum-verified, into the module cache) on first use.
+export GOTOOLCHAIN := env("GOTOOLCHAIN", "auto")
 
 binary := "audit"
 pkg := "github.com/njhoffman/audit"
@@ -101,10 +102,18 @@ manpage:
 clean:
     rm -rf {{ bin_dir }} coverage.out coverage.html
 
+# Check the build for known vulnerabilities (needs network for the Go
+# vulnerability database).
+# govulncheck asks the go on PATH for the language version, so that is the
+# toolchain go.mod names.
+vuln:
+    PATH="$(go env GOROOT)/bin:$PATH" govulncheck ./...
+
 # List the development tools the recipes use.
 tools:
     @echo "Required tools (install with: go install ...):"
     @echo "  github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"
+    @echo "  golang.org/x/vuln/cmd/govulncheck@latest"
     @echo "  gotest.tools/gotestsum@latest"
     @echo "  github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest"
     @echo "  github.com/mfridman/tparse@latest"

@@ -16,7 +16,8 @@ Roadmap, open issues and proposals live in `TODO.md`; every open item carries an
 - `just test` — `go test -race -count=1 ./...`. Renderer: `just test gotestsum|gotestfmt|tparse`.
 - `just test-one ./internal/config TestLoad` — one test.
 - `just manpage` — render `man/audit.1` from `man/audit.1.md`.
-- The justfile exports `GOTOOLCHAIN=local` so the system Go is used.
+- The justfile exports `GOTOOLCHAIN=auto`: go.mod's `toolchain` line (go1.27.4) is downloaded on first use when the installed Go is older. `go 1.26.0` stays the language version so golangci-lint (built with go1.26) can lint it.
+- `just vuln` runs govulncheck (needs network); CI runs it too.
 - Pre-commit gate: `just check` (gofmt check, lint, test, build).
 - `just release [patch|minor|major]` — run the gate, then `tools/release`: bump from the CHANGELOG's Unreleased headings (Removed or BREAKING major, Added/Changed/Deprecated minor, else patch; before 1.0 a major bump moves the minor unless `--allow-major`), date the section, commit `Release vX.Y.Z`, annotated tag, `git push --atomic origin main vX.Y.Z`, then `just install` so the binary on PATH (`$(go env GOPATH)/bin/audit`) is the new version. `-n` is a dry run.
 

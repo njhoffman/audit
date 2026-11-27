@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Built with Go 1.27.4 (go.mod's `toolchain` line; the justfile now uses `GOTOOLCHAIN=auto`, so an older installed Go downloads it) instead of Go 1.25, which no longer gets security fixes, and with golang.org/x/net v0.63.0, golang.org/x/text v0.44.0 and goldmark v1.8.7. `govulncheck` reported 36 known vulnerabilities reachable from audit's code in the old build, in the standard library's HTTP, HTML template, TLS and URL code (the tasks page and server, the HTML report, git remote parsing) and in those modules. CI and the release build take the Go version from go.mod, and CI runs govulncheck.
+
 ## [0.67.5] - 2026-11-26
 
 ### Changed
