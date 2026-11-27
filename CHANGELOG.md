@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.67.5] - 2026-11-26
+
 ### Changed
 
 - The legend under the dashboard and `audit --summary` no longer lists the `+`/`-` deltas, and its `│` before the task markers now sits in the same column as the table's.
