@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies updated: charmbracelet/bubbles v1.0.0, x/ansi v0.12.0, chroma v2.27.0, the SQLite driver modernc.org/sqlite v1.63.0, gopsutil v4.26.10, pflag v1.1.0, go-toml v2.4.3 and others. No change in behavior; the tests, the dashboard summary and the existing database were checked on them.
+
 ## [0.67.7] - 2026-11-27
 
 ### Fixed

@@ -74,7 +74,7 @@ them from being noise (one per check, dismissable like ignore rules).
   release workflow use `go-version: '1.25'`. Move go.mod, CI and release to a
   supported Go, install it locally, update x/net, x/text and goldmark, and
   add `govulncheck ./...` to `just check` or CI so this shows up on its own.
-- [ ] **Update the other dependencies.** (p3) [housekeeping] `go list -u -m all`
+- [x] **Update the other dependencies.** (p3) [housekeeping] `go list -u -m all`
   lists 30+ newer modules, among them charmbracelet/bubbles v1.0.0 (from
   v0.21.0; check for API changes in the list, viewport and textinput
   components the TUI uses), x/ansi v0.12.0, chroma v2.27.0 and gopsutil
