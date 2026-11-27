@@ -416,6 +416,21 @@ type TasksPage struct {
 	// Token, when set, makes the page live: it shows status buttons and a
 	// note editor that post to the task server with this token.
 	Token string
+	// Fixes are the newest entries of the fixes log, listed under the
+	// tasks.
+	Fixes []Fix
+}
+
+// Fix is one fixes log entry on the tasks page: a task closed or reopened,
+// or an action step that succeeded.
+type Fix struct {
+	At       time.Time
+	Command  string
+	Action   string
+	Priority string
+	Title    string
+	// Change is "FROM -> TO" for an action step, "" for a task.
+	Change string
 }
 
 // WriteTasks renders the searchable tasks page. Every task is embedded,
@@ -438,7 +453,8 @@ func WriteTasks(w io.Writer, p TasksPage) error {
 		Tasks     template.JS
 		Live      bool
 		Token     string
-	}{template.CSS(css), version.Version, p.Now, p.Host, template.JS(b), p.Token != "", p.Token}) // #nosec G203 -- embedded stylesheet; JSON escaped by Marshal
+		Fixes     []Fix
+	}{template.CSS(css), version.Version, p.Now, p.Host, template.JS(b), p.Token != "", p.Token, p.Fixes}) // #nosec G203 -- embedded stylesheet; JSON escaped by Marshal
 }
 
 func counts(c finding.Counts) string {

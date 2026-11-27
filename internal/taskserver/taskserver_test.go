@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/njhoffman/audit/internal/htmlreport"
 	"github.com/njhoffman/audit/internal/store"
 	"github.com/njhoffman/audit/internal/todo"
 )
@@ -47,6 +48,10 @@ func (f *fake) SetStatus(_ context.Context, id int64, s todo.Status) (todo.Todo,
 	t.Status = s
 	f.tasks[id] = t
 	return t, nil
+}
+
+func (f *fake) RecentFixes(context.Context) ([]htmlreport.Fix, error) {
+	return []htmlreport.Fix{{Command: "system", Action: "resolved", Title: "Swap is off"}}, nil
 }
 
 func (f *fake) SetNote(_ context.Context, id int64, note string) (todo.Todo, error) {

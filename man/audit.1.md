@@ -248,7 +248,7 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 :   Lists saved audit runs, newest first. This was previously **audit history**. **-l**/**\-\-limit** limits the count (20 by default, 0 for all); **-j** prints JSON. The top-level **history** configuration key still controls saved run retention.
 
 **history runs fixes**
-:   Lists what got done, newest first: tasks resolved by a rescan, marked done or won't do, and reopened when their problem came back (with their title, check and priority as they were), and every action step that succeeded (package and runtime updates and migrations, repo syncs, files, configs and containers cleanups, history prunes, with the versions or counts they moved between). Totals first: tasks fixed per command and priority, steps per kind, reopened tasks. The log is kept when runs, tasks (**todo.closed_max_age**) and update runs are pruned, and holds no command text. **-s**/**\-\-since** _age_ limits it to recent entries, **-l**/**\-\-limit** the rows listed (30; 0 for all; the totals count every entry), **-j** prints JSON. An open task that was fixed before gets a detail line saying when and how (**todo show**, **todo explain**, **todo fix**).
+:   Lists what got done, newest first: tasks resolved by a rescan, marked done or won't do, and reopened when their problem came back (with their title, check and priority as they were), and every action step that succeeded (package and runtime updates and migrations, repo syncs, files, configs and containers cleanups, history prunes, with the versions or counts they moved between). Totals first: tasks fixed per command and priority, steps per kind, reopened tasks. The log is kept when runs, tasks (**todo.closed_max_age**) and update runs are pruned, and holds no command text. **-s**/**\-\-since** _age_ limits it to recent entries, **-l**/**\-\-limit** the rows listed (30; 0 for all; the totals count every entry), **-j** prints JSON. An open task that was fixed before gets a detail line saying when and how (**todo show**, **todo explain**, **todo fix**). **fixes** (**L**) on the dashboard shows the same log, totals and the newest 50 entries, and **tasks.html** (written or served by **audit todo**) ends with the newest 30 under **Recently fixed**.
 
 **history runs diff** _A_ [_B_]
 :   Compares saved run _A_ with run _B_, or with the run of the same command and scope saved just before _A_ when _B_ is left out, and prints the findings added, resolved and changed in severity, keyed by command, check and subject as ignore rules and tasks are. The older run is the baseline whatever the order. Both runs must be of one command. **-j** prints **{from, to, delta}** with **delta.added**, **delta.resolved**, **delta.changed** (each finding with its earlier severity in **from**) and **delta.unchanged**.
@@ -517,6 +517,7 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     cycle_command       c                     tasks
     toggle_new          N                     tasks
     packages            p                     dashboard
+    fixes               L                     dashboard
     mark                m                     packages
     update              U                     packages
     toggle_outdated     a                     packages

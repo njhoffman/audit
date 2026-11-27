@@ -34,9 +34,13 @@ func (a *app) writeTasksPage(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	fixes, err := a.recentFixes(ctx)
+	if err != nil {
+		return "", err
+	}
 	path := a.tasksPath()
 	err = htmlreport.Save(path, func(w io.Writer) error {
-		return htmlreport.WriteTasks(w, htmlreport.TasksPage{Tasks: ts, Host: a.engine.Host, Now: timeNow()})
+		return htmlreport.WriteTasks(w, htmlreport.TasksPage{Tasks: ts, Host: a.engine.Host, Now: timeNow(), Fixes: fixes})
 	})
 	if err != nil {
 		return "", fmt.Errorf("write tasks page: %w", err)
@@ -86,4 +90,32 @@ func (a *app) serveTasks(ctx context.Context, port int, open bool, ready func(st
 		return err
 	}
 	return nil
+}
+
+// tasksPageFixes is how many fixes log entries the tasks page lists.
+const tasksPageFixes = 30
+
+// recentFixes are the newest fixes log entries as the tasks page lists them.
+func (a *app) recentFixes(ctx context.Context) ([]htmlreport.Fix, error) {
+	as, err := a.store.Activities(ctx, time.Time{}, tasksPageFixes)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]htmlreport.Fix, len(as))
+	for i, x := range as {
+		f := htmlreport.Fix{At: x.At, Command: x.Command, Action: x.Action, Priority: string(x.Priority), Title: x.Title}
+		if f.Command == "" {
+			f.Command = x.Kind
+		}
+		if x.From != "" || x.To != "" {
+			f.Change = x.From + " -> " + x.To
+		}
+		out[i] = f
+	}
+	return out, nil
+}
+
+// RecentFixes implements taskserver.Backend.
+func (b tuiBackend) RecentFixes(ctx context.Context) ([]htmlreport.Fix, error) {
+	return b.a.recentFixes(ctx)
 }

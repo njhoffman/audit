@@ -8,6 +8,7 @@ import (
 	"os"
 	osexec "os/exec"
 	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -175,6 +176,22 @@ func (b tuiBackend) Packages(ctx context.Context) ([]packages.Annotated, error) 
 		return nil, err
 	}
 	return b.a.annotated(ctx, r, packages.Query{})
+}
+
+// fixesShown is how many fixes log entries the dashboard's fixes screen
+// lists under the totals.
+const fixesShown = 50
+
+// Fixes implements tui.Backend with the fixes log as audit history runs
+// fixes prints it.
+func (b tuiBackend) Fixes(ctx context.Context, width int) (string, error) {
+	as, err := b.a.store.Activities(ctx, time.Time{}, 0)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	b.printer(&buf, width).Fixes(as, fixesShown)
+	return buf.String(), nil
 }
 
 // Action implements tui.Backend from core.Actions.

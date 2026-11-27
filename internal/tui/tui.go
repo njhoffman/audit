@@ -71,6 +71,13 @@ type Backend interface {
 	// ActionSession is that action on the terminal: it previews, asks and
 	// reports failures and backups itself.
 	ActionSession(ctx context.Context, command string) (*osexec.Cmd, error)
+	// Fixes renders the fixes log at width: its totals and newest entries.
+	Fixes(ctx context.Context, width int) (string, error)
+}
+
+type fixesMsg struct {
+	text string
+	err  error
 }
 
 type actionMsg struct {
@@ -113,6 +120,9 @@ const (
 	// screenPackages lists the package inventory; esc returns to the
 	// dashboard.
 	screenPackages
+	// screenFixes shows the fixes log (audit history runs fixes); esc
+	// returns to the dashboard.
+	screenFixes
 )
 
 // input is what the text field at the bottom of the task list is editing.
@@ -479,6 +489,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = max(0, len(m.rows)-1)
 		}
 		return m, nil
+	case fixesMsg:
+		if m.screen != screenFixes {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.setStatus(msg.err.Error(), true)
+			msg.text = "\n  " + msg.err.Error()
+		}
+		m.report.SetContent(msg.text)
+		m.reportLoaded = true
+		return m, nil
 	case reportMsg:
 		if msg.command != m.reportCmd {
 			return m, nil
@@ -682,6 +703,8 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.scroll(k)
+	case screenFixes:
+		return m, m.scroll(k)
 	case screenExplain:
 		if m.is(k, keys.Reask) {
 			if m.busy == "" {
@@ -738,6 +761,14 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case m.is(k, keys.ShowPackages):
 		return m, m.openPackages()
+	case m.is(k, keys.ShowFixes):
+		m.screen, m.reportLoaded = screenFixes, false
+		m.report.GotoTop()
+		width := m.width
+		return m, func() tea.Msg {
+			text, err := m.b.Fixes(m.ctx, width)
+			return fixesMsg{text, err}
+		}
 	case m.is(k, keys.RunAction):
 		if len(m.rows) > 0 {
 			return m, m.runAction(m.rows[m.cursor].Command)
@@ -978,9 +1009,11 @@ func (m *Model) View() string {
 	case screenDashboard:
 		b.WriteString(titleStyle.Render("audit") + faintStyle.Render("  dashboard") + "\n\n")
 		b.WriteString(m.dashboardView())
-	case screenReport, screenExplain, screenTask:
+	case screenReport, screenExplain, screenTask, screenFixes:
 		title := "audit " + m.reportCmd
 		switch m.screen {
+		case screenFixes:
+			title = "audit history runs fixes"
 		case screenExplain:
 			title = fmt.Sprintf("audit todo explain %d", m.explainID)
 		case screenTask:
@@ -1136,7 +1169,7 @@ func (m *Model) help() string {
 		return "enter keep  esc clear"
 	case m.screen == screenDashboard:
 		hints = [][]string{{"move", keys.Down, keys.Up}, {"report", keys.Open}, {"rescan", keys.Rescan},
-			{"rescan stale", keys.RescanStale}, {"action", keys.RunAction}, {"packages", keys.ShowPackages}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
+			{"rescan stale", keys.RescanStale}, {"action", keys.RunAction}, {"packages", keys.ShowPackages}, {"fixes", keys.ShowFixes}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}
 	case m.screen == screenPackages:
 		hints = [][]string{{"move", keys.Down, keys.Up}, {"mark", keys.Mark}, {"update", keys.Update},
 			{"all/outdated", keys.ToggleAll}, {"back", keys.Back}, {"quit", keys.Quit}}
@@ -1147,6 +1180,8 @@ func (m *Model) help() string {
 			hints = append(hints, []string{label, keys.RunAction})
 		}
 		hints = append(hints, [][]string{{"back", keys.Back}, {"tasks", keys.ShowTasks}, {"quit", keys.Quit}}...)
+	case m.screen == screenFixes:
+		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown}, {"back", keys.Back}, {"quit", keys.Quit}}
 	case m.screen == screenExplain:
 		hints = [][]string{{"scroll", keys.Down, keys.Up}, {"page", keys.PageUp, keys.PageDown},
 			{"ask again", keys.Reask}, {"back to tasks", keys.Back}, {"quit", keys.Quit}}

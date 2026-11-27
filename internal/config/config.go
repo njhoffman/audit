@@ -1067,6 +1067,7 @@ tui:
     cycle_command: [c]
     toggle_new: [N]                # tasks: only tasks the last scan of their command created
     packages: [p]                  # dashboard: the package inventory
+    fixes: [L]                     # dashboard: the fixes log (audit history runs fixes)
     mark: [m]                      # packages: mark the package for update
     update: [U]                    # packages: run audit packages update for the marked ones
     toggle_outdated: [a]           # packages: all packages or only outdated ones

@@ -29,6 +29,10 @@ var testNow = time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 func env(t *testing.T) (cfgHome, dataHome string) {
 	t.Helper()
 	cfgHome, dataHome = t.TempDir(), t.TempDir()
+	// A home of its own, so no scan reads the user's files (the default
+	// shell_history.histdb, ~/.histdb/zsh-history.db, is large enough to
+	// take minutes under -race).
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", cfgHome)
 	t.Setenv("XDG_DATA_HOME", dataHome)
 	t.Setenv("NO_COLOR", "1")

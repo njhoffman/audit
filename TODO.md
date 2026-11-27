@@ -106,7 +106,7 @@ them from being noise (one per check, dismissable like ignore rules).
   in its registry (`docker manifest inspect` or `skopeo inspect` against the
   local `RepoDigests`), reported as info with the pull command. Needs
   network and registry auth, so off by default (`containers.check_tags`).
-- [ ] **Fixes log on the dashboard and in HTML.** (p3) [feature] `audit history
+- [x] **Fixes log on the dashboard and in HTML.** (p3) [feature] `audit history
   runs fixes` is terminal-only. A dashboard panel (the last few fixes under
   the table, or a key that opens the log as a report) and a section on the
   tasks page would show the same data where the tasks are.

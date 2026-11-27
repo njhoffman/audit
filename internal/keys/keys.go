@@ -22,12 +22,13 @@ const (
 	Task      Screen = "task"
 	Explain   Screen = "explain"
 	Packages  Screen = "packages"
+	Fixes     Screen = "fixes"
 )
 
 var (
-	allScreens = []Screen{Dashboard, Report, Tasks, Task, Explain, Packages}
+	allScreens = []Screen{Dashboard, Report, Tasks, Task, Explain, Packages, Fixes}
 	// scrolling are the screens with a viewport or a table.
-	scrolling = []Screen{Report, Tasks, Task, Explain, Packages}
+	scrolling = []Screen{Report, Tasks, Task, Explain, Packages, Fixes}
 )
 
 // Reserved is always quit and cannot be bound to an action.
@@ -68,6 +69,7 @@ const (
 	ToggleAll    = "toggle_outdated"
 	ToggleNew    = "toggle_new"
 	RunAction    = "action"
+	ShowFixes    = "fixes"
 )
 
 // Action is something a key does.
@@ -110,6 +112,7 @@ var Actions = []Action{
 	{CycleCommand, "command", []Screen{Tasks}, []string{"c"}},
 	{ToggleNew, "new", []Screen{Tasks}, []string{"N"}},
 	{ShowPackages, "packages", []Screen{Dashboard}, []string{"p"}},
+	{ShowFixes, "fixes log", []Screen{Dashboard}, []string{"L"}},
 	{Mark, "mark", []Screen{Packages}, []string{"m"}},
 	{Update, "update", []Screen{Packages}, []string{"U"}},
 	{ToggleAll, "all or outdated", []Screen{Packages}, []string{"a"}},

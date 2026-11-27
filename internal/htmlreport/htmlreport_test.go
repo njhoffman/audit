@@ -342,3 +342,25 @@ func TestTrendSVG(t *testing.T) {
 		t.Errorf("segments scale to the largest total, tooltips count:\n%s", got)
 	}
 }
+
+func TestWriteTasksFixes(t *testing.T) {
+	var b strings.Builder
+	at := time.Date(2026, 11, 1, 9, 30, 0, 0, time.Local)
+	fixes := []Fix{
+		{At: at, Command: "packages", Action: "updated", Title: "uv:ruff", Change: "0.9.0 -> 0.10.0"},
+		{At: at, Command: "system", Action: "resolved", Priority: "high", Title: "<script>x</script>"},
+	}
+	if err := WriteTasks(&b, TasksPage{Now: at, Fixes: fixes}); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	for _, w := range []string{"Recently fixed (2;", "2026-11-01 09:30", "uv:ruff <span class=\"meta\">0.9.0 -&gt; 0.10.0</span>", "&lt;script&gt;x&lt;/script&gt;"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("tasks page missing %q", w)
+		}
+	}
+	b.Reset()
+	if err := WriteTasks(&b, TasksPage{Now: at}); err != nil || strings.Contains(b.String(), "Recently fixed") {
+		t.Errorf("no log, no section: %v", err)
+	}
+}

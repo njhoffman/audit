@@ -10,6 +10,8 @@
 .card .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
 .card .l { color: var(--muted); font-size: 13px; }
 .card.on { outline: 2px solid var(--accent); }
+.fixes { margin: 24px 0 8px; } .fixes summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+.fixes td, .fixes th { padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--line); font-size: 13px; }
 .bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 10px 0 2px; background: var(--line); }
 .bar span { display: block; height: 100%; }
 .bg-high { background: var(--high); } .bg-medium { background: var(--medium); } .bg-low { background: var(--low); } .bg-suggestion { background: var(--suggestion); }
@@ -88,6 +90,15 @@ kbd { font-family: ui-monospace, Menlo, monospace; font-size: 12px; border: 1px 
 </div>
 <div id="count" class="meta"></div>
 <div id="list"></div>
+{{if .Fixes}}<details class="fixes">
+<summary>Recently fixed ({{len .Fixes}}; <code>audit history runs fixes</code> lists the whole log)</summary>
+<table>
+<thead><tr><th>When</th><th>Command</th><th>What</th><th>Priority</th><th>Item</th></tr></thead>
+<tbody>{{range .Fixes}}
+<tr><td>{{.At.Local.Format "2006-01-02 15:04"}}</td><td>{{.Command}}</td><td>{{.Action}}</td><td>{{.Priority}}</td><td>{{.Title}}{{if .Change}} <span class="meta">{{.Change}}</span>{{end}}</td></tr>{{end}}
+</tbody>
+</table>
+</details>{{end}}
 <footer>audit {{.Version}}</footer>
 </main>
 <script id="data" type="application/json">{{.Tasks}}</script>

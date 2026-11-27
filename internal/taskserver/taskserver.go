@@ -36,6 +36,8 @@ type Backend interface {
 	Todos(ctx context.Context) ([]todo.Todo, error)
 	SetStatus(ctx context.Context, id int64, s todo.Status) (todo.Todo, error)
 	SetNote(ctx context.Context, id int64, note string) (todo.Todo, error)
+	// RecentFixes are the newest fixes log entries for the page.
+	RecentFixes(ctx context.Context) ([]htmlreport.Fix, error)
 }
 
 // TokenHeader carries the token on API requests.
@@ -154,8 +156,13 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	fixes, err := s.B.RecentFixes(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := htmlreport.WriteTasks(w, htmlreport.TasksPage{Tasks: ts, Host: s.Host, Now: s.Now(), Token: c.Value}); err != nil {
+	if err := htmlreport.WriteTasks(w, htmlreport.TasksPage{Tasks: ts, Host: s.Host, Now: s.Now(), Token: c.Value, Fixes: fixes}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

@@ -52,6 +52,13 @@ func (f *fake) Packages(context.Context) ([]packages.Annotated, error) { return 
 
 // Action: system's action rescans itself, environment's does not, the rest
 // have none.
+func (f *fake) Fixes(_ context.Context, width int) (string, error) {
+	if f.failAI {
+		return "", errors.New("store gone")
+	}
+	return fmt.Sprintf("Tasks fixed (resolved or done):\nsystem 3 at width %d", width), nil
+}
+
 func (f *fake) Action(c string) (string, bool) {
 	switch c {
 	case "system":
@@ -945,5 +952,27 @@ func TestRunAction(t *testing.T) {
 	key(t, m, "a")
 	if len(f.actions) != 2 {
 		t.Errorf("a on a report: %v", f.actions)
+	}
+}
+
+func TestFixesScreen(t *testing.T) {
+	f := newFake()
+	m := start(t, f)
+	if !strings.Contains(m.View(), "fixes") {
+		t.Errorf("the dashboard's help names the fixes log:\n%s", m.View())
+	}
+	key(t, m, "L")
+	v := m.View()
+	if !strings.Contains(v, "audit history runs fixes") || !strings.Contains(v, "system 3 at width 120") {
+		t.Fatalf("fixes screen:\n%s", v)
+	}
+	key(t, m, "esc")
+	if !strings.Contains(m.View(), "dashboard") {
+		t.Errorf("esc goes back to the dashboard:\n%s", m.View())
+	}
+	f.failAI = true
+	key(t, m, "L")
+	if v := m.View(); !strings.Contains(v, "store gone") {
+		t.Errorf("a failed load says why:\n%s", v)
 	}
 }

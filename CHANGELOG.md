@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The fixes log outside the terminal command: `L` on the dashboard opens it (totals and the newest 50 entries, as `audit history runs fixes` prints them; `tui.keys.fixes` rebinds it), and the tasks page, written or served by `audit todo`, ends with a collapsible "Recently fixed" table of the newest 30.
+
+### Fixed
+
+- Internal: the command-layer tests run with a temporary HOME. Four history tests had been reading the real `~/.histdb/zsh-history.db`, which made the race-enabled test run take over six minutes (and fail the 10-minute limit with the rest of the gate); it now takes about a minute and a half.
+
 ## [0.68.0] - 2026-11-27
 
 ### Added
