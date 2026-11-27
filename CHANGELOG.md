@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.69.2] - 2026-11-27
+
 ### Fixed
 
 - Actions now hold their command's lock from plan to rescan: `packages update`, `packages runtimes update` and `migrate`, `repos sync`, `files clean`, `configs clean`, `containers clean`, and `history prune`, `sync`, `backups clean` and `backups restore`. Two updates started at once (a terminal and the dashboard's `a`) used to plan from the same scan and run the same steps; now the second waits, says so, and can be stopped with ctrl+c. A scan of the command waits for the action too.
