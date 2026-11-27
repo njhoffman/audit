@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.61.0] - 2026-11-26
+
 ### Added
 
 - The HTML index has a Trend column: per command, one bar per kept full run, stacked by severity in the report colors, with each run's date and counts as a tooltip.
