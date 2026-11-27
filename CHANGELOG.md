@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.59.0] - 2026-11-26
+
 ### Added
 
 - `audit backups`: when Deja Dup (read from its settings) and each `backups.sources` command last finished a backup, flagging none at all, never, older than `backups.max_age` (7 days; an error past four times it), Deja Dup not running automatically, `backups.paths` (default `~`) no backup covers, and failing source commands. restic, borg or any other tool joins as a source whose command prints its last backup time. It is on the dashboard and in the schedule timer's default commands.
