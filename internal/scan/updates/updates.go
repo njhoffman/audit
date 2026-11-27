@@ -6,6 +6,7 @@ package updates
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -155,6 +156,26 @@ func Scan(ctx context.Context, o Options) (*scan.Result, error) {
 				fmt.Sprintf("%s failed on its last run; see journalctl -u %s", units[i], units[i]))
 		}
 	}
+	if o.Env.Which("fwupdmgr") != "" {
+		// Listing needs no sudo; exit 2 means nothing to update.
+		r := o.Env.Run(ctx, "fwupdmgr", []string{"get-updates", "--json", "--no-unreported-check"}, exec.Options{Timeout: 90 * time.Second})
+		if ups, err := FirmwareUpdates(r.Stdout); r.OK() && err == nil {
+			summary["firmware_updates"] = len(ups)
+			if len(ups) > 0 {
+				sev := scan.SeverityNotice
+				var parts []string
+				for _, u := range ups {
+					parts = append(parts, fmt.Sprintf("%s %s -> %s", u.Device, u.From, u.To))
+					if u.Urgency == "high" || u.Urgency == "critical" {
+						sev = scan.SeverityWarning
+					}
+				}
+				add("firmware", sev, "firmware", fmt.Sprintf("%d firmware update(s): %s; fwupdmgr update applies them", len(ups), strings.Join(parts, ", ")))
+			}
+		} else if r.Code == 2 {
+			summary["firmware_updates"] = 0
+		}
+	}
 	if line := lastError(o.path("/var/log/unattended-upgrades/unattended-upgrades.log"), started); line != "" {
 		add("upgrade_errors", scan.SeverityWarning, "unattended-upgrades", "unattended-upgrades logged an error in the last week: "+line)
 	}
@@ -196,4 +217,36 @@ func dedupe(s []string) []string {
 		}
 	}
 	return out
+}
+
+// FirmwareUpdate is one device with a newer firmware release.
+type FirmwareUpdate struct {
+	Device, From, To, Urgency string
+}
+
+// FirmwareUpdates reads fwupdmgr get-updates --json: each device's current
+// version and its newest release (fwupd lists releases newest first).
+func FirmwareUpdates(out string) ([]FirmwareUpdate, error) {
+	var d struct {
+		Devices []struct {
+			Name     string `json:"Name"`
+			Version  string `json:"Version"`
+			Releases []struct {
+				Version string `json:"Version"`
+				Urgency string `json:"Urgency"`
+			} `json:"Releases"`
+		} `json:"Devices"`
+	}
+	if err := json.Unmarshal([]byte(out), &d); err != nil {
+		return nil, err
+	}
+	var ups []FirmwareUpdate
+	for _, dev := range d.Devices {
+		if len(dev.Releases) == 0 {
+			continue
+		}
+		rel := dev.Releases[0]
+		ups = append(ups, FirmwareUpdate{Device: dev.Name, From: dev.Version, To: rel.Version, Urgency: rel.Urgency})
+	}
+	return ups, nil
 }

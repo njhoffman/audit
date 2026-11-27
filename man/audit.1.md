@@ -108,7 +108,7 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
     **resources**: memory, I/O and CPU stall time over five minutes (PSI), available memory and swap use, OOM kills in the last week's kernel log, the 15-minute load against the core count, temperatures within 5 C of their critical trip point, thermal throttling since boot, and battery wear (peripheral batteries left out).
 
-    **updates**: a reboot a package asked for, a newer kernel installed than the one running, security updates pending in apt's cached lists, failed **unattended-upgrades**, **apt-daily** and **apt-daily-upgrade** runs and errors in the unattended-upgrades log of the last week, and more kernels installed than **system.keep_kernels**.
+    **updates**: a reboot a package asked for, a newer kernel installed than the one running, security updates pending in apt's cached lists, failed **unattended-upgrades**, **apt-daily** and **apt-daily-upgrade** runs and errors in the unattended-upgrades log of the last week, more kernels installed than **system.keep_kernels**, and firmware updates **fwupdmgr get-updates** lists (no sudo needed; **updates.firmware**, a warning when a release is marked high or critical urgency).
 
     **security**: no active firewall service (ufw, firewalld, nftables), TCP ports listening beyond loopback (a warning for risky services such as rpcbind, smb, nfs, databases, redis, vnc; UDP only for those), **~/.ssh** permissions (directory, private keys, config, authorized_keys) and private keys without a passphrase (checked with **ssh-keygen -y -P ""**), world-writable PATH directories and files, and clock synchronization.
 

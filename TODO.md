@@ -70,7 +70,7 @@ an entry in `scanEntries` (cmd/audit/cmd/scanners.go) and a config section.
 - [x] **`audit backups`** (p2) [feature] (Deja Dup from gsettings plus command sources; restic, borg and timeshift through backups.sources commands) : last snapshot age and last check result for
   restic, borg, timeshift or a configured command; paths in a configured list
   that no backup covers. High value, small surface.
-- [ ] **Firmware in `system updates`** [feature] (p3): `fwupdmgr get-updates` (no sudo
+- [x] **Firmware in `system updates`** [feature] (p3): `fwupdmgr get-updates` (no sudo
   needed to list) as `updates.firmware`.
 
 Decisions to make: which of these is worth building at all; whether

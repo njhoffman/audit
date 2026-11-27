@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit system` (updates) lists firmware updates from `fwupdmgr get-updates` when fwupd is installed, as `updates.firmware` with each device's current and newest version; a release marked high or critical urgency makes it a warning.
+
 ## [0.59.0] - 2026-11-26
 
 ### Added

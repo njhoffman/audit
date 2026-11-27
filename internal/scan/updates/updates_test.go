@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/njhoffman/audit/internal/exec"
+	"github.com/njhoffman/audit/internal/scan"
 )
 
 func write(t *testing.T, root, p, s string) {
@@ -55,10 +56,13 @@ func TestScan(t *testing.T) {
 	fake.AddOutput("6.10.0-1-generic\n", "uname")
 	fake.AddOutput("Listing...\nopenssl/noble-security 3 amd64 [upgradable from: 2]\n", "apt", "list")
 	fake.AddOutput("active\nfailed\ninactive\n", "systemctl")
+	fake.AddOutput(`{"Devices":[{"Name":"Dock","Version":"1.0","Releases":[{"Version":"1.2","Urgency":"high"}]}]}`, "fwupdmgr", "get-updates")
 	bin := t.TempDir()
-	write(t, bin, "apt", "")
-	if err := os.Chmod(filepath.Join(bin, "apt"), 0o755); err != nil {
-		t.Fatal(err)
+	for _, b := range []string{"apt", "fwupdmgr"} {
+		write(t, bin, b, "")
+		if err := os.Chmod(filepath.Join(bin, b), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	res, err := Scan(context.Background(), Options{Root: root, Env: &exec.Env{Vars: map[string]string{"PATH": bin}, Runner: fake}})
 	if err != nil {
@@ -75,12 +79,30 @@ func TestScan(t *testing.T) {
 		"security_updates": "1 security update(s) pending: openssl",
 		"upgrade_failed":   "apt-daily-upgrade.service failed on its last run",
 		"upgrade_errors":   "Installing the upgrades failed!",
+		"firmware":         "1 firmware update(s): Dock 1.0 -> 1.2; fwupdmgr update applies them",
 	} {
 		if !strings.Contains(got[check], want) {
 			t.Errorf("%s: %q, want it to contain %q", check, got[check], want)
 		}
 	}
+	for _, f := range res.Findings {
+		if f.Check == "firmware" && f.Severity != scan.SeverityWarning {
+			t.Errorf("a high-urgency firmware release is a warning: %v", f.Severity)
+		}
+	}
 	if strings.Contains(got["upgrade_errors"], "ancient") {
 		t.Error("errors older than a week are left out")
+	}
+}
+
+func TestFirmwareUpdates(t *testing.T) {
+	out := `{"Devices":[{"Name":"UEFI dbx","Version":"20250902","Releases":[{"Version":"20260707"},{"Version":"20260402"}]},
+{"Name":"Dock","Version":"1.0","Releases":[{"Version":"1.2","Urgency":"high"}]},{"Name":"Disk","Version":"3"}]}`
+	ups, err := FirmwareUpdates(out)
+	if err != nil || len(ups) != 2 || ups[0].To != "20260707" || ups[1].Urgency != "high" {
+		t.Fatalf("%+v %v", ups, err)
+	}
+	if _, err := FirmwareUpdates("No updatable devices"); err == nil {
+		t.Error("non-JSON is an error")
 	}
 }
