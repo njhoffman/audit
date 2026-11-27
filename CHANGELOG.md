@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-11-26
+
 ### Added
 
 - `a` on a dashboard row or a report (`tui.keys.action`; `alt-x` in fzf) runs the command's built-in action on the terminal: `packages update`, `history prune`, `repos sync`, `files clean` or `configs clean`, each with its own preview, confirmation, failures and backup locations. The dashboard reloads afterwards, rescanning files and configs first since their actions do not.
