@@ -60,33 +60,6 @@ them from being noise (one per check, dismissable like ignore rules).
   output, cost per call in our cache); the cost summed from `llm_cache` is a
   fallback that only counts audit's own calls.
 
-## 16. Review findings (2026-11-27)
-
-- [x] **Actions outside the scan lock.** (p3) [bug] `lockCommand` is taken only
-  inside `Engine.Execute`, so the apply step of `packages update`, `repos
-  sync` and the `clean` actions runs unlocked between its scan and its
-  rescan. Two updates at once (a terminal and the dashboard's `a`) both
-  plan from the same scan and run the same steps. Holding the command's
-  lock across plan, apply and rescan needs Execute to accept a held lock:
-  flock locks belong to the open file, so a second `lockCommand` in the
-  same process waits on the first.
-- [x] **Redraw the fixes screen on resize.** (p3) [bug] The `L` screen renders at
-  the width it had when opened; the `WindowSizeMsg` case reloads only
-  `screenReport`, so after a resize the totals table keeps its old width
-  (cut off, or narrow). Reload it there too.
-- [x] **Repeated sentence in the todo man entry.** (p3) [docs] `man/audit.1.md`'s
-  `todo` entry says "**F** in the task editor runs the same **audit todo
-  fix**, so it asks there too. Closed tasks are refused. **F** in the task
-  editor does the same for the selected task." Drop the second F sentence.
-- [x] **Docker Hub pull quota in the tag check.** (measured 2026-11-27: 9 pulls per buildx lookup of alpine, 0 for a HEAD; audit now sends the HEAD itself) (p3) [performance] With
-  `containers.check_tags`, `skopeo inspect` GETs each image's manifest (and
-  its config blob), and Docker Hub counts manifest GETs against the pull
-  rate limit (100 per 6h anonymous); a HEAD of the manifest, which returns
-  `Docker-Content-Digest`, does not count. `skopeo inspect --raw` plus a
-  digest of the body still GETs. Worth measuring with `skopeo --debug`
-  before changing anything; `crane digest` or `regctl image digest` use
-  HEAD, if either is installed.
-
 ## Completed
 
 ### Rescan everything and run unattended (completed 2026-11-26)
@@ -521,3 +494,30 @@ them from being noise (one per check, dismissable like ignore rules).
   widths, nerd-font glyphs). Done 2026-11-27 (0.69.1): users 92.8%,
   storage 81.4%, render 84.2%; cmd stays near 78%, its gaps mostly the
   terminal-only paths (fzf picker, pager, sudo prompts).
+
+### Review findings (2026-11-27) (completed 2026-11-27)
+
+- [x] **Actions outside the scan lock.** (p3) [bug] `lockCommand` is taken only
+  inside `Engine.Execute`, so the apply step of `packages update`, `repos
+  sync` and the `clean` actions runs unlocked between its scan and its
+  rescan. Two updates at once (a terminal and the dashboard's `a`) both
+  plan from the same scan and run the same steps. Holding the command's
+  lock across plan, apply and rescan needs Execute to accept a held lock:
+  flock locks belong to the open file, so a second `lockCommand` in the
+  same process waits on the first.
+- [x] **Redraw the fixes screen on resize.** (p3) [bug] The `L` screen renders at
+  the width it had when opened; the `WindowSizeMsg` case reloads only
+  `screenReport`, so after a resize the totals table keeps its old width
+  (cut off, or narrow). Reload it there too.
+- [x] **Repeated sentence in the todo man entry.** (p3) [docs] `man/audit.1.md`'s
+  `todo` entry says "**F** in the task editor runs the same **audit todo
+  fix**, so it asks there too. Closed tasks are refused. **F** in the task
+  editor does the same for the selected task." Drop the second F sentence.
+- [x] **Docker Hub pull quota in the tag check.** (measured 2026-11-27: 9 pulls per buildx lookup of alpine, 0 for a HEAD; audit now sends the HEAD itself) (p3) [performance] With
+  `containers.check_tags`, `skopeo inspect` GETs each image's manifest (and
+  its config blob), and Docker Hub counts manifest GETs against the pull
+  rate limit (100 per 6h anonymous); a HEAD of the manifest, which returns
+  `Docker-Content-Digest`, does not count. `skopeo inspect --raw` plus a
+  digest of the body still GETs. Worth measuring with `skopeo --debug`
+  before changing anything; `crane digest` or `regctl image digest` use
+  HEAD, if either is installed.
