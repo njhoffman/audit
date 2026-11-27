@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.69.0] - 2026-11-27
+
 ### Added
 
 - The fixes log outside the terminal command: `L` on the dashboard opens it (totals and the newest 50 entries, as `audit history runs fixes` prints them; `tui.keys.fixes` rebinds it), and the tasks page, written or served by `audit todo`, ends with a collapsible "Recently fixed" table of the newest 30.
