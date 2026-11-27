@@ -115,7 +115,7 @@ global limit; AI cache entries and closed tasks still have no age limit.
   security-relevant edge cases (archive member paths, symlinks); it belongs
   in `internal/packages` (or `internal/bins`) behind the exec runner, where
   it can be tested without cobra.
-- [ ] **Thin the cmd layer generally.** [refactor] (p3) `cmd/audit/cmd` is about 7.6k lines
+- [x] **Thin the cmd layer generally.** [refactor] (p3) `cmd/audit/cmd` is about 7.6k lines
   of non-test code; `update.go`, `runtimes.go` and `packages.go` carry
   planning and cleanup logic (`cleanupPlan`, `installedPythons`,
   `rememberNodeMajor`) that would sit better in core or packages.
@@ -126,8 +126,9 @@ global limit; AI cache entries and closed tasks still have no age limit.
   too are now PackagesScanner.RuntimeCleanupPlan, InstalledPythons and
   RememberNodeMajor, and update.go's plan assembly is
   PackagesScanner.UpdatePlan with Update.Attempted; cmd keeps the prompts,
-  sudo and output. packages.go's aiTag (batching and saving AI tags)
-  remains.
+  sudo and output. Done 2026-11-26 (0.67.3): aiTag's choice of packages is
+  packages.TagCandidates and its batching and saving core.AITag, over
+  TagStore and Asker interfaces.
 
 ## 6. Test coverage gaps
 
@@ -214,7 +215,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   package name, and flag other managers' copies as shadowed (a finding when the
   shadowed copy is newer).
   Reuse package data and update plans rather than adding another updater.
-- [ ] **Verify parity with the original pkgm toolsets.** (p2) [test] Compare its package
+- [x] **Verify parity with the original pkgm toolsets.** (p2) [test] (closed 2026-11-26: the owner confirmed pkgm is already integrated.) Compare its package
   groups, manager self-updates and install/update recipes against audit's
   managers and tracked binaries; document remaining gaps before retiring
   the prototype. The original prototype was not found in this checkout.

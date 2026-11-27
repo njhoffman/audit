@@ -13,7 +13,6 @@ import (
 
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/core"
-	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/registry"
 	"github.com/njhoffman/audit/internal/render"
@@ -24,9 +23,6 @@ import (
 
 // settingGitHubUser remembers the detected GitHub login.
 const settingGitHubUser = "github_user"
-
-// aiTagBatch is how many packages one tagging prompt covers.
-const aiTagBatch = 50
 
 // systemQuestion asks whether a package scan includes the system managers.
 const systemQuestion = "Include apt, snap and flatpak in this scan?"
@@ -371,84 +367,19 @@ func (a *app) aiTag(ctx context.Context, r *run.Run, refs []packages.Ref, retag,
 	if err != nil {
 		return err
 	}
-	metas, err := a.store.PackageMeta(ctx)
-	if err != nil {
-		return err
-	}
-	var invs []packages.Inventory
-	for _, an := range as {
-		invs = append(invs, an.Inventory)
-	}
-	named := map[string]bool{}
-	for _, ref := range refs {
-		for _, p := range ref.Find(invs) {
-			named[p.Key()] = true
-		}
-	}
-	var todo []packages.Item
-	seen := map[string]bool{}
-	for _, an := range as {
-		for _, it := range an.Items {
-			k := it.Key()
-			if it.Meta == nil || seen[k] || (len(refs) > 0 && !named[k]) || (!retag && !it.Meta.TaggedAt.IsZero()) {
-				continue
-			}
-			seen[k] = true
-			todo = append(todo, it)
-		}
-	}
+	todo := packages.TagCandidates(as, refs, retag)
 	if len(todo) == 0 {
 		if showProgress && !a.flags.quiet {
 			sayln(a.errOut, "AI tagging: every package with registry data is tagged; use --ai-retag to tag again.")
 		}
 		return nil
 	}
-	client := a.aiClient("")
-	rep := a.progress(showProgress)
-	defer rep.Done()
-	rep.Phase("asking the AI for tags", (len(todo)+aiTagBatch-1)/aiTagBatch)
-	tagged := 0
-	var updated []packages.Meta
-	var errs []error
-	for start := 0; start < len(todo); start += aiTagBatch {
-		batch := todo[start:min(start+aiTagBatch, len(todo))]
-		resp, err := client.Ask(ctx, llm.Request{System: packages.TagSystem, Prompt: packages.TagPrompt(batch, a.cfg.Packages.Tags)}, retag)
-		rep.Step(fmt.Sprintf("%d package(s)", len(batch)))
-		if err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			errs = append(errs, err)
-			continue
-		}
-		answer, err := packages.ParseTagAnswer(resp.Text, batch, a.cfg.Packages.Tags)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		keys := make([]string, 0, len(answer))
-		for k := range answer {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			m := metas[k]
-			if err := a.store.ReplaceAITags(ctx, m.Manager, m.ID, answer[k]); err != nil {
-				return err
-			}
-			m.TaggedAt = timeNow()
-			updated = append(updated, m)
-			tagged++
-		}
-	}
-	if err := a.store.SavePackageMeta(ctx, updated); err != nil {
-		return err
-	}
-	rep.Done()
-	if showProgress && !a.flags.quiet {
+	tagged, err := core.AITag(ctx, todo, core.TagOptions{Store: a.store, AI: a.aiClient(""), Vocab: a.cfg.Packages.Tags,
+		Refresh: retag, Now: timeNow()}, a.progress(showProgress))
+	if ctx.Err() == nil && showProgress && !a.flags.quiet {
 		say(a.errOut, "AI tagging: tagged %d of %d package(s).\n", tagged, len(todo))
 	}
-	return errors.Join(errs...)
+	return err
 }
 
 func newPackagesInfoCmd(a *app) *cobra.Command {

@@ -68,3 +68,32 @@ func ParseTagAnswer(text string, items []Item, vocab []string) (map[string][]str
 	}
 	return out, nil
 }
+
+// TagCandidates are the packages of as that AI tagging asks about: each
+// once, with registry data, untagged unless retag is set, and only those
+// refs name when there are refs.
+func TagCandidates(as []Annotated, refs []Ref, retag bool) []Item {
+	var invs []Inventory
+	for _, an := range as {
+		invs = append(invs, an.Inventory)
+	}
+	named := map[string]bool{}
+	for _, ref := range refs {
+		for _, p := range ref.Find(invs) {
+			named[p.Key()] = true
+		}
+	}
+	var out []Item
+	seen := map[string]bool{}
+	for _, an := range as {
+		for _, it := range an.Items {
+			k := it.Key()
+			if it.Meta == nil || seen[k] || (len(refs) > 0 && !named[k]) || (!retag && !it.Meta.TaggedAt.IsZero()) {
+				continue
+			}
+			seen[k] = true
+			out = append(out, it)
+		}
+	}
+	return out
+}
