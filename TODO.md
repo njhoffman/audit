@@ -122,7 +122,12 @@ global limit; AI cache entries and closed tasks still have no age limit.
   Progress 2026-11-26: runtime cleanup planning, its verification and the
   node-major rule are now packages.CleanupPlan, VerifyCleanup and
   NodeMajorAfter; cmd keeps only the store and lookup calls. Bins install
-  moved earlier. update.go and packages.go remain.
+  moved earlier. Progress 2026-11-26 (0.67.2): the store and lookup calls
+  too are now PackagesScanner.RuntimeCleanupPlan, InstalledPythons and
+  RememberNodeMajor, and update.go's plan assembly is
+  PackagesScanner.UpdatePlan with Update.Attempted; cmd keeps the prompts,
+  sudo and output. packages.go's aiTag (batching and saving AI tags)
+  remains.
 
 ## 6. Test coverage gaps
 

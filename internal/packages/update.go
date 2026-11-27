@@ -330,6 +330,17 @@ func (u Update) Counts() (updated, failed, skipped int) {
 	return updated, failed, skipped
 }
 
+// Attempted are the packages whose step ran, whether it worked or not.
+func (u Update) Attempted() []Ref {
+	var out []Ref
+	for _, it := range u.Items {
+		if it.Status != UpdateSkipped {
+			out = append(out, Ref{Manager: it.Manager, Name: it.Name})
+		}
+	}
+	return out
+}
+
 // Summary is "12 updated, 2 failed, 3 skipped".
 func (u Update) Summary() string {
 	up, failed, skipped := u.Counts()

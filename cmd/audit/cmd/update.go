@@ -167,21 +167,15 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 	if err := json.Unmarshal(res.Run.Data, &d); err != nil {
 		return fmt.Errorf("read packages inventory: %w", err)
 	}
-	metas, err := a.store.PackageMeta(ctx)
-	if err != nil {
-		return err
-	}
-	metas = packages.LocalMeta(d.Inventories, metas, timeNow())
 	gaps, err := packages.ParseGaps(splitList(f.gaps))
 	if err != nil {
 		return err
 	}
-	if slices.Contains(gaps, packages.GapMajor) {
-		f.major = true
+	plan, err := s.UpdatePlan(ctx, d, packages.PlanOptions{
+		Refs: refs, Major: f.major, Exclude: parseRefs(a.cfg.Packages.Update.Exclude), Gaps: gaps})
+	if err != nil {
+		return err
 	}
-	plan := packages.PlanUpdates(d.Inventories, metas, packages.PlanOptions{
-		Tools: packages.DetectUpdateTools(s.ScanEnv),
-		Refs:  refs, Major: f.major, Exclude: parseRefs(a.cfg.Packages.Update.Exclude), Gaps: gaps})
 	if len(plan.Unmatched) > 0 {
 		return fmt.Errorf("no installed package matches %s", strings.Join(plan.Unmatched, ", "))
 	}
@@ -234,13 +228,7 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 		return err
 	}
 
-	var attempted []packages.Ref
-	for _, it := range u.Items {
-		if it.Status != packages.UpdateSkipped {
-			attempted = append(attempted, packages.Ref{Manager: it.Manager, Name: it.Name})
-		}
-	}
-	if len(attempted) > 0 {
+	if attempted := u.Attempted(); len(attempted) > 0 {
 		// Every manager is rescanned (only the attempted packages are looked
 		// up again), so the full results the saved views read show the
 		// update even when --manager narrowed it; system managers the scan

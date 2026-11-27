@@ -344,12 +344,16 @@ func TestNodeMajorRemembered(t *testing.T) {
 	}
 	u := &packages.Update{Items: []packages.UpdateResult{
 		{Kind: packages.KindMigration, Manager: "pnpm", Name: "eslint", Status: packages.UpdateOK}}}
-	a.rememberNodeMajor(ctx, u, packages.Data{Runtimes: []packages.RuntimeStatus{{Name: "node", Version: "26.1.0"}}})
+	if ok, err := s.RememberNodeMajor(ctx, u, packages.Data{Runtimes: []packages.RuntimeStatus{{Name: "node", Version: "26.1.0"}}}); !ok || err != nil {
+		t.Errorf("remembered: %v %v", ok, err)
+	}
 	if v, _ := a.store.Setting(ctx, core.NodeMajorSetting); v != "26" {
 		t.Errorf("after a clean node migration: %q", v)
 	}
 	u.Items = append(u.Items, packages.UpdateResult{Kind: packages.KindMigration, Manager: "pnpm", Name: "bad", Status: packages.UpdateFailed})
-	a.rememberNodeMajor(ctx, u, packages.Data{Runtimes: []packages.RuntimeStatus{{Name: "node", Version: "28.0.0"}}})
+	if ok, err := s.RememberNodeMajor(ctx, u, packages.Data{Runtimes: []packages.RuntimeStatus{{Name: "node", Version: "28.0.0"}}}); ok || err != nil {
+		t.Errorf("a failed global remembers nothing: %v %v", ok, err)
+	}
 	if v, _ := a.store.Setting(ctx, core.NodeMajorSetting); v != "26" {
 		t.Errorf("a failed global keeps the old major: %q", v)
 	}

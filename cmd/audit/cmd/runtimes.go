@@ -12,7 +12,6 @@ import (
 
 	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/packages"
-	"github.com/njhoffman/audit/internal/registry"
 	"github.com/njhoffman/audit/internal/version"
 )
 
@@ -281,7 +280,9 @@ func (a *app) runtimesMigrate(ctx context.Context, names []string, f runtimeFlag
 				after = packages.Data{}
 			} else {
 				packages.VerifyMigrations(u.Items, after.Inventories)
-				a.rememberNodeMajor(ctx, u, after)
+				if _, err := s.RememberNodeMajor(ctx, u, after); err != nil {
+					a.log.Warn("remember the node major", "err", err)
+				}
 			}
 		}
 	}
@@ -319,20 +320,10 @@ func (a *app) planGate(plan packages.Plan, f runtimeFlags, question, nothing str
 	return a.confirm(fmt.Sprintf(question, runnable))
 }
 
-// rememberNodeMajor records the current node major once every pnpm global
-// moved onto it.
-func (a *app) rememberNodeMajor(ctx context.Context, u *packages.Update, after packages.Data) {
-	if major, ok := packages.NodeMajorAfter(u, after); ok {
-		if err := a.store.SetSetting(ctx, core.NodeMajorSetting, major); err != nil {
-			a.log.Warn("remember the node major", "err", err)
-		}
-	}
-}
-
 // cleanup offers to trash stale runtime directories and uninstall python
 // patches no tool uses, and runs what was accepted.
 func (a *app) cleanup(ctx context.Context, s *core.PackagesScanner, d packages.Data, f runtimeFlags, show bool) []packages.UpdateResult {
-	plan := a.cleanupPlan(ctx, s, d)
+	plan := a.runtimeCleanupPlan(ctx, s, d)
 	if len(plan.Items) == 0 {
 		return nil
 	}
@@ -358,51 +349,28 @@ func (a *app) cleanup(ctx context.Context, s *core.PackagesScanner, d packages.D
 	}
 	rs := a.execPlan(ctx, s.ScanEnv, plan, "removing stale runtimes", f.stopOnError, !f.json, show)
 	packages.VerifyCleanup(rs, func(p string) bool { _, err := os.Stat(p); return err == nil },
-		func() map[string]bool { return a.installedPythons(ctx, s) })
+		func() map[string]bool {
+			pys, err := s.InstalledPythons(ctx, a.rtLooker, a.cfg.Packages.Registry.Timeout)
+			if err != nil {
+				a.log.Warn("list pythons", "err", err)
+			}
+			return pys
+		})
 	return rs
 }
 
-// cleanupPlan gathers what packages.CleanupPlan needs: the saved run's
-// stale runtime directories, gio, the python cache and uv's inventory.
-func (a *app) cleanupPlan(ctx context.Context, s *core.PackagesScanner, d packages.Data) packages.Plan {
-	var dirs []string
-	if r, err := a.engine.Saved(ctx, packages.Command, ""); err == nil && r != nil {
-		for _, fd := range r.Findings {
-			if fd.Check == "runtime.stale_dirs" {
-				dirs = append(dirs, fd.Subject)
-			}
-		}
+// runtimeCleanupPlan plans the stale runtime leftovers of the saved
+// packages run.
+func (a *app) runtimeCleanupPlan(ctx context.Context, s *core.PackagesScanner, d packages.Data) packages.Plan {
+	saved, err := a.engine.Saved(ctx, packages.Command, "")
+	if err != nil {
+		a.log.Warn("load the saved packages run", "err", err)
 	}
-	hasGio := s.ScanEnv.Which("gio") != ""
-	metas, err := a.store.RuntimeMeta(ctx)
+	plan, err := s.RuntimeCleanupPlan(ctx, saved, d)
 	if err != nil {
 		a.log.Warn("load runtime cache", "err", err)
-		return packages.CleanupPlan(dirs, hasGio, packages.RuntimeMeta{}, nil)
 	}
-	var uv *packages.Inventory
-	for i := range d.Inventories {
-		if d.Inventories[i].Manager == "uv" && d.Inventories[i].Available {
-			uv = &d.Inventories[i]
-		}
-	}
-	return packages.CleanupPlan(dirs, hasGio, metas[packages.RuntimePython], uv)
-}
-
-func (a *app) installedPythons(ctx context.Context, s *core.PackagesScanner) map[string]bool {
-	out := map[string]bool{}
-	l := a.rtLooker
-	if l == nil {
-		l = registry.NewClient(s.ScanEnv, "", a.cfg.Packages.Registry.Timeout)
-	}
-	m, err := l.LookupRuntime(ctx, packages.RuntimePython)
-	if err != nil {
-		a.log.Warn("list pythons", "err", err)
-		return out
-	}
-	for _, in := range m.Installs {
-		out[in.Version] = true
-	}
-	return out
+	return plan
 }
 
 // finishUpdate saves an update, prunes old ones and prints it.

@@ -371,3 +371,18 @@ func TestPlanUpdatesGaps(t *testing.T) {
 		t.Errorf("named: %v", got)
 	}
 }
+
+func TestUpdateAttempted(t *testing.T) {
+	u := Update{Items: []UpdateResult{
+		{Manager: "uv", Name: "ruff", Status: UpdateOK},
+		{Manager: "uv", Name: "black", Status: UpdateSkipped},
+		{Manager: "cargo", Name: "bat", Status: UpdateFailed},
+	}}
+	got := u.Attempted()
+	if len(got) != 2 || got[0] != (Ref{Manager: "uv", Name: "ruff"}) || got[1] != (Ref{Manager: "cargo", Name: "bat"}) {
+		t.Errorf("attempted %v", got)
+	}
+	if (Update{}).Attempted() != nil {
+		t.Error("nothing ran")
+	}
+}
