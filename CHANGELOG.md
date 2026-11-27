@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-11-26
+
 ### Added
 
 - `audit history runs fixes` lists what got done: tasks resolved by a rescan, marked done or won't do, and reopened, and every successful package update, repo sync, cleanup and history prune with the versions or counts it moved between, with totals per command and priority. The log survives run, task and update pruning and keeps no command text. A reopened task that was fixed before says so in its details, which `todo show`, `todo explain` and `todo fix` see.
