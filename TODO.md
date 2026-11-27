@@ -385,7 +385,7 @@ them from being noise (one per check, dismissable like ignore rules).
   cached explanation for the task (or save explanations against the task id) and
   add it to the fix prompt as context, marked as an earlier AI answer and not as
   instructions.
-- [ ] **AI review as part of scanning, with suggestions as findings.** (p2) [feature]
+- [x] **AI review as part of scanning, with suggestions as findings.** (ai.review_on_scan, empty by default; ai.review suggestions at the lowest priority; ai.review_daily_usd cap, cached answers free) (p2) [feature]
   `--ai`/`-a` already adds a review to a scan (Engine.Analyze), but only when
   given, and the review is prose in `run.Analysis`, so its points never become
   tasks. Add config `ai.review_on_scan` (off by default) and ask for structured

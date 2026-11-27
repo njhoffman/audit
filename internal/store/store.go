@@ -735,6 +735,13 @@ func (s *Store) CachePut(ctx context.Context, hash string, c CachedResponse) err
 	return err
 }
 
+// AICostSince sums what the AI answers cached since t cost.
+func (s *Store) AICostSince(ctx context.Context, t time.Time) (float64, error) {
+	var sum float64
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(cost_usd), 0) FROM llm_cache WHERE created_at >= ?`, fmtTime(t)).Scan(&sum)
+	return sum, err
+}
+
 // PruneCache deletes cached AI responses created before cutoff and reports
 // how many went. Entries are keyed by prompt hash, so one whose findings
 // changed is never read again.

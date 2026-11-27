@@ -206,3 +206,63 @@ func TestNewUrgentTasks(t *testing.T) {
 		t.Errorf("%+v", got)
 	}
 }
+
+func TestReviewOnScan(t *testing.T) {
+	cfgHome, _ := env(t)
+	review := `{"points":[{"title":"Rotate the old keys","subject":"","severity":"notice","details":["3 keys older than a year"],"fix":"ssh-keygen"},` +
+		`{"title":"Same subject as a finding","subject":"s","severity":"info","details":[],"fix":""}]}`
+	claude, stdin, argv := fakeAI(t, "claude", claudeJSON(t, map[string]any{"subtype": "success", "result": review, "total_cost_usd": 0.5}))
+	writeConfig(t, cfgHome, "ai: {claude: {command: "+claude+"}, review_on_scan: [system], review_daily_usd: 0.4}\n")
+	f := &fakeScans{}
+	if r := runArgsWith(t, f.setup, "-r", "-O", "system"); r.e != nil {
+		t.Fatalf("%v\n%s", r.e, r.err)
+	}
+	if p := readFile(t, stdin) + readFile(t, argv); !strings.Contains(p, "system.x") || !strings.Contains(p, "NOT already cover") {
+		t.Errorf("the scan's findings are sent:\n%s", p)
+	}
+	a, _, _ := loadedApp(t)
+	ctx := context.Background()
+	saved, err := a.engine.Saved(ctx, "system", "")
+	if err != nil || saved == nil {
+		t.Fatal(err)
+	}
+	var ai []finding.Finding
+	for _, x := range saved.Findings {
+		if x.Check == "ai.review" {
+			ai = append(ai, x)
+		}
+	}
+	if len(ai) != 1 || ai[0].Subject != "rotate-the-old-keys" || ai[0].Kind != finding.Suggestion {
+		t.Errorf("one point becomes a finding, the one about a reported subject is dropped: %+v", ai)
+	}
+	ts, _ := a.store.Todos(ctx, "system")
+	if !slices.ContainsFunc(ts, func(x todo.Todo) bool { return x.Check == "ai.review" && x.Priority == todo.Suggestion }) {
+		t.Errorf("it becomes a suggestion task: %+v", ts)
+	}
+	a.close()
+
+	// The same result set is answered from the cache although $0.50 is past
+	// the $0.40 cap; a new one is skipped for the day.
+	if err := os.Remove(stdin); err != nil {
+		t.Fatal(err)
+	}
+	if r := runArgsWith(t, f.setup, "-r", "-a", "-O", "system"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	if _, err := os.Stat(stdin); err == nil {
+		t.Error("a cached review does not call the AI")
+	}
+	writeConfig(t, cfgHome, "ai: {claude: {command: "+claude+"}, review_on_scan: [system, repos], review_daily_usd: 0.4}\n")
+	if r := runArgsWith(t, f.setup, "-r", "-a", "-O", "repos"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	a, _, _ = loadedApp(t)
+	saved, _ = a.engine.Saved(ctx, "repos", "")
+	if saved == nil || !slices.ContainsFunc(saved.Errors, func(e string) bool { return strings.Contains(e, "ai review skipped: today's AI spend $0.50") }) {
+		t.Errorf("over budget: %+v", saved)
+	}
+	writeConfig(t, cfgHome, "ai: {review_on_scan: [nope]}\n")
+	if r := runArgs(t, "todo"); r.e == nil || !strings.Contains(r.e.Error(), `ai.review_on_scan: unknown command "nope"`) {
+		t.Errorf("bad command: %v", r.e)
+	}
+}

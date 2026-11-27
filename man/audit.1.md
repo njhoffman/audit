@@ -585,6 +585,8 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       fzf_keys: {open: [enter], status_done: [alt-d], ...}   # see FZF
     ai:
       commit_fixes: ask        # after todo fix closes a task: offer to commit the files it changed in git work trees; never
+      review_on_scan: []       # commands whose every full scan gets an AI review; its points become ai.review suggestions
+      review_daily_usd: 1.0    # stop new review calls for the day once the AI cache shows this much spent; 0: no cap
       provider: claude         # claude or codex; -I overrides it per run
       claude: {command: claude, model: claude-sonnet-5-5}
       codex: {command: codex, model: ""}   # empty model: codex's default

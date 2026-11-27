@@ -8,6 +8,7 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -156,6 +157,14 @@ func (a *app) load() error {
 		a.env.Runner = a.runner
 	}
 	a.engine = &core.Engine{Store: st, Config: cfg, Host: host}
+	for _, c := range cfg.AI.ReviewOnScan {
+		if !slices.Contains(core.Commands, c) {
+			return fmt.Errorf("ai.review_on_scan: unknown command %q (want %s)", c, strings.Join(core.Commands, ", "))
+		}
+	}
+	if len(cfg.AI.ReviewOnScan) > 0 {
+		a.engine.Reviewer = a.aiClient("")
+	}
 	return nil
 }
 

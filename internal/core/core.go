@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/njhoffman/audit/internal/config"
@@ -67,6 +68,8 @@ type Engine struct {
 	Now    func() time.Time
 	// AI is nil unless --ai was given.
 	AI *llm.Client
+	// Reviewer, when set, reviews full scans of ai.review_on_scan commands.
+	Reviewer *llm.Client
 }
 
 func (e *Engine) now() time.Time {
@@ -136,6 +139,14 @@ func (e *Engine) Execute(ctx context.Context, s Scanner, rep progress.Reporter) 
 	if err != nil {
 		return nil, err
 	}
+	if e.Reviewer != nil && s.Scope() == "" && slices.Contains(e.Config.AI.ReviewOnScan, s.Command()) {
+		rep.Phase("asking the AI for a review", 0)
+		add, note := e.review(ctx, s.Command(), out)
+		out.Findings = append(out.Findings, add...)
+		if note != "" {
+			out.Errors = append(out.Errors, note)
+		}
+	}
 	kept, ignored := finding.NewIgnorer(e.Config.Ignore).Split(out.Findings)
 	if kept == nil {
 		kept = []finding.Finding{}
@@ -192,6 +203,38 @@ func inScope(s Scanner, existing, derived []todo.Todo) []todo.Todo {
 		}
 	}
 	return out
+}
+
+// review asks Reviewer what the scan's checks missed. A cached answer is
+// used whatever the budget; a new call waits until tomorrow once today's AI
+// spend reached ai.review_daily_usd. Failures become a note for the run's
+// errors, never a failed scan.
+func (e *Engine) review(ctx context.Context, command string, out *Outcome) ([]finding.Finding, string) {
+	req := llm.ReviewRequest(command, out.Findings, out.Stats, e.Config.AI.MaxDetails)
+	if budget := e.Config.AI.ReviewDailyUSD; budget > 0 {
+		hit, err := e.Reviewer.Cached(ctx, req)
+		if err != nil {
+			return nil, "ai review: " + err.Error()
+		}
+		if hit == nil {
+			now := e.now()
+			spent, err := e.Store.AICostSince(ctx, time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()))
+			if err != nil {
+				return nil, "ai review: " + err.Error()
+			}
+			if spent >= budget {
+				return nil, fmt.Sprintf("ai review skipped: today's AI spend $%.2f reached ai.review_daily_usd ($%.2f)", spent, budget)
+			}
+		}
+	}
+	var rv llm.Review
+	if _, err := e.Reviewer.AskJSON(ctx, req, false, &rv); err != nil {
+		if ctx.Err() != nil {
+			return nil, ""
+		}
+		return nil, "ai review: " + err.Error()
+	}
+	return llm.ReviewFindings(command, rv, out.Findings), ""
 }
 
 // Analyze attaches an AI review to r and saves it. refresh skips the cache.

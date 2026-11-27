@@ -257,6 +257,12 @@ type AIConfig struct {
 	// changed in a git work tree once the task closes: ask (offer a commit
 	// of only those files) or never.
 	CommitFixes string `mapstructure:"commit_fixes" yaml:"commit_fixes"`
+	// ReviewOnScan lists the commands whose every full scan gets an AI
+	// review whose points become ai.review suggestions; empty is off.
+	ReviewOnScan []string `mapstructure:"review_on_scan" yaml:"review_on_scan"`
+	// ReviewDailyUSD caps what those reviews may spend per day, counted
+	// from the AI cache; a cached answer costs nothing. 0 means no cap.
+	ReviewDailyUSD float64 `mapstructure:"review_daily_usd" yaml:"review_daily_usd"`
 }
 
 // ProviderConfig is one AI CLI.
@@ -495,6 +501,8 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("ai.instruction_limit_kb", 40)
 	v.SetDefault("ai.cache_max_age", 90*24*time.Hour)
 	v.SetDefault("ai.commit_fixes", CommitAsk)
+	v.SetDefault("ai.review_on_scan", []string{})
+	v.SetDefault("ai.review_daily_usd", 1.0)
 	v.SetDefault("todo.closed_max_age", 90*24*time.Hour)
 	v.SetDefault("schedule.calendar", "daily")
 	// packages reaches the registries; the others stay local by default.
@@ -747,6 +755,9 @@ func (c *Config) validate() error {
 	}
 	if !slices.Contains([]string{CommitAsk, CommitNever}, c.AI.CommitFixes) {
 		return fmt.Errorf("ai.commit_fixes must be %s or %s, got %q", CommitAsk, CommitNever, c.AI.CommitFixes)
+	}
+	if c.AI.ReviewDailyUSD < 0 {
+		return fmt.Errorf("ai.review_daily_usd must be 0 (no cap) or more, got %g", c.AI.ReviewDailyUSD)
 	}
 	if c.AI.CacheMaxAge < 0 {
 		return fmt.Errorf("ai.cache_max_age must be 0 (keep all) or more, got %s", c.AI.CacheMaxAge)
@@ -1022,6 +1033,13 @@ ai:
   # changed in each git work tree (only files that were clean before), or
   # never.
   commit_fixes: ask
+  # Commands whose every full scan gets an AI review; its points become
+  # ai.review suggestions (lowest priority), dropped when a finding already
+  # covers their subject. An unchanged result set is answered from the
+  # cache for free; new calls stop for the day once review_daily_usd is
+  # spent (0: no cap). e.g. [system, configs]
+  review_on_scan: []
+  review_daily_usd: 1.0
 
 system:
   # Extra journalctl flags for the journal source.
