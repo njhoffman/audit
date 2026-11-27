@@ -291,8 +291,8 @@ func newTodoFixCmd(a *app) *cobra.Command {
 		Long: `Start the AI CLI (ai.provider, or --ai-provider) interactively with the
 task and every detail of the saved findings behind it, asking it to fix the
 task. The CLI asks before each edit or command as usual. Tasks that a
-built-in action handles (packages update, repos sync, files clean, configs
-clean) are pointed at that action. When the session exits, the task's
+built-in action handles (packages update, repos sync, files, configs and
+containers clean) are pointed at that action. When the session exits, the task's
 command is rescanned and the task's new status printed.
 In the task editor (audit todo -i), F does the same for the selected task.`,
 		Args: cobra.ExactArgs(1),

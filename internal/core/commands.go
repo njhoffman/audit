@@ -49,11 +49,12 @@ type Action struct {
 
 // Actions are the commands with a built-in action.
 var Actions = map[string]Action{
-	packages.Command: {Label: "update", Args: []string{"packages", "update"}, Rescans: true},
-	"history":        {Label: "prune", Args: []string{"history", "prune"}, Rescans: true},
-	repos.Command:    {Label: "sync", Args: []string{"repos", "sync"}, Rescans: true},
-	files.Command:    {Label: "clean", Args: []string{"files", "clean"}},
-	configs.Command:  {Label: "clean", Args: []string{"configs", "clean"}},
+	packages.Command:   {Label: "update", Args: []string{"packages", "update"}, Rescans: true},
+	"history":          {Label: "prune", Args: []string{"history", "prune"}, Rescans: true},
+	repos.Command:      {Label: "sync", Args: []string{"repos", "sync"}, Rescans: true},
+	files.Command:      {Label: "clean", Args: []string{"files", "clean"}},
+	configs.Command:    {Label: "clean", Args: []string{"configs", "clean"}},
+	containers.Command: {Label: "clean", Args: []string{"containers", "clean"}},
 }
 
 // ScopeFlags names the flag that selects each command's scope.

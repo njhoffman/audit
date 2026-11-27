@@ -63,7 +63,7 @@ show the current state, not what moved.
 Each one implements `core.Scanner`, joins `core.Commands`, gets a subcommand,
 an entry in `scanEntries` (cmd/audit/cmd/scanners.go) and a config section.
 
-- [x] **`audit containers`** [feature] (p3) (listing only; `containers clean` and images behind their tag are not done): docker and podman dangling images, unused
+- [x] **`audit containers`** [feature] (p3) (`containers clean` landed in 0.67.0; images behind their tag are not done): docker and podman dangling images, unused
   volumes, stopped containers older than N days, images far behind their tag,
   rootless vs rootful. `files` already reports docker's cache size; this
   would own the per-object view and `containers clean`.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit containers clean` removes what `audit containers` reported: containers stopped longer than `containers.stopped_after` and dangling images, and with `-V`/`--volumes` the volumes no container uses. Each step is the engine's plain `rm`, `rmi` or `volume rm`, so anything running or in use again since the scan is refused and stays; each object is inspected afterwards to confirm it is gone. Names limit the plan, an ignored finding keeps its objects out, and it is confirmed like `packages update` (`-y`, `-N`, `-L`). It is the containers row's action (`a` on the dashboard, alt-x in fzf) and the action `todo fix` points container tasks at.
+
 ## [0.66.0] - 2026-11-26
 
 ### Added

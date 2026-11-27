@@ -44,7 +44,7 @@ func newHistoryRunsFixesCmd(a *app) *cobra.Command {
 		Long: `List what audit and you got done, newest first: tasks resolved by a rescan,
 marked done or won't do, and reopened when their problem came back; and
 every action step that succeeded (package and runtime updates, repo
-syncs, files and configs cleanups, history prunes). This log is kept when
+syncs, files, configs and containers cleanups, history prunes). This log is kept when
 runs, tasks and update runs are pruned. The totals count tasks closed per
 command and priority, reopened tasks, and steps per kind.`,
 		Args: cobra.NoArgs,

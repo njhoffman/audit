@@ -200,10 +200,11 @@ func taskPayload(t todo.Todo, fs []finding.Finding) []byte {
 // fixActions are the audit subcommands that fix whole classes of tasks,
 // by command.
 var fixActions = map[string]string{
-	"packages": "`audit packages update` (and `audit packages runtimes update`) for outdated packages and runtimes",
-	"repos":    "`audit repos sync` for repos behind, renamed or moved upstream",
-	"files":    "`audit files clean` for caches, build directories, orphaned data and duplicates",
-	"configs":  "`audit configs clean` for orphaned configs",
+	"packages":   "`audit packages update` (and `audit packages runtimes update`) for outdated packages and runtimes",
+	"repos":      "`audit repos sync` for repos behind, renamed or moved upstream",
+	"files":      "`audit files clean` for caches, build directories, orphaned data and duplicates",
+	"configs":    "`audit configs clean` for orphaned configs",
+	"containers": "`audit containers clean` for old stopped containers, dangling images and (with --volumes) unused volumes",
 }
 
 // FixTaskPrompt is the first message of an interactive AI session that
