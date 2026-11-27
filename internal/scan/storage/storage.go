@@ -218,10 +218,14 @@ func smart(ctx context.Context, env *exec.Env) ([]scan.Finding, []string) {
 	return fs, errs
 }
 
+// firstLines joins the first n lines of s, each trimmed, with " / ".
 func firstLines(s string, n int) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	if len(lines) > n {
 		lines = lines[:n]
+	}
+	for i, l := range lines {
+		lines[i] = strings.TrimSpace(l)
 	}
 	return strings.Join(lines, " / ")
 }

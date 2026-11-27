@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `system`'s storage checks no longer carry a command's indentation into a finding: the first lines of `zpool status -x` (and of lsblk and smartctl errors) are trimmed before they are joined.
+- Internal: tests for the users scan (finding order, readable and unreadable shadow, the real account files), ZFS pool status, and the render views of the fixes log, diffs, files, AI answers and repo states. Coverage: `internal/scan/users` 66.9% to 92.8%, `internal/scan/storage` 72.0% to 81.4%, `internal/render` 66.2% to 84.2%.
+
 ## [0.69.0] - 2026-11-27
 
 ### Added

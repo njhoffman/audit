@@ -110,11 +110,13 @@ them from being noise (one per check, dismissable like ignore rules).
   runs fixes` is terminal-only. A dashboard panel (the last few fixes under
   the table, or a key that opens the log as a report) and a section on the
   tasks page would show the same data where the tasks are.
-- [ ] **Coverage of the renderers and two scanners.** (p3) [test] Lowest
+- [x] **Coverage of the renderers and two scanners.** (p3) [test] Lowest
   per-package coverage: `internal/scan/users` 66.9%, `internal/render` 70.7%,
   `internal/scan/storage` 72.0%, `cmd/audit/cmd` 77.6%. render's report and
   package views carry the most untested branches (empty data, narrow
-  widths, nerd-font glyphs).
+  widths, nerd-font glyphs). Done 2026-11-27 (0.69.1): users 92.8%,
+  storage 81.4%, render 84.2%; cmd stays near 78%, its gaps mostly the
+  terminal-only paths (fzf picker, pager, sudo prompts).
 
 ## Completed
 
