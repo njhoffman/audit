@@ -45,7 +45,7 @@ show the current state, not what moved.
 - [x] **"New since last run" filter.** (`audit todo -N`, `N` in the task editor, "new in the last scan" on tasks.html) (p3) [feature] Split from the deltas item: a filter
   in the task editor and tasks page for tasks the latest run of their command created
   or reopened.
-- [ ] **Trend in the HTML index.** [feature] (p3) Finding counts per severity over the kept
+- [x] **Trend in the HTML index.** [feature] (p3) Finding counts per severity over the kept
   runs, as a small inline chart per command.
 - [ ] **History of fixes and what audit has done.** (p3) [feature] A log that outlives run
   pruning: every task resolved by a rescan or closed by hand, every package

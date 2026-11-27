@@ -12,12 +12,13 @@
 <div class="meta">Generated {{stamp .Generated}}</div>
 <h2>Commands</h2>
 <div class="table-wrap"><table>
-<thead><tr><th>Command</th><th>Last run</th><th>Age</th><th>Findings</th><th>Open tasks</th></tr></thead>
+<thead><tr><th>Command</th><th>Last run</th><th>Age</th><th>Findings</th><th>Trend</th><th>Open tasks</th></tr></thead>
 <tbody>
 {{range .Rows}}<tr>
 <td>{{if .Link}}<a href="{{.Link}}">{{.Command}}</a>{{else}}{{.Command}}{{end}}</td>
 {{if .Latest}}<td>{{stamp .Latest.FinishedAt}}</td><td class="age-{{.Freshness}}">{{.Age}}</td>{{else}}<td class="empty">never</td><td>-</td>{{end}}
 <td>{{.Findings}}</td>
+<td>{{.Trend}}</td>
 <td>{{.Tasks}}</td>
 </tr>
 {{end}}

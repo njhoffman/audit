@@ -282,7 +282,7 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 :   Print every command's last run, its age, its findings and its open tasks.
 
 **-H**, **\-\-html**
-:   Write the HTML report of every command's latest run and the index page.
+:   Write the HTML report of every command's latest run and the index page. The index shows, per command, a trend of its kept full runs: one bar per run, stacked by severity, with each run's date and counts as a tooltip.
 
 **-o**, **\-\-open**
 :   Like **\-\-html**, then open the index with **xdg-open**.

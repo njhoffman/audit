@@ -75,3 +75,4 @@ tr.gap-patch td:nth-child(3), tr.gap-update td:nth-child(3) { color: var(--notic
 tr.gap-minor td:nth-child(3) { color: var(--warning); }
 tr.gap-major td:nth-child(3), tr.gap-dead td:nth-child(3) { color: var(--error); }
 tr.pkg td:nth-child(6) { color: var(--accent); }
+.trend { vertical-align: middle; display: block; }

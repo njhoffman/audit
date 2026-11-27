@@ -330,6 +330,8 @@ type IndexRow struct {
 	Open       map[todo.Priority]int
 	// Link is the command's report file, relative to the index; "" when none.
 	Link string
+	// History are the command's kept full runs, newest first, for the trend.
+	History []store.RunInfo
 }
 
 type indexRow struct {
@@ -338,6 +340,47 @@ type indexRow struct {
 	Freshness string
 	Findings  string
 	Tasks     string
+	Trend     template.HTML
+}
+
+// trendSVG draws runs (newest first) oldest to newest as stacked bars, one
+// per run, a segment per severity in its color and the bar's height scaled
+// to the largest total; each bar's tooltip has the run's date and counts.
+// Fewer than two runs draw nothing: there is no trend yet.
+func trendSVG(runs []store.RunInfo) template.HTML {
+	if len(runs) < 2 {
+		return ""
+	}
+	const barW, gap, height = 6, 2, 28
+	most := 1
+	for _, r := range runs {
+		most = max(most, r.Counts.Total())
+	}
+	var b strings.Builder
+	width := len(runs)*(barW+gap) - gap
+	fmt.Fprintf(&b, `<svg class="trend" width="%d" height="%d" viewBox="0 0 %d %d" role="img" aria-label="findings over the last %d runs">`,
+		width, height, width, height, len(runs))
+	for i := range runs {
+		r := runs[len(runs)-1-i]
+		x := i * (barW + gap)
+		fmt.Fprintf(&b, `<g><title>%s: %s</title>`, r.FinishedAt.Local().Format("2006-01-02 15:04"), template.HTMLEscapeString(counts(r.Counts)))
+		y := float64(height)
+		for _, s := range finding.Severities {
+			n := r.Counts[s]
+			if n == 0 {
+				continue
+			}
+			h := float64(n) / float64(most) * float64(height)
+			y -= h
+			fmt.Fprintf(&b, `<rect x="%d" y="%.1f" width="%d" height="%.1f" style="fill:var(--%s)"/>`, x, y, barW, h, s)
+		}
+		if r.Counts.Total() == 0 {
+			fmt.Fprintf(&b, `<rect x="%d" y="%d" width="%d" height="1" style="fill:var(--fresh)"/>`, x, height-1, barW)
+		}
+		b.WriteString("</g>")
+	}
+	b.WriteString("</svg>")
+	return template.HTML(b.String()) // #nosec G203 -- built here from numbers, dates and escaped counts
 }
 
 // WriteIndex renders the cross-command index; tasksLink, when set, links
@@ -345,7 +388,7 @@ type indexRow struct {
 func WriteIndex(w io.Writer, rows []IndexRow, tasksLink string, now time.Time) error {
 	out := make([]indexRow, len(rows))
 	for i, r := range rows {
-		out[i] = indexRow{IndexRow: r, Findings: "-", Tasks: tasks(r.Open)}
+		out[i] = indexRow{IndexRow: r, Findings: "-", Tasks: tasks(r.Open), Trend: trendSVG(r.History)}
 		if r.Latest != nil {
 			age := now.Sub(r.Latest.FinishedAt)
 			out[i].Age = run.HumanAge(age)

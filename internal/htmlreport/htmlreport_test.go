@@ -315,3 +315,30 @@ func TestTasksScriptParses(t *testing.T) {
 		}
 	}
 }
+
+func TestTrendSVG(t *testing.T) {
+	at := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	if got := trendSVG([]store.RunInfo{{FinishedAt: at}}); got != "" {
+		t.Errorf("one run has no trend: %s", got)
+	}
+	runs := []store.RunInfo{ // newest first
+		{FinishedAt: at.Add(2 * time.Hour), Counts: finding.Counts{}},
+		{FinishedAt: at.Add(time.Hour), Counts: finding.Counts{finding.Error: 2, finding.Info: 2}},
+		{FinishedAt: at, Counts: finding.Counts{finding.Warning: 1}},
+	}
+	got := string(trendSVG(runs))
+	if strings.Count(got, "<g>") != 3 || !strings.Contains(got, `width="22"`) {
+		t.Fatalf("three bars, 22px wide:\n%s", got)
+	}
+	// Oldest on the left: the warning-only run is first; the newest, clean
+	// run is a flat green line on the right.
+	if first := strings.Index(got, "var(--warning)"); first < 0 || first > strings.Index(got, "var(--error)") {
+		t.Errorf("order:\n%s", got)
+	}
+	if !strings.Contains(got, `<rect x="16" y="27" width="6" height="1" style="fill:var(--fresh)"/>`) {
+		t.Errorf("a clean run:\n%s", got)
+	}
+	if !strings.Contains(got, `height="14.0" style="fill:var(--error)"`) || !strings.Contains(got, "2 error, 2 info") {
+		t.Errorf("segments scale to the largest total, tooltips count:\n%s", got)
+	}
+}

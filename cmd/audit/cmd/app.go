@@ -332,6 +332,15 @@ func (a *app) writeIndex(ctx context.Context) (string, error) {
 	rows := make([]htmlreport.IndexRow, len(statuses))
 	for i, s := range statuses {
 		rows[i] = htmlreport.IndexRow{Command: s.Command, Latest: s.Latest, Thresholds: s.Thresholds, Open: s.Open}
+		hist, err := a.store.History(ctx, s.Command, a.cfg.History)
+		if err != nil {
+			return "", err
+		}
+		for _, h := range hist {
+			if h.Scope == "" {
+				rows[i].History = append(rows[i].History, h)
+			}
+		}
 		if _, err := os.Stat(filepath.Join(a.cfg.ReportDir(), htmlreport.FileName(s.Command))); err == nil {
 			rows[i].Link = htmlreport.FileName(s.Command)
 		}
