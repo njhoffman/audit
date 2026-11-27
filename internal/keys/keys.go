@@ -66,6 +66,7 @@ const (
 	Mark         = "mark"
 	Update       = "update"
 	ToggleAll    = "toggle_outdated"
+	ToggleNew    = "toggle_new"
 )
 
 // Action is something a key does.
@@ -105,6 +106,7 @@ var Actions = []Action{
 	{Search, "find", []Screen{Tasks}, []string{"/"}},
 	{ToggleClosed, "closed", []Screen{Tasks}, []string{"a"}},
 	{CycleCommand, "command", []Screen{Tasks}, []string{"c"}},
+	{ToggleNew, "new", []Screen{Tasks}, []string{"N"}},
 	{ShowPackages, "packages", []Screen{Dashboard}, []string{"p"}},
 	{Mark, "mark", []Screen{Packages}, []string{"m"}},
 	{Update, "update", []Screen{Packages}, []string{"U"}},

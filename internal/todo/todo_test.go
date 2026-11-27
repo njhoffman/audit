@@ -396,3 +396,49 @@ func TestLocations(t *testing.T) {
 		}
 	}
 }
+
+func TestNewInLastScan(t *testing.T) {
+	t1 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	f := func(subject string) finding.Finding {
+		return finding.Finding{Command: "repos", Check: "repo.dirty", Subject: subject, Severity: finding.Warning, Kind: finding.Issue, Message: subject}
+	}
+	scan := func(existing []Todo, at time.Time, fs ...finding.Finding) []Todo {
+		writes, _ := Reconcile("repos", existing, Derive(fs), at)
+		byKey := map[string]Todo{}
+		for _, x := range existing {
+			byKey[x.Key] = x
+		}
+		for _, w := range writes {
+			byKey[w.Key] = w
+		}
+		var out []Todo
+		for _, x := range byKey {
+			out = append(out, x)
+		}
+		Sort(out)
+		return out
+	}
+	news := func(ts []Todo) []string {
+		var out []string
+		for _, x := range (Filter{New: true}).Apply(ts) {
+			out = append(out, x.Title)
+		}
+		return out
+	}
+	ts := scan(nil, t1, f("a"))
+	if got := news(ts); len(got) != 1 {
+		t.Fatalf("the first scan's task is new: %v", got)
+	}
+	ts = scan(ts, t1.Add(time.Hour), f("a"), f("b"))
+	if got := news(ts); len(got) != 1 || !strings.Contains(got[0], "b") {
+		t.Errorf("only b is new after the second scan: %v", got)
+	}
+	ts = scan(ts, t1.Add(2*time.Hour))
+	if got := news(ts); len(got) != 0 {
+		t.Errorf("resolved tasks are not new: %v", got)
+	}
+	manual := Todo{Title: "by hand", Source: Manual, Status: Open, CreatedAt: t1, LastSeenAt: t1}
+	if manual.NewInLastScan() {
+		t.Error("a manual task is never new from a scan")
+	}
+}

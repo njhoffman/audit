@@ -42,7 +42,7 @@ show the current state, not what moved.
   command, check and subject, the same key ignore rules use.
 - [x] **Deltas on the dashboard and summary.** (p3) [feature] `+3 -5` next to each
   command's finding count (Store.RunDelta, the same key as --diff).
-- [ ] **"New since last run" filter.** (p3) [feature] Split from the deltas item: a filter
+- [x] **"New since last run" filter.** (`audit todo -N`, `N` in the task editor, "new in the last scan" on tasks.html) (p3) [feature] Split from the deltas item: a filter
   in the task editor and tasks page for tasks the latest run of their command created
   or reopened.
 - [ ] **Trend in the HTML index.** [feature] (p3) Finding counts per severity over the kept

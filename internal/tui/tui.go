@@ -778,6 +778,10 @@ func (m *Model) todosKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filter.ShowClosed = !m.filter.ShowClosed
 		m.applyFilter()
 		return m, nil
+	case m.is(k, keys.ToggleNew):
+		m.filter.New = !m.filter.New
+		m.applyFilter()
+		return m, nil
 	case m.is(k, keys.CycleCommand):
 		m.filter.Command = m.nextCommand(m.filter.Command)
 		m.applyFilter()
@@ -1022,6 +1026,9 @@ func (m *Model) filterLabel() string {
 	if m.filter.Search != "" {
 		parts = append(parts, fmt.Sprintf("matching %q", m.filter.Search))
 	}
+	if m.filter.New {
+		parts = append(parts, "new in the last scan")
+	}
 	if m.filter.ShowClosed {
 		parts = append(parts, "including closed")
 	} else {
@@ -1092,7 +1099,7 @@ func (m *Model) help() string {
 		hints = [][]string{{"move", keys.Down, keys.Up}, {"details", keys.Open}, {"editor", keys.Editor},
 			{"open", keys.StatusOpen}, {"in progress", keys.StatusDoing}, {"done", keys.StatusDone},
 			{"won't do", keys.StatusWontDo}, {"note", keys.Note}, {"explain", keys.ExplainTask}, {"fix", keys.FixTask}, {"find", keys.Search},
-			{"command", keys.CycleCommand}, {"closed", keys.ToggleClosed}, {"back", keys.Back}, {"quit", keys.Quit}}
+			{"command", keys.CycleCommand}, {"closed", keys.ToggleClosed}, {"new", keys.ToggleNew}, {"back", keys.Back}, {"quit", keys.Quit}}
 	}
 	parts := make([]string, 0, len(hints))
 	for _, h := range hints {

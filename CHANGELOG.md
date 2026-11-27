@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A "new in the last scan" task filter: `audit todo -N`, `N` in the task editor (`tui.keys.toggle_new`) and a status choice on `tasks.html` keep the open tasks the last scan of their command created and no later scan has seen since.
+
 ## [0.55.0] - 2026-11-26
 
 ### Added

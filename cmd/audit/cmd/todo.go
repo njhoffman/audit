@@ -26,6 +26,7 @@ func newTodoCmd(a *app) *cobra.Command {
 		statuses    []string
 		all         bool
 		search      string
+		onlyNew     bool
 		asJSON      bool
 		interactive bool
 		useFzf      bool
@@ -54,7 +55,7 @@ token that every request needs.`,
 			if err := a.load(); err != nil {
 				return err
 			}
-			flt := todo.Filter{Command: command, ShowClosed: all, Search: search}
+			flt := todo.Filter{Command: command, ShowClosed: all, Search: search, New: onlyNew}
 			for _, p := range splitList(priorities) {
 				pr, err := todo.ParsePriority(p)
 				if err != nil {
@@ -119,6 +120,7 @@ token that every request needs.`,
 	fl.StringSliceVarP(&statuses, "status", "S", nil, "only these statuses: open, in-progress, done, wont-do, resolved")
 	fl.BoolVarP(&all, "all", "a", false, "include closed tasks (done, won't do, resolved)")
 	fl.StringVarP(&search, "find", "f", "", "only tasks whose title, key or note contains this text")
+	fl.BoolVarP(&onlyNew, "new", "N", false, "only open tasks the last scan of their command created")
 	fl.BoolVarP(&asJSON, "json", "j", false, "print tasks as JSON")
 	fl.BoolVarP(&interactive, "interactive", "i", false, "browse and change tasks in a terminal UI")
 	fl.BoolVarP(&useFzf, "fzf", "F", false, "browse and change tasks in fzf (implies -i; default tui.interface)")

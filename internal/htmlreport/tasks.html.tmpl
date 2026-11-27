@@ -60,6 +60,7 @@ kbd { font-family: ui-monospace, Menlo, monospace; font-size: 12px; border: 1px 
   <input type="search" id="q" placeholder="Search title, details, hint, note, check, key...">
   <select id="status" title="status">
     <option value="active">open + in progress</option>
+    <option value="new">new in the last scan</option>
     <option value="open">open</option>
     <option value="in_progress">in progress</option>
     <option value="done">done</option>
@@ -160,6 +161,8 @@ kbd { font-family: ui-monospace, Menlo, monospace; font-size: 12px; border: 1px 
   function matches(t) {
     if (state.status === "active" && closed(t)) { return false; }
     if (state.status === "closed" && !closed(t)) { return false; }
+    // Reconcile stamps a task it creates with the scan's time as both.
+    if (state.status === "new" && (closed(t) || t.source === "manual" || t.source === "ai" || t.created_at !== t.last_seen_at)) { return false; }
     if (["open", "in_progress", "done", "wont_do", "resolved"].indexOf(state.status) >= 0 && t.status !== state.status) { return false; }
     if (state.command && t.command !== state.command) { return false; }
     if (state.source && t.source !== state.source) { return false; }

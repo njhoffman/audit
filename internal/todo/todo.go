@@ -446,6 +446,13 @@ func Sort(ts []Todo) {
 	})
 }
 
+// NewInLastScan reports whether a scan created t and no later scan has
+// seen it since: an open scanned task whose creation is its last sighting
+// (Reconcile stamps both with the scan's time).
+func (t Todo) NewInLastScan() bool {
+	return t.Source.Scanned() && !t.Status.Closed() && !t.CreatedAt.IsZero() && t.CreatedAt.Equal(t.LastSeenAt)
+}
+
 // Filter selects tasks for display.
 type Filter struct {
 	Command    string
@@ -453,6 +460,8 @@ type Filter struct {
 	Statuses   []Status
 	ShowClosed bool
 	Search     string
+	// New keeps only tasks NewInLastScan.
+	New bool
 }
 
 // Apply returns the tasks that pass the filter.
@@ -474,6 +483,9 @@ func (f Filter) Apply(ts []Todo) []Todo {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(t.Title+" "+t.Key+" "+t.Note), q) {
+			continue
+		}
+		if f.New && !t.NewInLastScan() {
 			continue
 		}
 		out = append(out, t)

@@ -127,7 +127,7 @@ The defaults:
 | dashboard | `j`/`k` move, `enter` report, `r` rescan, `R` rescan every stale command (queued rows marked, one at a time), `p` packages, `t` tasks, `q` quit |
 | report | `j`/`k`/`pgup`/`pgdn` scroll, `g`/`G` top and bottom, `x` expand or collapse findings, `r` rescan, `esc` back |
 | packages (`p` on the dashboard) | outdated packages across managers; `a` all of them, `m` mark, `U` run `audit packages update` for the marked ones (or the selected one) in the terminal, then rescan; `esc` back |
-| tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `e` explain with AI, `F` fix with AI, `v` editor, `/` find, `c` cycle command, `a` show closed, `esc` back |
+| tasks | `o` open, `i` in progress, `d` done, `w` won't do, `n` note, `e` explain with AI, `F` fix with AI, `v` editor, `/` find, `c` cycle command, `a` show closed, `N` only tasks new in the last scan, `esc` back |
 | explanation | `j`/`k`/`pgup`/`pgdn` scroll, `r` ask again, `esc` back to tasks |
 
 The task list colors each task's priority and status and marks them like the dashboard (with Nerd Fonts, commands get their icons). Opened with `t` from a dashboard row or a report, it lists that command's tasks first, above an "other commands" divider; `c` filters to one command instead.

@@ -855,3 +855,22 @@ func TestPackagesScreenEmpty(t *testing.T) {
 		t.Errorf("all current:\n%s", v)
 	}
 }
+
+func TestTasksNewFilter(t *testing.T) {
+	f := newFake()
+	f.tasks[0].CreatedAt, f.tasks[0].LastSeenAt = now, now
+	f.tasks[1].CreatedAt, f.tasks[1].LastSeenAt = now.Add(-time.Hour), now
+	m := start(t, f)
+	key(t, m, "t")
+	if len(m.tasks) != 2 {
+		t.Fatalf("open tasks: %d", len(m.tasks))
+	}
+	key(t, m, "N")
+	if v := m.View(); len(m.tasks) != 1 || m.tasks[0].ID != 1 || !strings.Contains(v, "new in the last scan") {
+		t.Errorf("only #1 is new:\n%s", v)
+	}
+	key(t, m, "N")
+	if len(m.tasks) != 2 {
+		t.Errorf("N again shows them all: %d", len(m.tasks))
+	}
+}

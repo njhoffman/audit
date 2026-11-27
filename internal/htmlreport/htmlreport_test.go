@@ -231,6 +231,9 @@ func TestWriteTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := b.String()
+	if !strings.Contains(out, `<option value="new">new in the last scan</option>`) || !strings.Contains(out, `t.created_at !== t.last_seen_at`) {
+		t.Error("the status filter offers tasks new in the last scan")
+	}
 	if strings.Count(out, "</script>") != 2 {
 		t.Errorf("task text must not close the data script:\n%s", out)
 	}
