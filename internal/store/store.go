@@ -179,7 +179,7 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.Exec(schema + activitySchema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("init schema in %s: %w", path, err)
 	}
@@ -649,6 +649,15 @@ func (s *Store) SaveTodos(ctx context.Context, todos []todo.Todo) error {
 				return err
 			}
 			continue
+		}
+		var old string
+		if err := tx.QueryRowContext(ctx, `SELECT status FROM todos WHERE id=?`, t.ID).Scan(&old); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("read task %d: %w", t.ID, err)
+		}
+		if a, ok := taskTransition(todo.Status(old), *t); ok && old != "" {
+			if err := insertActivity(ctx, tx, a); err != nil {
+				return err
+			}
 		}
 		_, err := tx.ExecContext(ctx, `UPDATE todos SET key=?, command=?, check_id=?, title=?, hint=?, details=?, priority=?, status=?, source=?, note=?,
 			created_at=?, updated_at=?, last_seen_at=?, resolved_at=? WHERE id=?`,

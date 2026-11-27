@@ -165,6 +165,7 @@ which editors read as a quickfix list:
 			if err != nil {
 				return err
 			}
+			a.withFixHistory(c.Context(), &t)
 			switch {
 			case asJSON:
 				return a.writeJSON(t)

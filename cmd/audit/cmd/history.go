@@ -283,7 +283,7 @@ func newHistoryRunsCmd(a *app) *cobra.Command {
 	}
 	c.Flags().IntVarP(&limit, "limit", "l", 20, "show at most this many runs (0 for all)")
 	c.Flags().BoolVarP(&asJSON, "json", "j", false, "print runs as JSON")
-	c.AddCommand(newHistoryRunsDiffCmd(a))
+	c.AddCommand(newHistoryRunsDiffCmd(a), newHistoryRunsFixesCmd(a))
 	return c
 }
 

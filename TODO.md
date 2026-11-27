@@ -47,7 +47,7 @@ show the current state, not what moved.
   or reopened.
 - [x] **Trend in the HTML index.** [feature] (p3) Finding counts per severity over the kept
   runs, as a small inline chart per command.
-- [ ] **History of fixes and what audit has done.** (p3) [feature] A log that outlives run
+- [x] **History of fixes and what audit has done.** (activity table; `audit history runs fixes`; reopened tasks say they were fixed before. A dashboard panel and HTML page are not done.) (p3) [feature] A log that outlives run
   pruning: every task resolved by a rescan or closed by hand, every package
   update, repo sync, files or configs clean, history prune, with the date,
   command, check, subject and what changed (space reclaimed, versions moved, task title and

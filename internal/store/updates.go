@@ -37,6 +37,11 @@ func (s *Store) SaveUpdate(ctx context.Context, u *packages.Update) error {
 			return fmt.Errorf("insert update item %s: %w", it.Key(), err)
 		}
 	}
+	for _, a := range updateActivities(u) {
+		if err := insertActivity(ctx, tx, a); err != nil {
+			return err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}

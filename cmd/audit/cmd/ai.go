@@ -270,8 +270,12 @@ func (a *app) explainTask(ctx context.Context, id int64, refresh bool, level str
 // behind it.
 func (a *app) taskFindings(ctx context.Context, id int64) (todo.Todo, []finding.Finding, error) {
 	t, err := a.store.GetTodo(ctx, id)
-	if err != nil || !t.Source.Scanned() {
+	if err != nil {
 		return t, nil, err
+	}
+	a.withFixHistory(ctx, &t)
+	if !t.Source.Scanned() {
+		return t, nil, nil
 	}
 	r, err := a.engine.Saved(ctx, t.Command, "")
 	if err != nil || r == nil {

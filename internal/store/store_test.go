@@ -523,3 +523,82 @@ func TestRunDelta(t *testing.T) {
 		t.Error("a scoped run compares with its own scope only")
 	}
 }
+
+func TestActivityLog(t *testing.T) {
+	s := open(t)
+	t0 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	tk := todo.Todo{Key: "repos:repo.dirty:/r/a", Command: "repos", Check: "repo.dirty", Title: "commit /r/a", Priority: todo.Low,
+		Status: todo.Open, Source: todo.FromFinding, Details: []string{"2 files"}, CreatedAt: t0, UpdatedAt: t0, LastSeenAt: t0}
+	if err := s.SaveTodos(ctx, []todo.Todo{tk}); err != nil {
+		t.Fatal(err)
+	}
+	tk = mustTodo(t, s, "repos:repo.dirty:/r/a")
+	// A rescan resolves it, a later one reopens it, then the user marks it done.
+	tk.Status, tk.ResolvedAt, tk.UpdatedAt = todo.Resolved, t0.Add(time.Hour), t0.Add(time.Hour)
+	if err := s.SaveTodos(ctx, []todo.Todo{tk}); err != nil {
+		t.Fatal(err)
+	}
+	tk.Status, tk.ResolvedAt, tk.UpdatedAt = todo.Open, time.Time{}, t0.Add(2*time.Hour)
+	if err := s.SaveTodos(ctx, []todo.Todo{tk}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetTodoStatus(ctx, tk.ID, todo.Done, nil, t0.Add(3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	// An unchanged save records nothing.
+	if _, err := s.SetTodoNote(ctx, tk.ID, "ok", t0.Add(4*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveUpdate(ctx, &packages.Update{StartedAt: t0, FinishedAt: t0.Add(5 * time.Hour), Items: []packages.UpdateResult{
+		{Manager: "uv", Name: "ruff", ID: "ruff", From: "0.8.0", To: "0.9.0", Status: packages.UpdateOK},
+		{Manager: "uv", Name: "black", ID: "black", Status: packages.UpdateFailed},
+		{Manager: "repo", Name: "/r/a", ID: "/r/a", Status: packages.UpdateOK, Kind: "sync"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	as, err := s.Activities(ctx, time.Time{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, a := range as {
+		got = append(got, a.Kind+" "+a.Command+" "+a.Action+" "+a.Subject)
+	}
+	want := []string{"sync repos updated repo:/r/a", "package packages updated uv:ruff", "task repos done repos:repo.dirty:/r/a",
+		"task repos reopened repos:repo.dirty:/r/a", "task repos resolved repos:repo.dirty:/r/a"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("activity\n got %q\nwant %q", got, want)
+	}
+	if as[4].Title != "commit /r/a" || as[4].Details[0] != "2 files" || !as[4].At.Equal(t0.Add(time.Hour)) || as[1].From != "0.8.0" {
+		t.Errorf("rows keep the task and the versions: %+v %+v", as[4], as[1])
+	}
+	if since, _ := s.Activities(ctx, t0.Add(150*time.Minute), 1); len(since) != 1 || since[0].Kind != "sync" {
+		t.Errorf("since and limit: %+v", since)
+	}
+	prev, err := s.PreviousFix(ctx, "repos:repo.dirty:/r/a")
+	if err != nil || prev == nil || prev.Action != "done" {
+		t.Errorf("previous fix: %+v %v", prev, err)
+	}
+	// Pruning the closed task leaves its history.
+	if n, _ := s.PruneClosedTodos(ctx, t0.Add(100*time.Hour)); n != 1 {
+		t.Fatalf("pruned %d", n)
+	}
+	if as, _ := s.Activities(ctx, time.Time{}, 0); len(as) != 5 {
+		t.Errorf("activity outlives the task: %d", len(as))
+	}
+}
+
+func mustTodo(t *testing.T, s *Store, key string) todo.Todo {
+	t.Helper()
+	ts, err := s.Todos(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range ts {
+		if x.Key == key {
+			return x
+		}
+	}
+	t.Fatalf("no task %s", key)
+	return todo.Todo{}
+}
