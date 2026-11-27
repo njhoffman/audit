@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `containers.check_tags` asks the registries itself with a HEAD of each tag's manifest and an anonymous token, so Docker Hub no longer counts the check against its pull rate limit. `docker buildx imagetools inspect` counted one pull per platform (9 for `alpine`), so about 11 images used up the anonymous 100 an hour. skopeo, or docker buildx for docker, is still used for images the registry will not show anonymously (private ones), with your registry login; without either, the check works for public images and names the private ones it could not read. The summary says which way it asked.
+
 ## [0.69.2] - 2026-11-27
 
 ### Fixed

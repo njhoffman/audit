@@ -17,7 +17,8 @@ const CheckBehind = "containers.image_behind"
 
 // TagCheck is the registry check of one engine's tagged images.
 type TagCheck struct {
-	// Tool asked the registries: skopeo, or docker buildx.
+	// Tool asked the registries: the registry API, with skopeo or docker
+	// buildx for the images it may not read anonymously.
 	Tool    string `json:"tool,omitempty"`
 	Checked int    `json:"checked"`
 	// Behind are the images whose tag moved on.
@@ -35,20 +36,41 @@ type Behind struct {
 	Remote string `json:"remote"`
 }
 
-var errNoInspector = errors.New("needs skopeo, or docker buildx for docker images, to ask the registries")
-
 // checkTags compares each tagged image pulled from a registry with what its
 // tag names there now: the image is behind when none of its repo digests
 // is the registry's digest for the tag. Images built here (no repo digest)
-// and localhost ones are left out.
-func checkTags(ctx context.Context, env *exec.Env, engine string) TagCheck {
+// and localhost ones are left out. native asks first (a HEAD, no pull
+// counted); skopeo, or docker buildx for docker, answers the images native
+// may not read anonymously, or when native is nil.
+func checkTags(ctx context.Context, env *exec.Env, engine string, native Lookup) TagCheck {
 	var t TagCheck
-	inspect, tool := registryDigest(env, engine)
-	if inspect == nil {
-		t.Error = errNoInspector.Error()
+	tool, toolName := registryDigest(env, engine)
+	inspect := tool
+	switch {
+	case native != nil && tool != nil:
+		t.Tool = "registry API, " + toolName + " for private images"
+		inspect = func(ctx context.Context, ref string) (string, error) {
+			d, err := native(ctx, ref)
+			if errors.Is(err, errNeedsAuth) || errors.Is(err, errNoDigest) {
+				return tool(ctx, ref)
+			}
+			return d, err
+		}
+	case native != nil:
+		t.Tool = "registry API"
+		inspect = func(ctx context.Context, ref string) (string, error) {
+			d, err := native(ctx, ref)
+			if errors.Is(err, errNeedsAuth) {
+				return "", fmt.Errorf("%w; skopeo would use yours", err)
+			}
+			return d, err
+		}
+	case tool != nil:
+		t.Tool = toolName
+	default:
+		t.Error = "no way to ask the registries"
 		return t
 	}
-	t.Tool = tool
 	out, err := run1(ctx, env, engine, "images", "--format", "{{.Repository}}\t{{.Tag}}\t{{.ID}}")
 	if err != nil {
 		t.Error = err.Error()

@@ -31,7 +31,9 @@ type Options struct {
 	// CheckTags asks the registries whether each tagged image's tag now
 	// names a newer image.
 	CheckTags bool
-	Now       time.Time
+	// Lookup asks a registry for a tag's digest; nil uses a Registry.
+	Lookup Lookup
+	Now    time.Time
 }
 
 // Container is one stopped container.
@@ -98,7 +100,11 @@ func Scan(ctx context.Context, o Options) (*Result, error) {
 		}
 		e := collect(ctx, o.Env, name)
 		if o.CheckTags && e.Error == "" {
-			t := checkTags(ctx, o.Env, name)
+			lookup := o.Lookup
+			if lookup == nil {
+				lookup = (&Registry{}).Digest
+			}
+			t := checkTags(ctx, o.Env, name, lookup)
 			e.Tags = &t
 		}
 		es = append(es, e)

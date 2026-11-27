@@ -78,7 +78,7 @@ them from being noise (one per check, dismissable like ignore rules).
   `todo` entry says "**F** in the task editor runs the same **audit todo
   fix**, so it asks there too. Closed tasks are refused. **F** in the task
   editor does the same for the selected task." Drop the second F sentence.
-- [ ] **Docker Hub pull quota in the tag check.** (p3) [performance] With
+- [x] **Docker Hub pull quota in the tag check.** (measured 2026-11-27: 9 pulls per buildx lookup of alpine, 0 for a HEAD; audit now sends the HEAD itself) (p3) [performance] With
   `containers.check_tags`, `skopeo inspect` GETs each image's manifest (and
   its config blob), and Docker Hub counts manifest GETs against the pull
   rate limit (100 per 6h anonymous); a HEAD of the manifest, which returns

@@ -39,7 +39,7 @@ func TestCheckTagsWithBuildx(t *testing.T) {
 	f.AddOutput(`{"digest":"sha256:list7"}`+"\n", "docker", "buildx", "imagetools", "inspect", "--format", "{{json .Manifest}}", "redis:7")
 	f.Add([]string{"docker", "buildx", "imagetools", "inspect", "--format", "{{json .Manifest}}", "ghcr.io/me/private:v1"},
 		exec.Result{Code: 1, Stderr: "ERROR: unauthorized\n"})
-	tc := checkTags(context.Background(), env, "docker")
+	tc := checkTags(context.Background(), env, "docker", nil)
 	if tc.Tool != "docker buildx" || tc.Checked != 2 || len(tc.Behind) != 1 || tc.Behind[0].Ref != "nginx:1.27" || tc.Behind[0].Remote != "sha256:new0123456789abcdef" {
 		t.Fatalf("check %+v", tc)
 	}
@@ -72,7 +72,7 @@ func TestCheckTagsPrefersSkopeo(t *testing.T) {
 	f.AddOutput("nginx\t1.27\taaa111\n", "podman", "images", "--format")
 	f.AddOutput(`["nginx@sha256:old"]`, "podman", "image", "inspect", "--format", "{{json .RepoDigests}}", "aaa111")
 	f.AddOutput("sha256:old\n", "skopeo", "inspect", "--format", "{{.Digest}}", "docker://nginx:1.27")
-	tc := checkTags(context.Background(), env, "podman")
+	tc := checkTags(context.Background(), env, "podman", nil)
 	if tc.Tool != "skopeo" || tc.Checked != 1 || len(tc.Behind) != 0 {
 		t.Errorf("current under skopeo: %+v", tc)
 	}
@@ -80,7 +80,7 @@ func TestCheckTagsPrefersSkopeo(t *testing.T) {
 
 func TestCheckTagsWithoutATool(t *testing.T) {
 	env, _ := tagEnv(t, "podman")
-	tc := checkTags(context.Background(), env, "podman")
+	tc := checkTags(context.Background(), env, "podman", nil)
 	if tc.Error == "" || tc.Checked != 0 {
 		t.Errorf("podman without skopeo: %+v", tc)
 	}
@@ -90,7 +90,7 @@ func TestCheckTagsWithoutATool(t *testing.T) {
 			stat = s.Value + " | " + s.Note
 		}
 	}
-	if !strings.HasPrefix(stat, "not checked | needs skopeo") {
+	if !strings.HasPrefix(stat, "not checked | no way to ask the registries") {
 		t.Errorf("stat %q", stat)
 	}
 	for _, s := range stats([]Engine{{Name: "podman", Tags: &tc}}) {
@@ -107,13 +107,63 @@ func TestScanChecksTagsOnlyWhenAsked(t *testing.T) {
 		f.AddOutput("", "docker", "ps")
 		f.AddOutput("", "docker", "volume")
 		f.AddOutput("", "docker", "system", "df")
-		res, err := Scan(context.Background(), Options{Env: env, Engines: []string{"docker"}, CheckTags: check, Now: now, StoppedAfter: time.Hour})
+		lookup := func(context.Context, string) (string, error) { return "sha256:old", nil }
+		res, err := Scan(context.Background(), Options{Env: env, Engines: []string{"docker"}, CheckTags: check, Lookup: lookup, Now: now, StoppedAfter: time.Hour})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if got := res.Data.Engines[0].Tags != nil; got != check {
 			t.Errorf("check_tags %v: tags checked %v", check, got)
 		}
+	}
+}
+
+// nativeLookup answers nginx with a newer digest and refuses the private
+// image as a registry wanting a login does.
+func nativeLookup(calls *[]string) Lookup {
+	return func(_ context.Context, ref string) (string, error) {
+		*calls = append(*calls, ref)
+		switch ref {
+		case "nginx:1.27":
+			return "sha256:new0123456789abcdef", nil
+		case "redis:7":
+			return "sha256:list7", nil
+		}
+		return "", errNeedsAuth
+	}
+}
+
+func TestCheckTagsNativeFirst(t *testing.T) {
+	env, f := tagEnv(t, "docker")
+	f.AddOutput(`{"digest":"sha256:p"}`+"\n", "docker", "buildx", "imagetools", "inspect", "--format", "{{json .Manifest}}", "ghcr.io/me/private:v1")
+	var asked []string
+	tc := checkTags(context.Background(), env, "docker", nativeLookup(&asked))
+	if tc.Tool != "registry API, docker buildx for private images" || tc.Checked != 3 || len(tc.Behind) != 1 || len(tc.Failed) != 0 {
+		t.Fatalf("check %+v", tc)
+	}
+	var buildx []string
+	for _, c := range f.Calls {
+		if len(c) > 1 && c[1] == "buildx" {
+			buildx = append(buildx, c[len(c)-1])
+		}
+	}
+	if len(asked) != 3 || len(buildx) != 1 || buildx[0] != "ghcr.io/me/private:v1" {
+		t.Errorf("native asked %v, buildx only the private image: %v", asked, buildx)
+	}
+}
+
+func TestCheckTagsNativeOnly(t *testing.T) {
+	env, f := tagEnv(t, "podman")
+	f.AddOutput("nginx\t1.27\taaa111\nghcr.io/me/private\tv1\tfff666\n", "podman", "images", "--format")
+	f.AddOutput(`["nginx@sha256:old"]`, "podman", "image", "inspect", "--format", "{{json .RepoDigests}}", "aaa111")
+	f.AddOutput(`["ghcr.io/me/private@sha256:p"]`, "podman", "image", "inspect", "--format", "{{json .RepoDigests}}", "fff666")
+	var asked []string
+	tc := checkTags(context.Background(), env, "podman", nativeLookup(&asked))
+	if tc.Tool != "registry API" || tc.Checked != 1 || len(tc.Behind) != 1 {
+		t.Fatalf("check %+v", tc)
+	}
+	if len(tc.Failed) != 1 || !strings.Contains(tc.Failed[0], "ghcr.io/me/private:v1: the registry wants a login; skopeo would use yours") {
+		t.Errorf("failed %v", tc.Failed)
 	}
 }
 

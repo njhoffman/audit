@@ -985,7 +985,7 @@ schedule:
 containers:
   engines: [docker, podman]
   stopped_after: 720h   # 30 days
-  check_tags: false     # ask registries whether each image's tag moved on (skopeo, or docker buildx)
+  check_tags: false     # ask registries whether each image's tag moved on (HEAD requests; skopeo or docker buildx for private images)
 
 # audit backups: when each backup last finished and whether paths are
 # covered. Deja Dup is read from its settings when installed; other tools
