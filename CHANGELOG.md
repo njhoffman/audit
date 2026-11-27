@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.63.1] - 2026-11-26
+
 ### Changed
 
 - `ctrl+f` and `ctrl+b` page down and up on every scrolling screen of the dashboard (reports, tasks, task, explain, packages) and in audit's fzf lists.
