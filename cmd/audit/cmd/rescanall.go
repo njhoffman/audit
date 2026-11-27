@@ -22,6 +22,9 @@ type rescanFlags struct {
 	rescan bool
 	all    bool
 	only   []string
+	// ai adds an AI review of each command it rescans (cached per result
+	// set, like --ai on one command).
+	ai bool
 }
 
 // rescanTargets are the commands of f.only (every command when empty), in
@@ -140,9 +143,12 @@ func (a *app) rescanAll(ctx context.Context, f rescanFlags) error {
 		mu     sync.Mutex
 		failed []string
 	)
+	if f.ai {
+		a.engine.AI = a.aiClient("")
+	}
 	scan := func(c string) {
 		start := time.Now()
-		changes, err := a.scanOne(ctx, c, d.reporter(c))
+		changes, err := a.scanOne(ctx, c, d.reporter(c), f.ai)
 		took := time.Since(start).Round(100 * time.Millisecond)
 		if err != nil {
 			d.finish(c, err.Error(), true)
@@ -186,8 +192,10 @@ func (a *app) rescanAll(ctx context.Context, f rescanFlags) error {
 	return nil
 }
 
-// scanOne scans command with its default scope and saves the run.
-func (a *app) scanOne(ctx context.Context, command string, rep progress.Reporter) (int, error) {
+// scanOne scans command with its default scope and saves the run; with
+// review, an AI review of the run follows. A failed review is a warning:
+// the scan itself is saved.
+func (a *app) scanOne(ctx context.Context, command string, rep progress.Reporter, review bool) (int, error) {
 	s, err := a.scanner(command)
 	if err != nil {
 		return 0, err
@@ -195,6 +203,11 @@ func (a *app) scanOne(ctx context.Context, command string, rep progress.Reporter
 	res, err := a.engine.Execute(ctx, s, rep)
 	if err != nil {
 		return 0, err
+	}
+	if review {
+		if err := a.engine.Analyze(ctx, res.Run, false); err != nil && ctx.Err() == nil {
+			a.log.Warn("ai review failed", "command", command, "err", err)
+		}
 	}
 	return res.TaskChanges, nil
 }

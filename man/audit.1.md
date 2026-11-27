@@ -85,6 +85,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **config** [**-i** [**-f**]] [**-p**]
 
+**audit** **schedule** [**-j**] | **install** [**-N**] | **remove**
+
 **audit** **export** [**-d** _dir_]
 
 # DESCRIPTION
@@ -231,6 +233,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 **config**
 :   Prints the effective configuration and the file it came from. **-i** writes the default file (**-f** overwrites), **-p** prints the path.
 
+**schedule**
+:   Shows the systemd user timer that rescans unattended: whether **audit.timer** is installed and enabled, what it runs, when it runs next and how its last run ended (**-j** for JSON). **install** writes **audit.service** and **audit.timer** under **$XDG_CONFIG_HOME/systemd/user** and enables the timer (**-N** prints the files instead). On **schedule.calendar** (a systemd OnCalendar spec, default **daily**; missed runs happen at the next boot) it runs this binary as **audit -r -q -O** _schedule.commands_, which rescans the stale ones. **packages** is left out of the default command list because it asks the registries. With **schedule.ai** it adds **-A**, an AI review per rescanned command, which costs money unless the results are unchanged. No sudo is needed. **remove** disables the timer and deletes both files. Run **install** again after changing the settings.
+
 **export**
 :   Writes the export files (see **EXPORT FILES**) into **export.dir**, or into _dir_ with **-d**, and prints the directory. Nothing is scanned. With **export.enabled**, the default, the files are already rewritten after every command that saves something, including one that then fails; this writes them on demand.
 
@@ -288,6 +293,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **-O**, **\-\-only** _commands_
 :   With **-r**: consider only these commands (comma-separated or repeated). Implies **-r**.
+
+**-A**, **\-\-ai**
+:   With **-r**: add an AI review of each rescanned command, as **\-\-ai** does for one command (cached per result set). A failed review is logged; the scan is still saved. Requires **-r**.
 
 # SCAN OPTIONS
 
@@ -556,6 +564,10 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       commands:
         files: {warn: 168h, old: 720h}
     ignore: []                 # command:check:subject, command:check or check
+    schedule:
+      calendar: daily          # systemd OnCalendar spec for audit schedule install
+      commands: [system, environment, repos, files, configs, scripts, history, ai]   # rescanned when stale; [] for all
+      ai: false                # add -A: an AI review per rescanned command (costs money unless cached)
     todo:
       closed_max_age: 2160h    # done and resolved tasks deleted this long after closing (90 days) at startup; 0 keeps all; won't-do tasks are kept
     scan:

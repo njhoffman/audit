@@ -47,6 +47,8 @@ audit                          # dashboard: every command's last run, age, findi
 audit -s                       # the same overview as text
 audit -r                       # rescan every stale command, several at once, then the overview
 audit -r -a -O repos,files     # rescan these two even if fresh
+audit -r -A                    # rescan the stale commands and AI-review each
+audit schedule install         # systemd user timer: audit -r -q daily (schedule.* settings)
 audit system                   # saved results if fresh, otherwise scan
 audit system -r -O logs,services   # rescan only some parts
 audit packages -l              # one line per finding plus the package inventory (never scans)

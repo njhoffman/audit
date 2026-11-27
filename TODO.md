@@ -18,7 +18,7 @@ Reviewed: 2026-11-26
 `audit -r` rescans every stale command, but only when started by hand, and
 nothing tells you when a scan would turn up something new.
 
-- [ ] **Scheduled scans through a systemd user timer.** (p2) [feature] `audit schedule
+- [x] **Scheduled scans through a systemd user timer.** (p2) [feature] `audit schedule
   install|remove|status` writes `~/.config/systemd/user/audit.{service,timer}`
   running `audit -r -q`. Config key for the calendar spec (default daily) and
   which commands it covers. No sudo, no network-heavy commands by default.

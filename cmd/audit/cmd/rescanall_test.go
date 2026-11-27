@@ -122,3 +122,25 @@ func sorted(s []string) []string {
 	slices.Sort(s)
 	return s
 }
+
+func TestRescanAllWithAIReview(t *testing.T) {
+	cfgHome, _ := env(t)
+	claude, stdin, _ := fakeAI(t, "claude", claudeJSON(t, map[string]any{"subtype": "success", "result": "## Summary\n\nFine."}))
+	writeConfig(t, cfgHome, "ai: {claude: {command: "+claude+"}}\n")
+	f := &fakeScans{}
+	if r := runArgsWith(t, f.setup, "-A"); r.e == nil || !strings.Contains(r.e.Error(), "add -r") {
+		t.Errorf("--ai alone: %v", r.e)
+	}
+	r := runArgsWith(t, f.setup, "-r", "-A", "-O", "system")
+	if r.e != nil || !slices.Equal(f.scanned(), []string{"system"}) {
+		t.Fatalf("%v\n%s", r.e, r.err)
+	}
+	if p := readFile(t, stdin); !strings.Contains(p, "system.x") {
+		t.Errorf("the rescanned run is reviewed:\n%s", p)
+	}
+	a, _, _ := loadedApp(t)
+	saved, err := a.engine.Saved(context.Background(), "system", "")
+	if err != nil || saved == nil || saved.Analysis == nil {
+		t.Errorf("the review is saved with the run: %+v %v", saved, err)
+	}
+}

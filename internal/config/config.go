@@ -47,6 +47,18 @@ type Config struct {
 	Scripts      ScriptsConfig      `mapstructure:"scripts" yaml:"scripts"`
 	ShellHistory ShellHistoryConfig `mapstructure:"shell_history" yaml:"shell_history"`
 	Todo         TodoConfig         `mapstructure:"todo" yaml:"todo"`
+	Schedule     ScheduleConfig     `mapstructure:"schedule" yaml:"schedule"`
+}
+
+// ScheduleConfig is the unattended run audit schedule install sets up.
+type ScheduleConfig struct {
+	// Calendar is the systemd OnCalendar spec.
+	Calendar string `mapstructure:"calendar" yaml:"calendar"`
+	// Commands are rescanned when stale; empty means every command.
+	Commands []string `mapstructure:"commands" yaml:"commands"`
+	// AI adds an AI review of each rescanned command, which costs money per
+	// run unless the result set is unchanged and cached.
+	AI bool `mapstructure:"ai" yaml:"ai"`
 }
 
 // TodoConfig controls the task list.
@@ -464,6 +476,10 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("ai.instruction_limit_kb", 40)
 	v.SetDefault("ai.cache_max_age", 90*24*time.Hour)
 	v.SetDefault("todo.closed_max_age", 90*24*time.Hour)
+	v.SetDefault("schedule.calendar", "daily")
+	// packages reaches the registries; the others stay local by default.
+	v.SetDefault("schedule.commands", []string{"system", "environment", "repos", "files", "configs", "scripts", "history", "ai"})
+	v.SetDefault("schedule.ai", false)
 	v.SetDefault("system.journal", DefaultJournalFlags)
 	v.SetDefault("system.logs", DefaultLogs)
 	v.SetDefault("system.log_max_lines", 5000)
@@ -698,6 +714,9 @@ func (c *Config) validate() error {
 	if c.System.Services.HighRestarts < 0 {
 		return fmt.Errorf("system.services.high_restarts must be 0 (off) or more, got %d", c.System.Services.HighRestarts)
 	}
+	if strings.TrimSpace(c.Schedule.Calendar) == "" || strings.ContainsAny(c.Schedule.Calendar, "\n\r") {
+		return fmt.Errorf("schedule.calendar must be a systemd OnCalendar spec on one line, got %q", c.Schedule.Calendar)
+	}
 	if c.Todo.ClosedMaxAge < 0 {
 		return fmt.Errorf("todo.closed_max_age must be 0 (keep all) or more, got %s", c.Todo.ClosedMaxAge)
 	}
@@ -852,6 +871,16 @@ stale:
 # them all). Won't-do tasks are always kept: they stop the task coming back.
 todo:
   closed_max_age: 2160h      # 90 days
+
+# audit schedule install: a systemd user timer that runs audit -r -q on
+# this calendar (systemd OnCalendar: daily, hourly, "Mon *-*-* 09:00"),
+# rescanning the stale ones of these commands. packages is left out by
+# default since it asks the registries; [] means every command. ai adds an
+# AI review of each rescanned command, which costs money unless cached.
+schedule:
+  calendar: daily
+  commands: [system, environment, repos, files, configs, scripts, history, ai]
+  ai: false
 
 # Findings to hide. Each entry is a full key (command:check:subject), a
 # command-qualified check (packages:pnpm.legacy_shim) or a bare check id.

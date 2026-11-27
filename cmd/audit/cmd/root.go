@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
@@ -68,6 +69,9 @@ Run without a command in a terminal for the interactive dashboard, or with
 			if rf.all || len(rf.only) > 0 {
 				rf.rescan = true
 			}
+			if rf.ai && !rf.rescan {
+				return errors.New("--ai reviews what --rescan scans; add -r")
+			}
 			if rf.rescan {
 				if err := a.rescanAll(ctx, rf); err != nil {
 					return err
@@ -131,12 +135,14 @@ Run without a command in a terminal for the interactive dashboard, or with
 	fl.BoolVarP(&rf.rescan, "rescan", "r", false, "rescan every stale or never-run command, then print the summary")
 	fl.BoolVarP(&rf.all, "all", "a", false, "with --rescan: rescan every command, fresh or not (implies --rescan)")
 	fl.StringSliceVarP(&rf.only, "only", "O", nil, "with --rescan: only these commands, comma-separated (implies --rescan)")
+	fl.BoolVarP(&rf.ai, "ai", "A", false, "with --rescan: add an AI review of each rescanned command (ai.provider; cached per result set)")
 	root.MarkFlagsMutuallyExclusive("rescan", "fzf")
 	root.MarkFlagsMutuallyExclusive("all", "fzf")
 	root.MarkFlagsMutuallyExclusive("only", "fzf")
+	root.MarkFlagsMutuallyExclusive("ai", "fzf")
 
 	root.AddCommand(scanCommands(a)...)
-	root.AddCommand(newTodoCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a), newFzfHelperCmd(a))
+	root.AddCommand(newTodoCmd(a), newConfigCmd(a), newExportCmd(a), newAnalyzeCmd(a), newScheduleCmd(a), newFzfHelperCmd(a))
 	return root
 }
 
