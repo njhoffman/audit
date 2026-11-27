@@ -30,7 +30,7 @@ func TestSchedule(t *testing.T) {
 		t.Fatalf("status before: %v %q", r.e, r.out)
 	}
 	r := runArgsWith(t, setup, "schedule", "install", "-N")
-	if r.e != nil || !strings.Contains(r.out, "ExecStart=/usr/local/bin/audit -r -q -O system,environment,repos,files,configs,scripts,history,ai") {
+	if r.e != nil || !strings.Contains(r.out, "ExecStart=/usr/local/bin/audit -r -q -O system,environment,repos,files,backups,configs,scripts,history,ai") {
 		t.Fatalf("dry run: %v\n%s", r.e, r.out)
 	}
 	if _, err := os.Stat(dir); err == nil {

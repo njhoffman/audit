@@ -63,6 +63,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **files** [_scan options_]
 
+**audit** **backups** [_scan options_]
+
 **audit** **files** **clean** [**-C** _categories_] [**-N**] [**-y**] [**-x**] [**-j**|**-e**] [_path_...]
 
 **audit** **files** **clean** **-L** [**-j**|**-e**]
@@ -199,6 +201,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **ai**
 :   Reports the AI tooling: the **claude**, **codex**, **gh copilot**, **aichat** and **ollama** CLIs (installed, version, logged in from **claude auth status** and **codex login status**, ollama's local server and models; **ai.not_logged_in**, **ai.ollama_down**), provider keys in the environment by name only, and the MCP servers configured in **~/.claude.json** (user and per project), **~/.codex/config.toml** and mcphub, with **ai.mcp_missing** when a server's command is not on PATH. Claude Code's settings are checked for hooks whose program or script is missing, or whose command leaves a quote open (**ai.hook_broken**; the command is split and expanded as sh would, and a word using a variable only set when the hook runs, such as **$CLAUDE_PROJECT_DIR**, is not checked, nor is a command starting with a shell builtin or keyword) and allow rules that let it run any command (**ai.permissions_broad**); unreadable configs are **ai.config_syntax**. AI projects are the repos under **repos.roots** with CLAUDE.md, .claude, AGENTS.md, GEMINI.md, .mcp.json, .cursor or copilot instructions, plus every directory Claude Code has sessions for, each with git branch and changes, instruction size, commands, skills, agents, MCP servers, session count and last session; **ai.instructions_large** flags instruction files over **ai.instruction_limit_kb**, **ai.stale_sessions** sessions of projects that are gone. Nothing is sent to a provider unless **-p**/**\-\-ping** is given, which sends one tiny request to each logged-in CLI (and asks ollama for its version) and implies **\-\-rescan**.
+
+**backups**
+:   Checks the workstation's backups: Deja Dup, read from its settings (**gsettings get org.gnome.DejaDup**) when installed (**backups.deja_dup**), and each **backups.sources** entry, a command run through **sh** that prints when its last backup finished (RFC 3339 or Unix seconds; empty output means never), with the paths it **covers**. Findings: **backups.none** (no backup at all; warning), **backups.never** (a source never finished one; warning), **backups.stale** (older than **backups.max_age**, default 7 days; an error past four times it), **backups.unscheduled** (Deja Dup not backing up automatically; notice), **backups.uncovered** (a **backups.paths** entry, default **~**, no source includes; warning) and **backups.error** (a source's command fails or prints no time; error). **\-\-list** shows each source with its last backup, whether it is automatic and what it covers.
 
 **files**
 :   Measures **files.roots** (home by default) in one parallel walk that stays on each root's filesystem and counts allocated blocks, like **du**, and finds space to reclaim: **files.cache** (tool caches with their own cleaners: uv, pip, go build and modules, pnpm store, npm, yarn, cargo registry, thumbnails; apt archives, the systemd journal, disabled snap revisions, docker's reclaimable space; other large children of **~/.cache**), **files.build** (node_modules, target, .venv, venv, .tox, .gradle and .next of projects unchanged for **files.stale_after**; a tool's own install, such as an LSP under ~/.local/share or a gh extension, never counts), **files.orphaned** (children of ~/.local/share and ~/.local/state whose name matches no installed program: PATH executables, apt packages, flatpaks, snaps, desktop entries), **files.large**, **files.downloads** (files in **files.downloads** older than **files.old_downloads**), **files.trash**, **files.duplicates** (same size, then the same hash of both ends, then of the whole file, reading at most **files.hash_limit_gb**), **files.core_dumps**, **files.empty_dirs** and **files.broken_links**. Version-control internals, caches, dependency trees and files inside git working trees are never listed as large files or duplicates. **\-\-list** shows the largest directories and every candidate; nothing is deleted.
@@ -568,9 +573,14 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     notify:
       enabled: false           # after an unattended audit -r (no terminal, e.g. the schedule timer): notify-send about new or reopened tasks
       min_priority: high       # the least urgent priority that counts
+    backups:
+      deja_dup: true           # read Deja Dup's settings when it is installed
+      sources: []              # [{name, command (prints the last backup time), covers: [paths]}]
+      paths: ["~"]             # each should be covered by some backup
+      max_age: 168h            # a last backup older than this is stale
     schedule:
       calendar: daily          # systemd OnCalendar spec for audit schedule install
-      commands: [system, environment, repos, files, configs, scripts, history, ai]   # rescanned when stale; [] for all
+      commands: [system, environment, repos, files, backups, configs, scripts, history, ai]   # rescanned when stale; [] for all
       ai: false                # add -A: an AI review per rescanned command (costs money unless cached)
     todo:
       closed_max_age: 2160h    # done and resolved tasks deleted this long after closing (90 days) at startup; 0 keeps all; won't-do tasks are kept

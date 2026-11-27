@@ -67,7 +67,7 @@ an entry in `scanEntries` (cmd/audit/cmd/scanners.go) and a config section.
   volumes, stopped containers older than N days, images far behind their tag,
   rootless vs rootful. `files` already reports docker's cache size; this
   would own the per-object view and `containers clean`.
-- [ ] **`audit backups`** (p2) [feature] : last snapshot age and last check result for
+- [x] **`audit backups`** (p2) [feature] (Deja Dup from gsettings plus command sources; restic, borg and timeshift through backups.sources commands) : last snapshot age and last check result for
   restic, borg, timeshift or a configured command; paths in a configured list
   that no backup covers. High value, small surface.
 - [ ] **Firmware in `system updates`** [feature] (p3): `fwupdmgr get-updates` (no sudo

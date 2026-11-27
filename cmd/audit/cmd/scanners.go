@@ -27,6 +27,7 @@ var scanEntries = []scanEntry{
 	{"packages", newPackagesCmd, func(a *app) (core.Scanner, error) { return a.packagesScanner(nil) }},
 	{"repos", newReposCmd, func(a *app) (core.Scanner, error) { return a.reposScanner(), nil }},
 	{"files", newFilesCmd, func(a *app) (core.Scanner, error) { return core.NewFiles(a.cfg, a.env), nil }},
+	{"backups", newBackupsCmd, func(a *app) (core.Scanner, error) { return core.NewBackups(a.cfg, a.env), nil }},
 	{"configs", newConfigsCmd, func(a *app) (core.Scanner, error) { return a.configsScanner(context.Background()), nil }},
 	{"scripts", newScriptsCmd, func(a *app) (core.Scanner, error) { return a.scriptsScanner(), nil }},
 	{"history", newHistoryCmd, func(a *app) (core.Scanner, error) { return core.NewHistory(a.cfg, a.env), nil }},

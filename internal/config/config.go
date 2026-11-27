@@ -49,6 +49,27 @@ type Config struct {
 	Todo         TodoConfig         `mapstructure:"todo" yaml:"todo"`
 	Schedule     ScheduleConfig     `mapstructure:"schedule" yaml:"schedule"`
 	Notify       NotifyConfig       `mapstructure:"notify" yaml:"notify"`
+	Backups      BackupsConfig      `mapstructure:"backups" yaml:"backups"`
+}
+
+// BackupsConfig configures audit backups.
+type BackupsConfig struct {
+	// DejaDup reads Deja Dup's settings when it is installed.
+	DejaDup bool `mapstructure:"deja_dup" yaml:"deja_dup"`
+	// Sources are other backups, each a command printing its last backup's
+	// finish time and the paths it covers.
+	Sources []BackupSource `mapstructure:"sources" yaml:"sources"`
+	// Paths should each be covered by some backup.
+	Paths []string `mapstructure:"paths" yaml:"paths"`
+	// MaxAge is how old the last backup may be before it is stale.
+	MaxAge time.Duration `mapstructure:"max_age" yaml:"max_age"`
+}
+
+// BackupSource is one backups.sources entry.
+type BackupSource struct {
+	Name    string   `mapstructure:"name" yaml:"name"`
+	Command string   `mapstructure:"command" yaml:"command"`
+	Covers  []string `mapstructure:"covers" yaml:"covers"`
 }
 
 // NotifyConfig controls the desktop notification after an unattended
@@ -506,8 +527,12 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("todo.closed_max_age", 90*24*time.Hour)
 	v.SetDefault("schedule.calendar", "daily")
 	// packages reaches the registries; the others stay local by default.
-	v.SetDefault("schedule.commands", []string{"system", "environment", "repos", "files", "configs", "scripts", "history", "ai"})
+	v.SetDefault("schedule.commands", []string{"system", "environment", "repos", "files", "backups", "configs", "scripts", "history", "ai"})
 	v.SetDefault("schedule.ai", false)
+	v.SetDefault("backups.deja_dup", true)
+	v.SetDefault("backups.sources", []BackupSource{})
+	v.SetDefault("backups.paths", []string{"~"})
+	v.SetDefault("backups.max_age", 7*24*time.Hour)
 	v.SetDefault("notify.enabled", false)
 	v.SetDefault("notify.min_priority", "high")
 	v.SetDefault("system.journal", DefaultJournalFlags)
@@ -750,6 +775,16 @@ func (c *Config) validate() error {
 	if strings.TrimSpace(c.Schedule.Calendar) == "" || strings.ContainsAny(c.Schedule.Calendar, "\n\r") {
 		return fmt.Errorf("schedule.calendar must be a systemd OnCalendar spec on one line, got %q", c.Schedule.Calendar)
 	}
+	sourceNames := map[string]bool{}
+	for _, s := range c.Backups.Sources {
+		if s.Name == "" || s.Command == "" || sourceNames[s.Name] {
+			return fmt.Errorf("backups.sources entries need a unique name and a command, got %+v", s)
+		}
+		sourceNames[s.Name] = true
+	}
+	if c.Backups.MaxAge < 0 {
+		return fmt.Errorf("backups.max_age must be 0 (never stale) or more, got %s", c.Backups.MaxAge)
+	}
 	if c.Todo.ClosedMaxAge < 0 {
 		return fmt.Errorf("todo.closed_max_age must be 0 (keep all) or more, got %s", c.Todo.ClosedMaxAge)
 	}
@@ -918,8 +953,22 @@ todo:
 # AI review of each rescanned command, which costs money unless cached.
 schedule:
   calendar: daily
-  commands: [system, environment, repos, files, configs, scripts, history, ai]
+  commands: [system, environment, repos, files, backups, configs, scripts, history, ai]
   ai: false
+
+# audit backups: when each backup last finished and whether paths are
+# covered. Deja Dup is read from its settings when installed; other tools
+# are sources whose command prints the last backup's finish time (RFC 3339
+# or Unix seconds, empty for never), run through sh, e.g.
+#   sources:
+#     - name: restic
+#       command: restic snapshots --latest 1 --json | jq -r '.[0].time // empty'
+#       covers: ["~"]
+backups:
+  deja_dup: true
+  sources: []
+  paths: ["~"]          # each should be covered by some backup
+  max_age: 168h         # older last backups are stale (an error past 4x)
 
 # After an unattended audit -r (the schedule timer, or no terminal), send a
 # desktop notification (notify-send) when tasks at or above min_priority
