@@ -28,7 +28,10 @@ type Options struct {
 	// StoppedAfter is how long a stopped container may sit before it is
 	// reported.
 	StoppedAfter time.Duration
-	Now          time.Time
+	// CheckTags asks the registries whether each tagged image's tag now
+	// names a newer image.
+	CheckTags bool
+	Now       time.Time
 }
 
 // Container is one stopped container.
@@ -56,6 +59,9 @@ type Engine struct {
 	// Usage is system df: type to "size (reclaimable)".
 	Usage map[string]string `json:"usage,omitempty"`
 	Error string            `json:"error,omitempty"`
+	// Tags is the registry check of the tagged images, nil when it did not
+	// run.
+	Tags *TagCheck `json:"tags,omitempty"`
 }
 
 // Data is what a containers run stores.
@@ -90,7 +96,12 @@ func Scan(ctx context.Context, o Options) (*Result, error) {
 		if o.Env.Which(name) == "" {
 			continue
 		}
-		es = append(es, collect(ctx, o.Env, name))
+		e := collect(ctx, o.Env, name)
+		if o.CheckTags && e.Error == "" {
+			t := checkTags(ctx, o.Env, name)
+			e.Tags = &t
+		}
+		es = append(es, e)
 	}
 	res := &Result{Data: Data{Engines: es}}
 	res.Findings = Analyze(es, o.StoppedAfter, now)
@@ -230,6 +241,14 @@ func Analyze(es []Engine, stoppedAfter time.Duration, now time.Time) []finding.F
 			add(CheckDangling, e.Name, finding.Info, fmt.Sprintf("%d dangling %s image(s) (untagged layers nothing uses)", len(e.Dangling), e.Name),
 				e.Name+" image prune removes them.", d)
 		}
+		if t := e.Tags; t != nil && len(t.Behind) > 0 {
+			var d []string
+			for _, b := range t.Behind {
+				d = append(d, fmt.Sprintf("%s (%s here; the registry has %s)", b.Ref, b.ID, short(b.Remote)))
+			}
+			add(CheckBehind, e.Name, finding.Info, fmt.Sprintf("%d %s image(s) behind their tag", len(t.Behind), e.Name),
+				e.Name+" pull REF fetches the new image; containers created from the old one keep running it until recreated.", d)
+		}
 		if len(e.Volumes) > 0 {
 			add(CheckVolumes, e.Name, finding.Notice, fmt.Sprintf("%d %s volume(s) no container uses", len(e.Volumes), e.Name),
 				"Check they hold nothing you need, then "+e.Name+" volume prune (or "+e.Name+" volume rm NAME).", e.Volumes)
@@ -255,6 +274,21 @@ func stats(es []Engine) []run.Stat {
 			run.Stat{Group: g, Name: "stopped containers", Value: fmt.Sprint(len(e.Stopped))},
 			run.Stat{Group: g, Name: "dangling images", Value: fmt.Sprint(len(e.Dangling))},
 			run.Stat{Group: g, Name: "unused volumes", Value: fmt.Sprint(len(e.Volumes))})
+		if t := e.Tags; t != nil {
+			st := run.Stat{Group: g, Name: "tags checked", Value: fmt.Sprint(t.Checked)}
+			switch {
+			case t.Error != "":
+				st.Value, st.Note = "not checked", t.Error
+			case len(t.Failed) > 0:
+				st.Note = fmt.Sprintf("with %s; %d lookup(s) failed, the first: %s", t.Tool, len(t.Failed), t.Failed[0])
+			default:
+				st.Note = "with " + t.Tool
+			}
+			out = append(out, st)
+			if t.Error == "" {
+				out = append(out, run.Stat{Group: g, Name: "images behind their tag", Value: fmt.Sprint(len(t.Behind))})
+			}
+		}
 		for _, t := range []string{"Images", "Containers", "Local Volumes", "Build Cache"} {
 			if u, ok := e.Usage[t]; ok {
 				out = append(out, run.Stat{Group: g, Name: strings.ToLower(t), Value: u})
@@ -262,4 +296,12 @@ func stats(es []Engine) []run.Stat {
 		}
 	}
 	return out
+}
+
+// short is a digest cut to its first 12 hex digits, as the engines show IDs.
+func short(digest string) string {
+	if rest, ok := strings.CutPrefix(digest, "sha256:"); ok && len(rest) > 12 {
+		return "sha256:" + rest[:12]
+	}
+	return digest
 }

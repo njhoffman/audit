@@ -18,7 +18,7 @@ type ContainersScanner struct {
 // NewContainers builds the containers scanner from the config.
 func NewContainers(cfg *config.Config, env *exec.Env) *ContainersScanner {
 	cc := cfg.Containers
-	return &ContainersScanner{Options: containers.Options{Env: env, Engines: cc.Engines, StoppedAfter: cc.StoppedAfter}}
+	return &ContainersScanner{Options: containers.Options{Env: env, Engines: cc.Engines, StoppedAfter: cc.StoppedAfter, CheckTags: cc.CheckTags}}
 }
 
 // Command implements Scanner.

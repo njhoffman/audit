@@ -101,7 +101,7 @@ them from being noise (one per check, dismissable like ignore rules).
   --serve, --since, --skip-checksum, --tasks. Name both forms, and extend
   `TestEveryFlagHasShortForm` (or a sibling) to check that every long flag
   is in the man page.
-- [ ] **Images behind their tag in `audit containers`.** (p3) [feature] Left out
+- [x] **Images behind their tag in `audit containers`.** (p3) [feature] Left out
   of the containers scanner: an image whose tag now points at a newer digest
   in its registry (`docker manifest inspect` or `skopeo inspect` against the
   local `RepoDigests`), reported as info with the pull command. Needs

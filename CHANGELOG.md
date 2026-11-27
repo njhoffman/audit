@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `containers.check_tags` (off by default, since it asks the registries): `audit containers` reports tagged images whose tag now points at a newer image in their registry, as `containers.image_behind` with the pull to run. The registry's digest for the tag comes from `skopeo inspect`, or `docker buildx imagetools inspect` for docker when skopeo is missing, and is compared with every repo digest the image was pulled as, so a multi-platform image is not reported by mistake. Locally built and `localhost/` images are left out; the summary counts the images checked and names the first lookup that failed.
+
 ## [0.67.8] - 2026-11-27
 
 ### Changed

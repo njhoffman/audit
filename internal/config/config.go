@@ -60,6 +60,9 @@ type ContainersConfig struct {
 	// StoppedAfter is how long a stopped container may sit before it is
 	// reported.
 	StoppedAfter time.Duration `mapstructure:"stopped_after" yaml:"stopped_after"`
+	// CheckTags asks each tagged image's registry whether the tag now
+	// points at a newer image (network; off by default).
+	CheckTags bool `mapstructure:"check_tags" yaml:"check_tags"`
 }
 
 // BackupsConfig configures audit backups.
@@ -541,6 +544,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("schedule.ai", false)
 	v.SetDefault("containers.engines", []string{"docker", "podman"})
 	v.SetDefault("containers.stopped_after", 30*24*time.Hour)
+	v.SetDefault("containers.check_tags", false)
 	v.SetDefault("backups.deja_dup", true)
 	v.SetDefault("backups.sources", []BackupSource{})
 	v.SetDefault("backups.paths", []string{"~"})
@@ -981,6 +985,7 @@ schedule:
 containers:
   engines: [docker, podman]
   stopped_after: 720h   # 30 days
+  check_tags: false     # ask registries whether each image's tag moved on (skopeo, or docker buildx)
 
 # audit backups: when each backup last finished and whether paths are
 # covered. Deja Dup is read from its settings when installed; other tools
