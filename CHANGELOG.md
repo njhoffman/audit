@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.67.3] - 2026-11-26
+
 ### Changed
 
 - Internal: choosing the packages `audit packages --ai-tags` asks about and batching, saving and stamping their AI tags moved from the command layer into `packages.TagCandidates` and `core.AITag`, tested with a fake AI and store. No user-visible change.
