@@ -11,7 +11,7 @@ Refreshed 2026-10-22 against the current working tree. Checked items may be
 implemented but not released yet. Issues below are based on source review;
 suggestions describe proposed behavior rather than existing guarantees.
 
-Reviewed: 2026-11-26
+Reviewed: 2026-11-27
 
 ## 11. Tips
 
@@ -60,63 +60,32 @@ them from being noise (one per check, dismissable like ignore rules).
   output, cost per call in our cache); the cost summed from `llm_cache` is a
   fallback that only counts audit's own calls.
 
-## 15. Review findings (2026-11-26, second pass)
+## 16. Review findings (2026-11-27)
 
-- [x] **Build on a supported Go.** (p1) [security] `govulncheck ./...` reports 36
-  vulnerabilities reachable from audit's code: most in the standard library
-  of go1.25.7 (net/http, html/template, crypto/x509, crypto/tls, net/url;
-  `htmlreport.WriteTasks`, the tasks server and `repos.ParseRemote` are on
-  the traces), plus golang.org/x/net v0.41.0 (fixed in v0.60.0),
-  golang.org/x/text v0.30.0 and github.com/yuin/goldmark v1.7.13. Several
-  fixes exist only in go1.26.x, so Go 1.25 no longer gets them. The
-  workstation's Go is go1.25.7 (`golang-go 2:1.25~0longsleep1`, and the
-  justfile's `GOTOOLCHAIN=local` holds `just install` to it), and CI and the
-  release workflow use `go-version: '1.25'`. Move go.mod, CI and release to a
-  supported Go, install it locally, update x/net, x/text and goldmark, and
-  add `govulncheck ./...` to `just check` or CI so this shows up on its own.
-- [x] **Update the other dependencies.** (p3) [housekeeping] `go list -u -m all`
-  lists 30+ newer modules, among them charmbracelet/bubbles v1.0.0 (from
-  v0.21.0; check for API changes in the list, viewport and textinput
-  components the TUI uses), x/ansi v0.12.0, chroma v2.27.0 and gopsutil
-  v4.26.10. Update in one change after the Go move, with the TUI tests and a
-  look at the dashboard.
-- [x] **One scan of a command at a time.** (p3) [bug] Nothing stops the schedule
-  timer's `audit -r` and a manual scan (or the dashboard's rescan) of the
-  same command from overlapping. SQLite's WAL mode and busy timeout keep the
-  writes from failing, and the fixes log reads the old status inside the
-  save transaction, so nothing is corrupted; but both runs do the full work
-  (a packages scan refreshes the registries twice), and each reconciles
-  from the tasks it read before the other saved, so the last to finish
-  decides the task rows. A per-command lock (flock on a file in the state
-  directory) held across Execute would serialize them, with the waiting run
-  saying what it waits for.
-- [x] **Honor ctrl+c in the GitHub login lookup.** (p3) [bug] `reposScanner`
-  asks `githubUser(context.Background(), true)`, so an interrupt during the
-  first repos scan (before the login is remembered) waits up to 15s for `gh`.
-  Pass the command's context through `reposScanner`.
-- [x] **Long flag names in the man page.** (p3) [docs] 21 flags appear in
-  `man/audit.1.md` only by their letter (`-O`, `-s`, `-P`, ...): --categories,
-  --dir, --dirty, --hint, --installed, --limit, --lines, --move, --no-fetch,
-  --note, --offline, --orphans, --owner, --path, --port, --push, --release,
-  --serve, --since, --skip-checksum, --tasks. Name both forms, and extend
-  `TestEveryFlagHasShortForm` (or a sibling) to check that every long flag
-  is in the man page.
-- [x] **Images behind their tag in `audit containers`.** (p3) [feature] Left out
-  of the containers scanner: an image whose tag now points at a newer digest
-  in its registry (`docker manifest inspect` or `skopeo inspect` against the
-  local `RepoDigests`), reported as info with the pull command. Needs
-  network and registry auth, so off by default (`containers.check_tags`).
-- [x] **Fixes log on the dashboard and in HTML.** (p3) [feature] `audit history
-  runs fixes` is terminal-only. A dashboard panel (the last few fixes under
-  the table, or a key that opens the log as a report) and a section on the
-  tasks page would show the same data where the tasks are.
-- [x] **Coverage of the renderers and two scanners.** (p3) [test] Lowest
-  per-package coverage: `internal/scan/users` 66.9%, `internal/render` 70.7%,
-  `internal/scan/storage` 72.0%, `cmd/audit/cmd` 77.6%. render's report and
-  package views carry the most untested branches (empty data, narrow
-  widths, nerd-font glyphs). Done 2026-11-27 (0.69.1): users 92.8%,
-  storage 81.4%, render 84.2%; cmd stays near 78%, its gaps mostly the
-  terminal-only paths (fzf picker, pager, sudo prompts).
+- [ ] **Actions outside the scan lock.** (p3) [bug] `lockCommand` is taken only
+  inside `Engine.Execute`, so the apply step of `packages update`, `repos
+  sync` and the `clean` actions runs unlocked between its scan and its
+  rescan. Two updates at once (a terminal and the dashboard's `a`) both
+  plan from the same scan and run the same steps. Holding the command's
+  lock across plan, apply and rescan needs Execute to accept a held lock:
+  flock locks belong to the open file, so a second `lockCommand` in the
+  same process waits on the first.
+- [ ] **Redraw the fixes screen on resize.** (p3) [bug] The `L` screen renders at
+  the width it had when opened; the `WindowSizeMsg` case reloads only
+  `screenReport`, so after a resize the totals table keeps its old width
+  (cut off, or narrow). Reload it there too.
+- [ ] **Repeated sentence in the todo man entry.** (p3) [docs] `man/audit.1.md`'s
+  `todo` entry says "**F** in the task editor runs the same **audit todo
+  fix**, so it asks there too. Closed tasks are refused. **F** in the task
+  editor does the same for the selected task." Drop the second F sentence.
+- [ ] **Docker Hub pull quota in the tag check.** (p3) [performance] With
+  `containers.check_tags`, `skopeo inspect` GETs each image's manifest (and
+  its config blob), and Docker Hub counts manifest GETs against the pull
+  rate limit (100 per 6h anonymous); a HEAD of the manifest, which returns
+  `Docker-Content-Digest`, does not count. `skopeo inspect --raw` plus a
+  digest of the body still GETs. Worth measuring with `skopeo --debug`
+  before changing anything; `crane digest` or `regctl image digest` use
+  HEAD, if either is installed.
 
 ## Completed
 
@@ -494,3 +463,61 @@ them from being noise (one per check, dismissable like ignore rules).
   .github/workflows/release.yml runs goreleaser on a tag with no test step; the
   `go mod tidy` hook mutates the tree (use `go mod tidy -diff`); .goreleaser.yml's
   header describes the old sysaudit tool and archives `LICENSE*`, which does not exist.
+
+### Review findings (2026-11-26, second pass) (completed 2026-11-27)
+
+- [x] **Build on a supported Go.** (p1) [security] `govulncheck ./...` reports 36
+  vulnerabilities reachable from audit's code: most in the standard library
+  of go1.25.7 (net/http, html/template, crypto/x509, crypto/tls, net/url;
+  `htmlreport.WriteTasks`, the tasks server and `repos.ParseRemote` are on
+  the traces), plus golang.org/x/net v0.41.0 (fixed in v0.60.0),
+  golang.org/x/text v0.30.0 and github.com/yuin/goldmark v1.7.13. Several
+  fixes exist only in go1.26.x, so Go 1.25 no longer gets them. The
+  workstation's Go is go1.25.7 (`golang-go 2:1.25~0longsleep1`, and the
+  justfile's `GOTOOLCHAIN=local` holds `just install` to it), and CI and the
+  release workflow use `go-version: '1.25'`. Move go.mod, CI and release to a
+  supported Go, install it locally, update x/net, x/text and goldmark, and
+  add `govulncheck ./...` to `just check` or CI so this shows up on its own.
+- [x] **Update the other dependencies.** (p3) [housekeeping] `go list -u -m all`
+  lists 30+ newer modules, among them charmbracelet/bubbles v1.0.0 (from
+  v0.21.0; check for API changes in the list, viewport and textinput
+  components the TUI uses), x/ansi v0.12.0, chroma v2.27.0 and gopsutil
+  v4.26.10. Update in one change after the Go move, with the TUI tests and a
+  look at the dashboard.
+- [x] **One scan of a command at a time.** (p3) [bug] Nothing stops the schedule
+  timer's `audit -r` and a manual scan (or the dashboard's rescan) of the
+  same command from overlapping. SQLite's WAL mode and busy timeout keep the
+  writes from failing, and the fixes log reads the old status inside the
+  save transaction, so nothing is corrupted; but both runs do the full work
+  (a packages scan refreshes the registries twice), and each reconciles
+  from the tasks it read before the other saved, so the last to finish
+  decides the task rows. A per-command lock (flock on a file in the state
+  directory) held across Execute would serialize them, with the waiting run
+  saying what it waits for.
+- [x] **Honor ctrl+c in the GitHub login lookup.** (p3) [bug] `reposScanner`
+  asks `githubUser(context.Background(), true)`, so an interrupt during the
+  first repos scan (before the login is remembered) waits up to 15s for `gh`.
+  Pass the command's context through `reposScanner`.
+- [x] **Long flag names in the man page.** (p3) [docs] 21 flags appear in
+  `man/audit.1.md` only by their letter (`-O`, `-s`, `-P`, ...): --categories,
+  --dir, --dirty, --hint, --installed, --limit, --lines, --move, --no-fetch,
+  --note, --offline, --orphans, --owner, --path, --port, --push, --release,
+  --serve, --since, --skip-checksum, --tasks. Name both forms, and extend
+  `TestEveryFlagHasShortForm` (or a sibling) to check that every long flag
+  is in the man page.
+- [x] **Images behind their tag in `audit containers`.** (p3) [feature] Left out
+  of the containers scanner: an image whose tag now points at a newer digest
+  in its registry (`docker manifest inspect` or `skopeo inspect` against the
+  local `RepoDigests`), reported as info with the pull command. Needs
+  network and registry auth, so off by default (`containers.check_tags`).
+- [x] **Fixes log on the dashboard and in HTML.** (p3) [feature] `audit history
+  runs fixes` is terminal-only. A dashboard panel (the last few fixes under
+  the table, or a key that opens the log as a report) and a section on the
+  tasks page would show the same data where the tasks are.
+- [x] **Coverage of the renderers and two scanners.** (p3) [test] Lowest
+  per-package coverage: `internal/scan/users` 66.9%, `internal/render` 70.7%,
+  `internal/scan/storage` 72.0%, `cmd/audit/cmd` 77.6%. render's report and
+  package views carry the most untested branches (empty data, narrow
+  widths, nerd-font glyphs). Done 2026-11-27 (0.69.1): users 92.8%,
+  storage 81.4%, render 84.2%; cmd stays near 78%, its gaps mostly the
+  terminal-only paths (fzf picker, pager, sudo prompts).
