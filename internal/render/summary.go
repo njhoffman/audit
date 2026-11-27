@@ -63,8 +63,8 @@ func (p *Printer) Summary(rows []CommandStatus) {
 const CountSeparator = "│ "
 
 // CountLegend names the markers of the count columns in use, findings then
-// tasks: "◉ critical  ● error ... │ ● high  ▲ medium ...", faint, or "" when
-// no column has a count.
+// tasks: "◉ critical  ● error ... + new  - resolved since the run before │
+// ● high  ▲ medium ...", faint, or "" when no column has a count.
 func (p *Printer) CountLegend(cc CountColumns) string {
 	g := p.glyphs()
 	var sev, pri []string
@@ -76,6 +76,15 @@ func (p *Printer) CountLegend(cc CountColumns) string {
 	}
 	if len(sev) == 0 && len(pri) == 0 {
 		return ""
+	}
+	if cc.addW > 0 {
+		sev = append(sev, p.fg("9").Render("+")+" new")
+	}
+	if cc.resW > 0 {
+		sev = append(sev, p.fg("10").Render("-")+" resolved")
+	}
+	if cc.addW > 0 || cc.resW > 0 {
+		sev[len(sev)-1] += " since the run before"
 	}
 	out := p.faint().Render("findings ") + strings.Join(sev, "  ")
 	if len(pri) > 0 {
@@ -103,6 +112,9 @@ type CountColumns struct {
 	sevW map[finding.Severity]int
 	pri  []todo.Priority
 	priW map[todo.Priority]int
+	// addW and resW are the widths of the delta's +N and -N columns; 0
+	// when no row has one.
+	addW, resW int
 }
 
 // NewCountColumns sizes the count sub-columns for rows.
@@ -114,6 +126,14 @@ func NewCountColumns(rows []CommandStatus) CountColumns {
 				if n > 0 {
 					cc.sevW[s] = max(cc.sevW[s], len(fmt.Sprint(n)))
 				}
+			}
+		}
+		if d := r.Delta; d != nil && r.Latest != nil && r.Latest.Counts.Total() > 0 {
+			if d.Added > 0 {
+				cc.addW = max(cc.addW, len(fmt.Sprint(d.Added))+1)
+			}
+			if d.Resolved > 0 {
+				cc.resW = max(cc.resW, len(fmt.Sprint(d.Resolved))+1)
 			}
 		}
 		for pr, n := range r.Open {
@@ -148,33 +168,54 @@ func (p *Printer) RunCounts(cc CountColumns, r CommandStatus) string {
 		}
 		return p.fg("10").Render(mark + " none")
 	}
-	return p.FindingCounts(cc, r.Latest.Counts) + p.deltaText(r.Delta)
+	counts := p.findingCells(cc, r.Latest.Counts)
+	if d := p.deltaText(cc, r.Delta); d != "" {
+		counts += "  " + d
+	}
+	return strings.TrimRight(counts, " ")
 }
 
-// deltaText is "  +3 -5" after the counts: new findings in red, resolved in
-// green, each left out when zero, nothing when the run changed nothing.
-func (p *Printer) deltaText(d *Delta) string {
-	if d == nil || (d.Added == 0 && d.Resolved == 0) {
+// deltaText is "+3 -5": new findings in red, resolved in green, each in
+// its own column across the rows (blank when zero), nothing when no row
+// has a delta.
+func (p *Printer) deltaText(cc CountColumns, d *Delta) string {
+	if cc.addW == 0 && cc.resW == 0 {
 		return ""
 	}
-	var parts []string
-	if d.Added > 0 {
-		parts = append(parts, p.fg("9").Render(fmt.Sprintf("+%d", d.Added)))
+	var added, resolved int
+	if d != nil {
+		added, resolved = d.Added, d.Resolved
 	}
-	if d.Resolved > 0 {
-		parts = append(parts, p.fg("10").Render(fmt.Sprintf("-%d", d.Resolved)))
+	cell := func(n, width int, sign, color string) string {
+		if width == 0 {
+			return ""
+		}
+		if n == 0 {
+			return strings.Repeat(" ", width)
+		}
+		return p.fg(color).Render(padLeft(fmt.Sprintf("%s%d", sign, n), width))
 	}
-	return "  " + strings.Join(parts, " ")
+	parts := []string{cell(added, cc.addW, "+", "9"), cell(resolved, cc.resW, "-", "10")}
+	if cc.addW == 0 || cc.resW == 0 {
+		return parts[0] + parts[1]
+	}
+	return parts[0] + " " + parts[1]
 }
 
 // FindingCounts is c as aligned cells: each severity's marker and count in
 // a muted shade of its color, blank where c has none.
 func (p *Printer) FindingCounts(cc CountColumns, c finding.Counts) string {
+	return strings.TrimRight(p.findingCells(cc, c), " ")
+}
+
+// findingCells is FindingCounts with its trailing blank cells kept, so
+// what follows starts at the same column on every row.
+func (p *Printer) findingCells(cc CountColumns, c finding.Counts) string {
 	cells := make([]string, len(cc.sev))
 	for i, s := range cc.sev {
 		cells[i] = p.countCell(c[s], cc.sevW[s], p.glyphs().Severity[s], p.mutedSev(s))
 	}
-	return strings.TrimRight(strings.Join(cells, "  "), " ")
+	return strings.Join(cells, "  ")
 }
 
 // TaskCounts is open as aligned cells, like FindingCounts, by priority.

@@ -526,7 +526,24 @@ func TestRunCountsDelta(t *testing.T) {
 		{Command: "d", Latest: &store.RunInfo{Counts: finding.Counts{finding.Warning: 2}}},
 	}
 	cc := NewCountColumns(rows)
-	for i, want := range []string{"▲ 4  +3 -5", "▲ 2  -1", "▲ 2", "▲ 2"} {
+	// The resolved count keeps its column when a row has nothing added.
+	for i, want := range []string{"▲ 4  +3 -5", "▲ 2     -1", "▲ 2", "▲ 2"} {
+		if got := p.RunCounts(cc, rows[i]); got != want {
+			t.Errorf("%s: %q, want %q", rows[i].Command, got, want)
+		}
+	}
+	// Columns are as wide as the widest delta and start where the counts
+	// end on every row, whichever severities a row has.
+	rows = []CommandStatus{
+		{Command: "a", Latest: &store.RunInfo{Counts: finding.Counts{finding.Error: 1, finding.Warning: 12}}, Delta: &Delta{Added: 12}},
+		{Command: "b", Latest: &store.RunInfo{Counts: finding.Counts{finding.Error: 3}}, Delta: &Delta{Added: 1, Resolved: 2}},
+		{Command: "c", Latest: &store.RunInfo{Counts: finding.Counts{finding.Warning: 1}}, Delta: &Delta{Resolved: 10}},
+	}
+	cc = NewCountColumns(rows)
+	if l := p.CountLegend(cc); !strings.HasSuffix(l, "○ info  + new  - resolved since the run before") && !strings.Contains(l, "▲ warning  + new  - resolved since the run before") {
+		t.Errorf("legend: %q", l)
+	}
+	for i, want := range []string{"● 1  ▲ 12  +12", "● 3         +1  -2", "     ▲  1      -10"} {
 		if got := p.RunCounts(cc, rows[i]); got != want {
 			t.Errorf("%s: %q, want %q", rows[i].Command, got, want)
 		}
