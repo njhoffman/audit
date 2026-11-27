@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/njhoffman/audit/internal/config"
@@ -234,10 +236,20 @@ func start(t *testing.T, f *fake, opts ...Option) *Model {
 func TestDashboardShowsCommandsAndAges(t *testing.T) {
 	m := start(t, newFake())
 	v := m.View()
-	for _, s := range []string{"system", "environment", "packages", "1h", "10d", "never", "● 2       │ ● 2", "│ OPEN TASKS", "findings ● error  │ tasks ● high", "✓ none"} {
+	for _, s := range []string{"system", "environment", "packages", "1h", "10d", "never", "● 2       │ ● 2", "│ OPEN TASKS", "findings ● error", "│ tasks ● high", "✓ none"} {
 		if !strings.Contains(v, s) {
 			t.Errorf("dashboard missing %q:\n%s", s, v)
 		}
+	}
+	// Every separator, the legend's included, sits in one column.
+	cols := map[int]bool{}
+	for _, line := range strings.Split(ansi.Strip(v), "\n") {
+		if i := strings.Index(line, "│"); i >= 0 {
+			cols[ansi.StringWidth(line[:i])] = true
+		}
+	}
+	if len(cols) != 1 {
+		t.Errorf("separators in columns %v:\n%s", cols, v)
 	}
 }
 

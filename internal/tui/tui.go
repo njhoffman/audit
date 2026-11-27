@@ -1059,7 +1059,9 @@ func (m *Model) dashboardView() string {
 		}
 		b.WriteString(marker + name + "  " + pad(l.last, 16) + "  " + pad(l.age, 8) + "  " + pad(l.findings, findW) + "  " + l.tasks + "\n")
 	}
-	if l := p.CountLegend(cc); l != "" {
+	// The legend starts two columns in, like the rows past their marker, so
+	// its separator lines up with theirs.
+	if l := p.CountLegend(cc, nameW+2+16+2+8+2+findW+2); l != "" {
 		b.WriteString("\n  " + l + "\n")
 	}
 	if m.cursor < len(m.rows) {

@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -171,11 +172,26 @@ func TestSummary(t *testing.T) {
 	})
 	out := b.String()
 	for _, w := range []string{"COMMAND", "system", "2h", "● 2  ○ 1  │ ● 2  ◆ 1", "│ OPEN TASKS",
-		"findings ● error  ○ info  │ tasks ● high  ◆ low",
+		"findings ● error  ○ info", "│ tasks ● high  ◆ low",
 		"packages", "10d", "✓ none", "repos", "never"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("summary missing %q:\n%s", w, out)
 		}
+	}
+	if cols := separatorColumns(out); len(cols) != 1 {
+		t.Errorf("the legend's separator lines up with the table's: columns %v\n%s", cols, out)
+	}
+}
+
+func TestCountLegendSeparator(t *testing.T) {
+	p, _ := printer(0)
+	cc := NewCountColumns([]CommandStatus{{Command: "a", Latest: &store.RunInfo{Counts: finding.Counts{finding.Error: 1}},
+		Open: map[todo.Priority]int{todo.High: 1}}})
+	if l := p.CountLegend(cc, 30); !slices.Equal(separatorColumns(l), []int{30}) {
+		t.Errorf("separator not at column 30: %q", l)
+	}
+	if l := p.CountLegend(cc, 5); !strings.Contains(l, "error  │ tasks") {
+		t.Errorf("too narrow keeps two spaces: %q", l)
 	}
 }
 
@@ -452,10 +468,10 @@ func TestCountColumnsAlign(t *testing.T) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if l := p.CountLegend(cc); l != "findings ● error  ▲ warning  ○ info  │ tasks ● high  ◆ low" {
+	if l := p.CountLegend(cc, 0); l != "findings ● error  ▲ warning  ○ info  │ tasks ● high  ◆ low" {
 		t.Errorf("legend %q", l)
 	}
-	if l := p.CountLegend(NewCountColumns(nil)); l != "" {
+	if l := p.CountLegend(NewCountColumns(nil), 0); l != "" {
 		t.Errorf("no counts, no legend: %q", l)
 	}
 	// Each priority marker is its mapped severity's, and the unmapped
@@ -540,12 +556,30 @@ func TestRunCountsDelta(t *testing.T) {
 		{Command: "c", Latest: &store.RunInfo{Counts: finding.Counts{finding.Warning: 1}}, Delta: &Delta{Resolved: 10}},
 	}
 	cc = NewCountColumns(rows)
-	if l := p.CountLegend(cc); !strings.HasSuffix(l, "○ info  + new  - resolved since the run before") && !strings.Contains(l, "▲ warning  + new  - resolved since the run before") {
-		t.Errorf("legend: %q", l)
+	if l := p.CountLegend(cc, 0); strings.Contains(l, "new") || strings.Contains(l, "resolved") {
+		t.Errorf("the deltas are not in the legend: %q", l)
 	}
 	for i, want := range []string{"● 1  ▲ 12  +12", "● 3         +1  -2", "     ▲  1      -10"} {
 		if got := p.RunCounts(cc, rows[i]); got != want {
 			t.Errorf("%s: %q, want %q", rows[i].Command, got, want)
 		}
 	}
+}
+
+// separatorColumns are the distinct display columns of the count
+// separator over the lines of out that have one.
+func separatorColumns(out string) []int {
+	seen := map[int]bool{}
+	var cols []int
+	for _, line := range strings.Split(ansi.Strip(out), "\n") {
+		i := strings.Index(line, "│")
+		if i < 0 {
+			continue
+		}
+		if c := ansi.StringWidth(line[:i]); !seen[c] {
+			seen[c] = true
+			cols = append(cols, c)
+		}
+	}
+	return cols
 }

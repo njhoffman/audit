@@ -53,7 +53,17 @@ func (p *Printer) Summary(rows []CommandStatus) {
 		styles[i] = st
 	}
 	p.table(cols, cells, func(row, col int) lipgloss.Style { return styles[row][col] })
-	if l := p.CountLegend(cc); l != "" {
+	// The legend's separator goes under the table's: past the first four
+	// columns and their gaps, as p.table lays them out.
+	sep := 0
+	for i, c := range cols[:4] {
+		w := ansi.StringWidth(c.title)
+		for _, r := range cells {
+			w = max(w, ansi.StringWidth(r[i]))
+		}
+		sep += w + 2
+	}
+	if l := p.CountLegend(cc, sep); l != "" {
 		p.println("")
 		p.println(l)
 	}
@@ -63,9 +73,11 @@ func (p *Printer) Summary(rows []CommandStatus) {
 const CountSeparator = "│ "
 
 // CountLegend names the markers of the count columns in use, findings then
-// tasks: "◉ critical  ● error ... + new  - resolved since the run before │
-// ● high  ▲ medium ...", faint, or "" when no column has a count.
-func (p *Printer) CountLegend(cc CountColumns) string {
+// tasks: "◉ critical  ● error ... │ ● high  ▲ medium ...", faint, or ""
+// when no column has a count. sep is the column the separator goes in, so
+// it lines up with the table's; a legend too wide for it (or sep 0) keeps
+// two spaces before the separator.
+func (p *Printer) CountLegend(cc CountColumns, sep int) string {
 	g := p.glyphs()
 	var sev, pri []string
 	for _, s := range cc.sev {
@@ -77,18 +89,10 @@ func (p *Printer) CountLegend(cc CountColumns) string {
 	if len(sev) == 0 && len(pri) == 0 {
 		return ""
 	}
-	if cc.addW > 0 {
-		sev = append(sev, p.fg("9").Render("+")+" new")
-	}
-	if cc.resW > 0 {
-		sev = append(sev, p.fg("10").Render("-")+" resolved")
-	}
-	if cc.addW > 0 || cc.resW > 0 {
-		sev[len(sev)-1] += " since the run before"
-	}
 	out := p.faint().Render("findings ") + strings.Join(sev, "  ")
 	if len(pri) > 0 {
-		out += p.faint().Render("  "+CountSeparator+"tasks ") + strings.Join(pri, "  ")
+		gap := max(2, sep-ansi.StringWidth(out))
+		out += p.faint().Render(strings.Repeat(" ", gap)+CountSeparator+"tasks ") + strings.Join(pri, "  ")
 	}
 	return out
 }
