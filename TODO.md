@@ -344,7 +344,7 @@ Still open: whether format detection should refuse pruning ambiguous histories.
 
 ## 10. Dashboard actions
 
-- [ ] **fzx integration: an updates mode in fzx's packages module.** (p2) [feature] Decided 2026-11-26:
+- [x] **fzx integration: an updates mode in fzx's packages module.** (fzx 0.121.0: `fzx -m packages:updates`; pipx replaced by uv) (p2) [feature] Decided 2026-11-26:
   rows from `audit packages list -u -T` (every manager, colored by level), alt-u upgrades the marked rows
   through `audit packages update REFS`, toggles for patch/minor/major and per manager. Waiting for the
   uncommitted work in the fzx checkout (VERSION 0.119.0, menu/session changes) to be committed first.
