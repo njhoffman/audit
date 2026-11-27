@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -308,5 +309,68 @@ func TestTouchesSystemManager(t *testing.T) {
 		if got := touchesSystemManager(tc.t, tc.fs); got != tc.want {
 			t.Errorf("%s %+v: %v, want %v", tc.t.Command, tc.fs, got, tc.want)
 		}
+	}
+}
+
+func TestTodoFixOffersCommit(t *testing.T) {
+	if _, err := osexec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	cfgHome, _ := env(t)
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"} {
+		t.Setenv(k, v)
+	}
+	repo := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		out, err := osexec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput() // #nosec G204 -- test
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	run("init", "-q", "-b", "main")
+	for _, f := range []string{"a.conf", "b.conf"} {
+		if err := os.WriteFile(filepath.Join(repo, f), []byte(f+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "init")
+	if err := os.WriteFile(filepath.Join(repo, "b.conf"), []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The session edits a.conf (clean before) and b.conf (already dirty).
+	script := filepath.Join(t.TempDir(), "claude")
+	body := "#!/bin/sh\necho fixed >> '" + filepath.Join(repo, "a.conf") + "'\necho fixed >> '" + filepath.Join(repo, "b.conf") + "'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil { // #nosec G306 -- test executable
+		t.Fatal(err)
+	}
+	writeConfig(t, cfgHome, "ai: {claude: {command: "+script+"}}\n")
+	t.Chdir(repo)
+	if r := runArgs(t, "todo", "add", "harden the config"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	r := runArgsWith(t, func(a *app) {
+		a.interactive = func() bool { return true }
+		a.in = strings.NewReader("y\n")
+	}, "todo", "fix", "1")
+	if r.e != nil || !strings.Contains(r.err, "b.conf had your changes before the fix") || !strings.Contains(r.err, `Commit 1 file(s) as "audit: fix #1 harden the config"?`) ||
+		!strings.Contains(r.err, "Committed in "+repo) {
+		t.Fatalf("fix: %v\n%s", r.e, r.err)
+	}
+	if got := run("show", "--name-only", "--format=%s", "HEAD"); got != "audit: fix #1 harden the config\n\na.conf\n" {
+		t.Errorf("only a.conf is committed:\n%s", got)
+	}
+	if st := run("status", "--porcelain"); st != " M b.conf\n" {
+		t.Errorf("b.conf stays the user's uncommitted change: %q", st)
+	}
+
+	// ai.commit_fixes: never takes no snapshot and asks nothing.
+	writeConfig(t, cfgHome, "ai: {claude: {command: "+script+"}, commit_fixes: never}\n")
+	r = runArgsWith(t, func(a *app) { a.interactive = func() bool { return true } }, "todo", "fix", "1")
+	if r.e != nil || strings.Contains(r.err, "Commit ") {
+		t.Errorf("never: %v\n%s", r.e, r.err)
 	}
 }

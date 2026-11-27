@@ -370,7 +370,7 @@ them from being noise (one per check, dismissable like ignore rules).
 
 ## 12. AI review and fix workflow
 
-- [ ] **Commit AI fixes made inside a git repo.** (p2) [feature] After `audit todo fix`
+- [x] **Commit AI fixes made inside a git repo.** (ai.commit_fixes: ask; git status snapshot with content hashes before the session; only files clean before are committed, with --only) (p2) [feature] After `audit todo fix`
   (fixTask in cmd/audit/cmd/ai.go) succeeds and the rescan closes the task, check
   whether the files it changed are in a git work tree. If they are, offer a
   commit of only those files with a message naming the task (`audit: fix #ID

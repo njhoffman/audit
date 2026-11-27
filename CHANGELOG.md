@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit todo fix` (and `F` in the task editor, which now runs it) offers to commit what the AI session changed in git work trees once the task closes: only files that were clean before the session, as `audit: fix #ID title`, leaving your own uncommitted and staged changes as they were and naming files that had both. `ai.commit_fixes: never` turns it off.
+
+### Changed
+
+- `F` in the task editor runs `audit todo fix ID` on the terminal instead of the bare AI CLI, so the rescan and the commit question happen there; the dashboard reloads afterwards instead of rescanning a second time.
+
 ## [0.56.0] - 2026-11-26
 
 ### Added

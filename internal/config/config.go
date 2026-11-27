@@ -96,6 +96,12 @@ type ShellHistoryConfig struct {
 	BackupKeep   int           `mapstructure:"backup_keep" yaml:"backup_keep"`
 }
 
+// ai.commit_fixes values.
+const (
+	CommitAsk   = "ask"
+	CommitNever = "never"
+)
+
 // HistoryPattern is one shell_history.patterns entry: a literal substring
 // to Match, written either as a plain string (known by its position,
 // pattern-N) or as {name, match}. A named pattern's findings, tasks and
@@ -247,6 +253,10 @@ type AIConfig struct {
 	InstructionLimitKB int64 `mapstructure:"instruction_limit_kb" yaml:"instruction_limit_kb"`
 	// CacheMaxAge is how long a cached AI answer is kept; 0 keeps them all.
 	CacheMaxAge time.Duration `mapstructure:"cache_max_age" yaml:"cache_max_age"`
+	// CommitFixes is what audit todo fix does with the files a session
+	// changed in a git work tree once the task closes: ask (offer a commit
+	// of only those files) or never.
+	CommitFixes string `mapstructure:"commit_fixes" yaml:"commit_fixes"`
 }
 
 // ProviderConfig is one AI CLI.
@@ -484,6 +494,7 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("ai.max_details", 10)
 	v.SetDefault("ai.instruction_limit_kb", 40)
 	v.SetDefault("ai.cache_max_age", 90*24*time.Hour)
+	v.SetDefault("ai.commit_fixes", CommitAsk)
 	v.SetDefault("todo.closed_max_age", 90*24*time.Hour)
 	v.SetDefault("schedule.calendar", "daily")
 	// packages reaches the registries; the others stay local by default.
@@ -733,6 +744,9 @@ func (c *Config) validate() error {
 	}
 	if c.Todo.ClosedMaxAge < 0 {
 		return fmt.Errorf("todo.closed_max_age must be 0 (keep all) or more, got %s", c.Todo.ClosedMaxAge)
+	}
+	if !slices.Contains([]string{CommitAsk, CommitNever}, c.AI.CommitFixes) {
+		return fmt.Errorf("ai.commit_fixes must be %s or %s, got %q", CommitAsk, CommitNever, c.AI.CommitFixes)
 	}
 	if c.AI.CacheMaxAge < 0 {
 		return fmt.Errorf("ai.cache_max_age must be 0 (keep all) or more, got %s", c.AI.CacheMaxAge)
@@ -1004,6 +1018,10 @@ ai:
   # Cached AI answers older than this are deleted when audit starts; each
   # changed set of findings adds a new one. 0 keeps them all.
   cache_max_age: 2160h       # 90 days
+  # After audit todo fix closes a task: ask to commit the files the session
+  # changed in each git work tree (only files that were clean before), or
+  # never.
+  commit_fixes: ask
 
 system:
   # Extra journalctl flags for the journal source.

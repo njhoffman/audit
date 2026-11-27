@@ -650,11 +650,13 @@ func TestFixTask(t *testing.T) {
 	if len(f.fixes) != 1 || f.fixes[0] != 1 {
 		t.Fatalf("F starts a session for the selected task: %v", f.fixes)
 	}
-	// tea.ExecProcess runs the session in a real program; deliver its end.
+	// tea.ExecProcess runs audit todo fix, which rescans; deliver its end
+	// with the task it resolved.
+	f.tasks[0].Status = todo.Resolved
 	_, cmd := m.Update(fixMsg{task: f.tasks[0]})
 	drive(t, m, cmd)
-	if strings.Join(f.rescans, ",") != "system" || !strings.Contains(m.status, "#1 resolved") {
-		t.Errorf("the task's command is rescanned and the outcome shown: %v %q", f.rescans, m.status)
+	if len(f.rescans) != 0 || !strings.Contains(m.status, "#1 resolved") {
+		t.Errorf("the tasks reload and the outcome shows, without a second rescan: %v %q", f.rescans, m.status)
 	}
 
 	f.resolve = 0

@@ -55,8 +55,9 @@ type Backend interface {
 	// Explain asks the AI about task id and renders the answer at width;
 	// refresh skips the cache.
 	Explain(ctx context.Context, id int64, width int, refresh bool) (string, error)
-	// FixSession is an interactive AI session that fixes task id, to run on
-	// the terminal.
+	// FixSession fixes task id on the terminal: an interactive AI session,
+	// then a rescan of its command and the offer to commit what it changed
+	// (audit todo fix).
 	FixSession(ctx context.Context, id int64) (*osexec.Cmd, error)
 	// Packages is the saved package inventory with registry data, none when
 	// packages has never run.
@@ -501,11 +502,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("fix: "+msg.err.Error(), true)
 			return m, m.loadTodos()
 		}
+		// The session ran audit todo fix, which rescanned the task's command
+		// and offered a commit itself; reload what it changed.
 		m.fixing = msg.task.ID
-		if msg.task.Source.Scanned() && m.busy == "" {
-			return m, m.rescan(msg.task.Command)
-		}
-		return m, m.loadTodos()
+		return m, tea.Batch(m.loadTodos(), m.loadStatuses())
 	case editorMsg:
 		if msg.err != nil {
 			m.setStatus("editor: "+msg.err.Error(), true)

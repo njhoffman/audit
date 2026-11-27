@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	osexec "os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/finding"
+	"github.com/njhoffman/audit/internal/gitfix"
 	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/render"
@@ -313,6 +315,7 @@ func (a *app) fixTask(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
+	snap := a.fixSnapshot(ctx, id)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w", cmd.Args[0], err)
@@ -321,6 +324,7 @@ func (a *app) fixTask(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
+	defer func() { a.offerFixCommit(ctx, t, snap) }()
 	if t.Source.Scanned() {
 		// A fixed apt, snap or flatpak task only closes on a scan that
 		// includes its manager, whatever packages.system_managers says.
@@ -428,4 +432,101 @@ func (a *app) explainUpdate(ctx context.Context, u *packages.Update, f aiFlags) 
 	sayln(a.out)
 	a.printAnswer("Why these failed", resp)
 	return nil
+}
+
+// fixPaths are where a fix session for t is likely to change files: the
+// task's file locations, the absolute paths its findings name, and the
+// directory audit was started in (where the session runs).
+func (a *app) fixPaths(ctx context.Context, id int64) []string {
+	t, fs, err := a.taskFindings(ctx, id)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, l := range todo.Locations(t) {
+		out = append(out, l.Path)
+	}
+	abs := func(p string) {
+		if filepath.IsAbs(p) {
+			out = append(out, filepath.Clean(p))
+		}
+	}
+	for _, f := range fs {
+		abs(f.Subject)
+		for _, d := range f.Details {
+			p, _, _ := strings.Cut(d, ":")
+			abs(p)
+		}
+	}
+	if wd, err := os.Getwd(); err == nil {
+		out = append(out, wd)
+	}
+	return out
+}
+
+// fixSnapshot records the git work trees a fix may touch, unless
+// ai.commit_fixes is never. A failure only loses the commit offer.
+func (a *app) fixSnapshot(ctx context.Context, id int64) gitfix.Snapshot {
+	if a.cfg.AI.CommitFixes == config.CommitNever {
+		return nil
+	}
+	snap, err := gitfix.Take(ctx, a.env, gitfix.Roots(ctx, a.env, a.fixPaths(ctx, id)))
+	if err != nil {
+		a.log.Warn("snapshot git work trees before the fix", "err", err)
+		return nil
+	}
+	return snap
+}
+
+// fixCommitMessage names the task the commit fixes.
+func fixCommitMessage(t todo.Todo) string {
+	title := t.Title
+	if len(title) > 60 {
+		title = strings.TrimSpace(title[:60]) + "..."
+	}
+	return fmt.Sprintf("audit: fix #%d %s", t.ID, title)
+}
+
+// offerFixCommit asks, per git work tree the session changed, whether to
+// commit the files it changed that were clean before; files that already
+// had the user's changes are named and left alone. It only offers once the
+// task is closed (or was never scanned), and only on a terminal.
+func (a *app) offerFixCommit(ctx context.Context, t todo.Todo, snap gitfix.Snapshot) {
+	if len(snap) == 0 {
+		return
+	}
+	cs, err := gitfix.Diff(ctx, a.env, snap)
+	if err != nil {
+		a.log.Warn("compare git work trees after the fix", "err", err)
+		return
+	}
+	if len(cs) == 0 {
+		return
+	}
+	if t.Source.Scanned() && !t.Status.Closed() {
+		say(a.errOut, "Not offering a commit: #%d is still open.\n", t.ID)
+		return
+	}
+	msg := fixCommitMessage(t)
+	for _, c := range cs {
+		for _, m := range c.Mixed {
+			say(a.errOut, "%s: %s had your changes before the fix and changed again; left uncommitted.\n", c.Root, m)
+		}
+		if len(c.Files) == 0 {
+			continue
+		}
+		say(a.errOut, "The fix changed in %s:\n  %s\n", c.Root, strings.Join(c.Files, "\n  "))
+		if !a.interactive() {
+			continue
+		}
+		ok, err := a.confirm(fmt.Sprintf("Commit %d file(s) as %q?", len(c.Files), msg))
+		if err != nil || !ok {
+			continue
+		}
+		if err := gitfix.Commit(ctx, a.env, c, msg); err != nil {
+			say(a.errOut, "Commit failed: %v\n", err)
+			continue
+		}
+		say(a.errOut, "Committed in %s.\n", c.Root)
+	}
 }

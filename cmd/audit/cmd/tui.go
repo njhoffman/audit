@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	osexec "os/exec"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -123,8 +124,14 @@ func (b tuiBackend) Explain(ctx context.Context, id int64, width int, refresh bo
 	return buf.String(), nil
 }
 
+// FixSession implements tui.Backend with audit todo fix ID, so the session,
+// the rescan and the commit question run on the terminal as from the
+// command line. A closed task is refused before the terminal is handed over.
 func (b tuiBackend) FixSession(ctx context.Context, id int64) (*osexec.Cmd, error) {
-	return b.a.fixSession(ctx, id)
+	if _, err := b.a.fixSession(ctx, id); err != nil {
+		return nil, err
+	}
+	return osexec.Command(packages.SelfCommand, "todo", "fix", strconv.FormatInt(id, 10)), nil // #nosec G204 -- this binary with a task id
 }
 
 // printer renders into buf at width in the backend's color profile.
