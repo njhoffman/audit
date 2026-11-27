@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-11-26
+
 ### Added
 
 - `notify.enabled` (off by default): after an unattended `audit -r` (the schedule timer, or any run without a terminal), one desktop notification through `notify-send` lists the tasks at or above `notify.min_priority` (default high) that the rescan created or reopened. Skipped quietly without a session bus.
