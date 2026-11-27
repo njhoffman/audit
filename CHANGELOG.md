@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.69.1] - 2026-11-27
+
 ### Fixed
 
 - `system`'s storage checks no longer carry a command's indentation into a finding: the first lines of `zpool status -x` (and of lsblk and smartctl errors) are trimmed before they are joined.
