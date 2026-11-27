@@ -476,7 +476,7 @@ The dashboard and the task editor bind each action to a list of keys under **tui
     back                esc backspace h left  all screens
     tasks               t                     dashboard, report, task, explain
     up, down            k up, j down          all screens
-    page_up, page_down  pgup b, pgdown f space   report, tasks, task, explain
+    page_up, page_down  pgup b ctrl+b, pgdown f space ctrl+f   report, tasks, task, explain, packages
     half_page_up        ctrl+u u              same
     half_page_down      ctrl+d                same
     top, bottom         home g, end G         same

@@ -224,7 +224,7 @@ func TestLoadKeys(t *testing.T) {
 	if len(k["editor"]) != 0 {
 		t.Errorf("[] unbinds: %v", k["editor"])
 	}
-	if !reflect.DeepEqual(k["bottom"], []string{"end", "G"}) || !reflect.DeepEqual(k["page_down"], []string{"pgdown", "f", " "}) {
+	if !reflect.DeepEqual(k["bottom"], []string{"end", "G"}) || !reflect.DeepEqual(k["page_down"], []string{"pgdown", "f", " ", "ctrl+f"}) {
 		t.Errorf("other actions keep their defaults: %v %v", k["bottom"], k["page_down"])
 	}
 }

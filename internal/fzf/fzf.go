@@ -121,6 +121,8 @@ func (in Interface) header(hints [][2]string) string {
 func common(prompt, header string) []string {
 	return []string{
 		"--ansi", "--no-sort", "--with-shell", "sh -c",
+		// ctrl-f and ctrl-b page the list, as in the dashboard.
+		"--bind", "ctrl-f:page-down,ctrl-b:page-up",
 		"--prompt", prompt, "--header", header, "--preview-window", "right,60%,wrap,nohidden",
 	}
 }

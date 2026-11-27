@@ -1011,8 +1011,8 @@ tui:
     tasks: [t]                     # dashboard, report, task, explain
     up: [k, up]
     down: [j, down]
-    page_up: [pgup, b]             # report, tasks, task, explain
-    page_down: [pgdown, f, " "]
+    page_up: [pgup, b, ctrl+b]     # report, tasks, task, explain, packages
+    page_down: [pgdown, f, " ", ctrl+f]
     half_page_up: [ctrl+u, u]
     half_page_down: [ctrl+d]
     top: [home, g]
