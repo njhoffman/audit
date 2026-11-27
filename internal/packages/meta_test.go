@@ -2,6 +2,7 @@ package packages
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -367,5 +368,32 @@ func TestCoverageOf(t *testing.T) {
 	want := Coverage{Packages: 5, Known: 2, Unchecked: 1, Failed: 1, Unknown: 1, OldestCheck: now.Add(-48 * time.Hour)}
 	if got != want {
 		t.Errorf("got %+v\nwant %+v", got, want)
+	}
+}
+
+func TestParseGapsAndQueryFilters(t *testing.T) {
+	if g, err := ParseGaps([]string{"minor", " PATCH ", "minor", ""}); err != nil || !slices.Equal(g, []Gap{GapMinor, GapPatch}) {
+		t.Errorf("gaps %v %v", g, err)
+	}
+	if g, _ := ParseGaps([]string{"all"}); !slices.Equal(g, GapLevels) {
+		t.Errorf("all: %v", g)
+	}
+	if _, err := ParseGaps([]string{"huge"}); err == nil {
+		t.Error("unknown level")
+	}
+	items := []Item{
+		{Package: Package{Manager: "uv", Name: "a"}, Gap: GapMajor},
+		{Package: Package{Manager: "uv", Name: "b"}, Gap: GapPatch},
+		{Package: Package{Manager: "cargo", Name: "c"}, Gap: GapMinor},
+	}
+	q := Query{Managers: []string{"uv"}, Gaps: []Gap{GapPatch, GapMinor}}
+	var kept []string
+	for _, it := range items {
+		if q.Match(it) {
+			kept = append(kept, it.Name)
+		}
+	}
+	if !slices.Equal(kept, []string{"b"}) || q.Empty() {
+		t.Errorf("kept %v", kept)
 	}
 }

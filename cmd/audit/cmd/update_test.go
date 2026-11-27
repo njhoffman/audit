@@ -237,3 +237,58 @@ func TestNarrowedUpdateRefreshesTheFullView(t *testing.T) {
 		}
 	}
 }
+
+func TestPackagesListAndPick(t *testing.T) {
+	gh := updateEnv(t)
+	if r := runUpdate(t, gh, false, "", "packages", "list"); r.e == nil || !strings.Contains(r.e.Error(), "no saved") {
+		t.Errorf("nothing saved: %v", r.e)
+	}
+	if r := runUpdate(t, gh, false, "", "packages", "update", "-N"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	r := runUpdate(t, gh, false, "", "packages", "list")
+	for _, w := range []string{"MANAGER", "gh", "major", "v0.9.0", "->", "behind:"} {
+		if r.e != nil || !strings.Contains(r.out, w) {
+			t.Errorf("list missing %q: %v\n%s", w, r.e, r.out)
+		}
+	}
+	r = runUpdate(t, gh, false, "", "packages", "list", "-g", "major", "-T")
+	lines := strings.Split(strings.TrimSpace(r.out), "\n")
+	if r.e != nil || len(lines) != 1 || !strings.HasPrefix(lines[0], "gh:major\tgh\tmajor\tv0.9.0\t") || strings.Count(lines[0], "\t") != 6 {
+		t.Errorf("major only, as tab-separated fields: %v %q", r.e, r.out)
+	}
+	if r := runUpdate(t, gh, false, "", "packages", "list", "-M", "nope"); r.e == nil {
+		t.Error("an unknown manager is an error")
+	}
+	if r := runUpdate(t, gh, false, "", "packages", "list", "-g", "huge"); r.e == nil {
+		t.Error("an unknown level is an error")
+	}
+
+	// --gap and --all shape the plan.
+	if r := runUpdate(t, gh, false, "", "packages", "update", "-N", "-g", "minor"); r.e != nil || strings.Contains(r.out, "gh:major") {
+		t.Errorf("minor only: %v\n%s", r.e, r.out)
+	}
+	if r := runUpdate(t, gh, false, "", "packages", "update", "-N", "--all"); r.e != nil || strings.Contains(r.out, "skip: major release") {
+		t.Errorf("--all plans majors: %v\n%s", r.e, r.out)
+	}
+
+	// --pick hands the outdated list to fzf and updates what it prints.
+	bin := os.Getenv("PATH") // updateEnv puts its fake gh there
+	fzf := "#!/bin/sh\n/usr/bin/grep '^gh:ok'\n"
+	if err := os.WriteFile(filepath.Join(bin, "fzf"), []byte(fzf), 0o755); err != nil { // #nosec G306 -- test executable
+		t.Fatal(err)
+	}
+	r = runUpdate(t, gh, false, "", "packages", "update", "--pick", "-N")
+	if r.e != nil || !strings.Contains(r.out, "gh:ok") || strings.Contains(r.out, "gh:stuck") || strings.Contains(r.out, "gh:major") {
+		t.Errorf("picked only ok: %v\n%s", r.e, r.out)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "fzf"), []byte("#!/bin/sh\nexit 130\n"), 0o755); err != nil { // #nosec G306 -- test executable
+		t.Fatal(err)
+	}
+	if r := runUpdate(t, gh, false, "", "packages", "update", "--pick"); r.e != nil || !strings.Contains(r.out, "Nothing chosen.") {
+		t.Errorf("esc: %v %q", r.e, r.out)
+	}
+	if r := runUpdate(t, gh, false, "", "packages", "update", "--pick", "gh:ok"); r.e == nil {
+		t.Error("--pick with packages is an error")
+	}
+}

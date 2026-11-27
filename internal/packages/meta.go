@@ -259,10 +259,41 @@ type Query struct {
 	Find string
 	// Outdated keeps packages behind their latest release.
 	Outdated bool
+	// Managers, when set, keeps only these managers' packages.
+	Managers []string
+	// Gaps, when set, keeps only packages this far behind (patch, minor,
+	// major, update).
+	Gaps []Gap
 }
 
 // Empty reports whether the query keeps everything.
-func (q Query) Empty() bool { return len(q.Tags) == 0 && q.Find == "" && !q.Outdated }
+func (q Query) Empty() bool {
+	return len(q.Tags) == 0 && q.Find == "" && !q.Outdated && len(q.Managers) == 0 && len(q.Gaps) == 0
+}
+
+// Gap levels a query or an update can select.
+var GapLevels = []Gap{GapPatch, GapMinor, GapMajor, GapUpdate}
+
+// ParseGaps reads gap levels ("patch,minor"); "all" is every level.
+func ParseGaps(vals []string) ([]Gap, error) {
+	var out []Gap
+	for _, v := range vals {
+		v = strings.ToLower(strings.TrimSpace(v))
+		switch {
+		case v == "":
+			continue
+		case v == "all":
+			return slices.Clone(GapLevels), nil
+		case slices.Contains(GapLevels, Gap(v)):
+			if !slices.Contains(out, Gap(v)) {
+				out = append(out, Gap(v))
+			}
+		default:
+			return nil, fmt.Errorf("unknown update level %q (want patch, minor, major, update or all)", v)
+		}
+	}
+	return out, nil
+}
 
 // Match reports whether it passes the query.
 func (q Query) Match(it Item) bool {
@@ -272,6 +303,12 @@ func (q Query) Match(it Item) bool {
 		}
 	}
 	if q.Outdated && !it.Gap.Behind() {
+		return false
+	}
+	if len(q.Managers) > 0 && !slices.Contains(q.Managers, it.Manager) {
+		return false
+	}
+	if len(q.Gaps) > 0 && !slices.Contains(q.Gaps, it.Gap) {
 		return false
 	}
 	if q.Find != "" {

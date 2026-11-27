@@ -99,10 +99,12 @@ func behind(items []packages.Item) int {
 	return n
 }
 
-// gapStyle colors a latest version by how far behind the install is.
 // GapStyle is the color of a package row by how far behind it is.
 func (p *Printer) GapStyle(it packages.Item) lipgloss.Style { return p.gapStyle(it) }
 
+// gapStyle colors a latest version by how far behind the install is:
+// major red, minor yellow, patch cyan, a system manager's update amber,
+// current green; deprecated, archived and yanked installs are red too.
 func (p *Printer) gapStyle(it packages.Item) lipgloss.Style {
 	if it.Meta != nil && (it.Meta.Deprecated != "" || it.Meta.Archived || (it.Meta.InstalledYanked && it.Meta.Installed == it.Version)) {
 		return p.fg("9")
@@ -112,7 +114,9 @@ func (p *Printer) gapStyle(it packages.Item) lipgloss.Style {
 		return p.fg("9")
 	case packages.GapMinor:
 		return p.fg("11")
-	case packages.GapPatch, packages.GapUpdate:
+	case packages.GapPatch:
+		return p.fg("14")
+	case packages.GapUpdate:
 		return p.fg("3")
 	case packages.GapCurrent:
 		return p.fg("10")
@@ -276,4 +280,59 @@ func (p *Printer) PackageInfo(it packages.Item, tags []packages.Tag) {
 		}
 		return p.style()
 	})
+}
+
+// PackageList prints items as one table across managers: manager, name,
+// installed version, latest with how far behind, and the latest release's
+// age, each behind row in its gap's color; then a line counting them by
+// level.
+func (p *Printer) PackageList(items []packages.Item) {
+	if len(items) == 0 {
+		p.println(p.faint().Render("No packages match."))
+		return
+	}
+	now := p.Now()
+	rows := make([][]string, len(items))
+	levels := map[packages.Gap]int{}
+	for i, it := range items {
+		latest, released := packages.LatestCells(it, now)
+		arrow := ""
+		if it.Gap.Behind() {
+			arrow = "->"
+			levels[it.Gap]++
+		}
+		rows[i] = []string{it.Manager, it.Name, it.VersionKey(), arrow, latest, gapText(it.Gap), released}
+	}
+	p.table([]column{{title: "MANAGER"}, {title: "NAME"}, {title: "VERSION"}, {title: ""}, {title: "LATEST"}, {title: "GAP"}, {title: "RELEASED", flex: true}},
+		rows, func(row, col int) lipgloss.Style {
+			it := items[row]
+			switch col {
+			case 0:
+				return p.faint()
+			case 1:
+				if it.Gap.Behind() {
+					return p.gapStyle(it).Bold(true)
+				}
+				return p.style()
+			case 3, 4, 5:
+				return p.gapStyle(it)
+			case 6:
+				return p.faint()
+			}
+			return p.style()
+		})
+	var parts []string
+	total := 0
+	for _, g := range packages.GapLevels {
+		if n := levels[g]; n > 0 {
+			total += n
+			parts = append(parts, p.gapStyle(packages.Item{Gap: g}).Render(fmt.Sprintf("%d %s", n, g)))
+		}
+	}
+	line := fmt.Sprintf("%d package(s)", len(items))
+	if total > 0 {
+		line += fmt.Sprintf(", %d behind: %s", total, strings.Join(parts, ", "))
+	}
+	p.println("")
+	p.println(line)
 }

@@ -15,6 +15,7 @@ Scans are saved in a SQLite database. Viewing a command again shows the saved re
 | `audit packages` | user package managers (uv, pnpm, cargo, go, gem, gh) and system ones (apt, snap, flatpak, no sudo needed to scan): inventory, broken and shadowed executables, runtime drift, stale runtime dirs, misplaced installs; checked against a fresh login shell's PATH and variables, not the terminal's; latest releases, release age, deprecation and archive status from a cached registry lookup; tags |
 | `audit packages registry` | look packages up on PyPI, npm, crates.io, the Go proxy, rubygems.org and GitHub, cache the results, optionally AI-tag them |
 | `audit packages outdated` | refresh the inventory and registry cache, then show outdated packages with installed/latest versions; `-F` forces registry checks, `-l` reads saved results |
+| `audit packages list` | every installed package in one aligned table, with current -> new version colored by major/minor/patch; filter by manager and level; `-T` tab-separated lines for fzf/fzx |
 | `audit packages update` | update outdated packages one at a time with their own managers (apt, snap and flatpak in one command each, under one `sudo -v` session; apt lists refreshed first), verify the new versions, save and itemize failures |
 | `audit packages runtimes` | python, node, rust, go and ruby: installed version, owner (uv, pnpm, rustup, system), newest release of the line and overall, packages on another version |
 | `audit packages runtimes update` / `migrate` | update uv pythons, pnpm's node and rustup toolchains (same line by default, `-m` for a new python minor or node LTS); reinstall packages onto the current runtime, then offer to trash stale runtime dirs |
@@ -69,6 +70,9 @@ audit history runs diff 93 87  # compare two saved runs
 audit packages registry        # refresh the registry cache (entries younger than 24h are reused), then report
 audit packages registry -a     # also AI-tag packages that have no AI tags yet
 audit packages update -N       # show what would be updated and the commands
+audit packages list -g major,minor -M uv,cargo   # aligned list of what is behind, colored by level
+audit packages update -p -g patch                # pick patch updates in fzf, then update them
+audit packages update -a -M pnpm                 # every pnpm package behind, majors included
 audit packages outdated        # refresh and list installed/latest versions of outdated packages
 audit packages outdated -F     # force fresh registry lookups
 audit packages outdated -l     # view saved outdated packages without scanning

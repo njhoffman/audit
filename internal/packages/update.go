@@ -106,6 +106,9 @@ type PlanOptions struct {
 	Major bool
 	// Exclude lists packages never updated (packages.update.exclude).
 	Exclude []Ref
+	// Gaps, when set, plans only packages this far behind; others are
+	// left out of the plan.
+	Gaps []Gap
 }
 
 // Planned is one package of an update plan.
@@ -179,6 +182,9 @@ func PlanUpdates(invs []Inventory, metas map[string]Meta, o PlanOptions) Plan {
 			}
 			seen[strings.Join(cmd, " ")] = true
 			it, ok := planOne(p, metas, o, named)
+			if ok && len(o.Gaps) > 0 && !named && !slices.Contains(o.Gaps, it.Gap) {
+				continue
+			}
 			if !ok {
 				if named {
 					continue

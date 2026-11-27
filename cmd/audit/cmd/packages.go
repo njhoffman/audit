@@ -101,7 +101,7 @@ keep scans offline); the saved views only read the cache and show its age. --tag
 		}
 		return fmt.Sprintf("\n%d package(s) behind their latest release; `audit packages outdated -l` lists them with versions.", n), nil
 	}
-	c.AddCommand(newPackagesRegistryCmd(a), newPackagesOutdatedCmd(a), newPackagesUpdateCmd(a), newPackagesInfoCmd(a), newPackagesTagCmd(a), newRuntimesCmd(a), newBinsCmd(a))
+	c.AddCommand(newPackagesListCmd(a), newPackagesRegistryCmd(a), newPackagesOutdatedCmd(a), newPackagesUpdateCmd(a), newPackagesInfoCmd(a), newPackagesTagCmd(a), newRuntimesCmd(a), newBinsCmd(a))
 	return c
 }
 

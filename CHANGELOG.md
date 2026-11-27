@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit packages list` (`ls`): every package of the last full scan in one aligned table across managers, installed `->` latest colored by level (major red, minor yellow, patch cyan, system updates amber), with a count per level. `-M` filters managers and `-g patch,minor,major` levels; `-T` prints tab-separated lines (ref, manager, name, version, latest, gap, colored row) for fzf, fzx and scripts.
+- `audit packages update -g LEVELS` plans only those levels, `--all` plans everything the filters match including majors, and `--pick` chooses the packages in fzf (multi-select, `ctrl-a` all, `packages info` preview) before the usual plan and confirmation.
+
+### Changed
+
+- Patch updates are cyan instead of the dim yellow they shared with system updates, so patch, minor and major read apart in every package view.
+
 ## [0.63.1] - 2026-11-26
 
 ### Changed

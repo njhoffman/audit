@@ -3,6 +3,7 @@ package packages
 import (
 	"context"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -340,5 +341,33 @@ func TestGitCrates(t *testing.T) {
 	Verify(rs, []Inventory{{Manager: "cargo", Packages: []Package{g}}})
 	if rs[0].Status != UpdateFailed {
 		t.Errorf("same commit is a failure: %+v", rs[0])
+	}
+}
+
+func TestPlanUpdatesGaps(t *testing.T) {
+	inv := []Inventory{{Manager: "uv", Available: true, Packages: []Package{
+		{Manager: "uv", Name: "a", Version: "1.0.0", Source: "pypi"},
+		{Manager: "uv", Name: "b", Version: "1.0.0", Source: "pypi"},
+		{Manager: "uv", Name: "c", Version: "1.0.0", Source: "pypi"},
+	}}}
+	metas := map[string]Meta{
+		"uv:a": {Latest: "1.0.1"}, "uv:b": {Latest: "1.1.0"}, "uv:c": {Latest: "2.0.0"},
+	}
+	names := func(p Plan) []string {
+		var out []string
+		for _, it := range p.Runnable() {
+			out = append(out, it.Name)
+		}
+		return out
+	}
+	if got := names(PlanUpdates(inv, metas, PlanOptions{Gaps: []Gap{GapPatch}})); !slices.Equal(got, []string{"a"}) {
+		t.Errorf("patch only: %v", got)
+	}
+	if got := names(PlanUpdates(inv, metas, PlanOptions{Gaps: []Gap{GapMinor, GapMajor}, Major: true})); !slices.Equal(got, []string{"b", "c"}) {
+		t.Errorf("minor and major: %v", got)
+	}
+	// Named packages are planned whatever their level.
+	if got := names(PlanUpdates(inv, metas, PlanOptions{Gaps: []Gap{GapPatch}, Refs: []Ref{{Name: "b"}}})); !slices.Equal(got, []string{"b"}) {
+		t.Errorf("named: %v", got)
 	}
 }

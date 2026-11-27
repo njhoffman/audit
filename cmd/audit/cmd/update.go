@@ -28,6 +28,11 @@ type updateFlags struct {
 	last        bool
 	json        bool
 	explain     bool
+	// gaps limits the plan to these levels; all plans majors too; pick
+	// chooses the packages in fzf.
+	gaps []string
+	all  bool
+	pick bool
 }
 
 func newPackagesUpdateCmd(a *app) *cobra.Command {
@@ -64,6 +69,29 @@ tasks follow, and a failed attempt is noted on the package's outdated task.`,
 				return a.lastUpdate(c.Context(), f.json, f.explain, packages.KindPackage)
 			}
 			refs := parseRefs(args)
+			if f.pick {
+				if len(args) > 0 || f.json {
+					return errors.New("--pick chooses the packages itself; it takes no packages or --json")
+				}
+				q, err := listFlags{managers: f.managers, gaps: f.gaps, outdated: true}.query()
+				if err != nil {
+					return err
+				}
+				items, err := a.listItems(c.Context(), q)
+				if err != nil {
+					return err
+				}
+				if refs, err = a.pickPackages(c.Context(), items); err != nil {
+					return err
+				}
+				if len(refs) == 0 {
+					sayln(a.out, "Nothing chosen.")
+					return nil
+				}
+			}
+			if f.all {
+				f.major = true
+			}
 			if len(splitList(f.managers)) == 0 && !a.systemFlag(c, f.system) {
 				if err := a.settleSystemForUpdate(refs, f); err != nil {
 					return err
@@ -82,6 +110,11 @@ tasks follow, and a failed attempt is noted on the package's outdated task.`,
 	fl.BoolVarP(&f.last, "last", "L", false, "show the last update and its errors; update nothing")
 	fl.BoolVarP(&f.json, "json", "j", false, "print the plan (with --dry-run) or the update as JSON")
 	fl.BoolVarP(&f.explain, "explain", "e", false, "ask the AI why the failed updates failed (with --last, the last update's)")
+	fl.StringSliceVarP(&f.gaps, "gap", "g", nil, "update only packages this far behind: patch, minor, major, update or all (major implies --major)")
+	fl.BoolVarP(&f.all, "all", "a", false, "update every package the filters match, major releases included")
+	fl.BoolVarP(&f.pick, "pick", "p", false, "choose the packages to update in fzf from the outdated list (filtered by --manager and --gap)")
+	c.MarkFlagsMutuallyExclusive("pick", "last")
+	c.MarkFlagsMutuallyExclusive("all", "last")
 	c.MarkFlagsMutuallyExclusive("explain", "json")
 	return c
 }
@@ -139,9 +172,16 @@ func (a *app) update(ctx context.Context, refs []packages.Ref, f updateFlags) er
 		return err
 	}
 	metas = packages.LocalMeta(d.Inventories, metas, timeNow())
+	gaps, err := packages.ParseGaps(splitList(f.gaps))
+	if err != nil {
+		return err
+	}
+	if slices.Contains(gaps, packages.GapMajor) {
+		f.major = true
+	}
 	plan := packages.PlanUpdates(d.Inventories, metas, packages.PlanOptions{
 		Tools: packages.DetectUpdateTools(s.ScanEnv),
-		Refs:  refs, Major: f.major, Exclude: parseRefs(a.cfg.Packages.Update.Exclude)})
+		Refs:  refs, Major: f.major, Exclude: parseRefs(a.cfg.Packages.Update.Exclude), Gaps: gaps})
 	if len(plan.Unmatched) > 0 {
 		return fmt.Errorf("no installed package matches %s", strings.Join(plan.Unmatched, ", "))
 	}
