@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Internal: the engine saves runs and tasks through a `core.RunStore` interface instead of the SQLite store type, so its failure paths are tested with a failing store: pruning, loading and saving tasks, saving an AI review, and the AI review on scan (budget reached, spend lookup failed, call failed). With tests for the backups and containers adapters, dpkg ownership and the python cleanup plan, `internal/core` coverage goes from 81.0% to 90.4%. No user-visible change.
+
 ## [0.67.3] - 2026-11-26
 
 ### Changed

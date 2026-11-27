@@ -16,7 +16,6 @@ import (
 	"github.com/njhoffman/audit/internal/llm"
 	"github.com/njhoffman/audit/internal/progress"
 	"github.com/njhoffman/audit/internal/run"
-	"github.com/njhoffman/audit/internal/store"
 	"github.com/njhoffman/audit/internal/todo"
 )
 
@@ -62,7 +61,7 @@ var ErrNoSavedRun = errors.New("no saved results")
 
 // Engine ties the scanners to the store.
 type Engine struct {
-	Store  *store.Store
+	Store  RunStore
 	Config *config.Config
 	Host   string
 	Now    func() time.Time
@@ -77,6 +76,18 @@ func (e *Engine) now() time.Time {
 		return e.Now()
 	}
 	return time.Now()
+}
+
+// RunStore keeps the runs and tasks the engine saves and reads
+// (implemented by *store.Store).
+type RunStore interface {
+	LatestRun(ctx context.Context, command, scope string) (*run.Run, error)
+	SaveRun(ctx context.Context, r *run.Run) error
+	UpdateAnalysis(ctx context.Context, runID int64, a *run.Analysis) error
+	Prune(ctx context.Context, command string, keep int) error
+	Todos(ctx context.Context, command string) ([]todo.Todo, error)
+	SaveTodos(ctx context.Context, todos []todo.Todo) error
+	AICostSince(ctx context.Context, t time.Time) (float64, error)
 }
 
 // Result is a run plus how it was obtained.

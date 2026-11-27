@@ -137,7 +137,7 @@ build); the final bash-record pruning fix also passed focused race tests,
 lint and build. Coverage percentages below are from 2026-10-20, not a new
 coverage run.
 
-- [ ] **`internal/core` at 89.5%** [test] (was 41.7%; 79.6% before the 2026-11-26 tests for the history and system adapters, carried system managers and the repos cache). (p3) What is left: the
+- [x] **`internal/core` at 90.4%** [test] (done 2026-11-26 in 0.67.4: `Engine.Store` is the `RunStore` interface, and tests cover the Prune, Todos and SaveTodos failures of Execute, the failed save of Analyze, the AI review on scan with its budget, the backups and containers adapters, dpkg ownership and the python cleanup; what stays uncovered is json.Marshal errors of the adapters) (was 41.7%; 79.6% before the 2026-11-26 tests for the history and system adapters, carried system managers and the repos cache). (p3) What is left: the
   Prune and SaveTodos failure branches of Execute (testing them needs
   `Engine.Store` as an interface), the `time.Now` fallbacks, and the
   json.Marshal errors of the adapters.

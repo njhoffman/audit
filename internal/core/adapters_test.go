@@ -426,7 +426,7 @@ func TestEnvironmentScanner(t *testing.T) {
 // before a scan and saving fails after one.
 func TestEngineStoreFailures(t *testing.T) {
 	e, _ := engine(t)
-	if err := e.Store.Close(); err != nil {
+	if err := sqlite(e).Close(); err != nil {
 		t.Fatal(err)
 	}
 	s := &fakeScanner{command: "system"}

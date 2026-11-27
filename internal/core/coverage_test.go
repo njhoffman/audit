@@ -198,3 +198,42 @@ func TestSystemProgramPackages(t *testing.T) {
 		t.Errorf("a store error is reported: %v", res.Errors)
 	}
 }
+
+func TestDpkgOwner(t *testing.T) {
+	f := &exec.Fake{}
+	// /usr/sbin/cron was unpacked as /sbin/cron (merged /usr); a diversion
+	// line and a package listing another path are passed over.
+	f.Add([]string{"dpkg-query", "-S", "/usr/sbin/cron"}, exec.Result{Code: 1})
+	f.AddOutput("diversion by x from: /sbin/cron\nother: /sbin/cronx\ncron, cron-daemon: /sbin/cron\n", "dpkg-query", "-S", "/sbin/cron")
+	env := &exec.Env{Runner: f}
+	if got := dpkgOwner(context.Background(), env, "/usr/sbin/cron"); got != "cron" {
+		t.Errorf("owner %q", got)
+	}
+	f.AddOutput("tool: /usr/bin/tool\n", "dpkg-query", "-S", "/usr/bin/tool")
+	if got := dpkgOwner(context.Background(), env, "/bin/tool"); got != "tool" {
+		t.Errorf("a /bin path tries /usr/bin: %q", got)
+	}
+	if got := dpkgOwner(context.Background(), env, "/opt/x"); got != "" {
+		t.Errorf("unknown path: %q", got)
+	}
+}
+
+func TestCopyOwner(t *testing.T) {
+	it := &packages.Item{Package: packages.Package{Name: "cron", Version: "4.1"}}
+	for _, tc := range []struct {
+		c     packages.ProgramCopy
+		owner string
+		ver   string
+	}{
+		{packages.ProgramCopy{Manager: "bins", Item: it}, "bins cron", " 4.1"},
+		{packages.ProgramCopy{Manager: "apt"}, "apt", ""},
+		{packages.ProgramCopy{}, "no package", ""},
+	} {
+		if got := copyOwner(tc.c); got != tc.owner {
+			t.Errorf("owner %q, want %q", got, tc.owner)
+		}
+		if got := versionOf(tc.c); got != tc.ver {
+			t.Errorf("version %q, want %q", got, tc.ver)
+		}
+	}
+}

@@ -66,6 +66,9 @@ func engine(t *testing.T) (*Engine, *clock) {
 	return &Engine{Store: st, Config: cfg, Host: "box", Now: c.now}, c
 }
 
+// sqlite is the engine's store as the SQLite store engine built it.
+func sqlite(e *Engine) *store.Store { return e.Store.(*store.Store) }
+
 func TestExecuteSavesIgnoresAndCreatesTasks(t *testing.T) {
 	e, _ := engine(t)
 	e.Config.Ignore = []string{"procs.zombies"}
@@ -229,7 +232,7 @@ func TestExecutePrunesHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h, _ := e.Store.History(ctx, "system", 0)
+	h, _ := sqlite(e).History(ctx, "system", 0)
 	if len(h) != e.Config.History {
 		t.Errorf("history %d, want %d", len(h), e.Config.History)
 	}
@@ -240,7 +243,7 @@ func TestExecuteScanError(t *testing.T) {
 	if _, err := e.Execute(context.Background(), &fakeScanner{command: "system", err: errors.New("boom")}, nil); err == nil {
 		t.Fatal("want error")
 	}
-	if h, _ := e.Store.History(context.Background(), "system", 0); len(h) != 0 {
+	if h, _ := sqlite(e).History(context.Background(), "system", 0); len(h) != 0 {
 		t.Error("failed scan should not be saved")
 	}
 }
@@ -258,7 +261,7 @@ func TestAnalyze(t *testing.T) {
 	f := &exec.Fake{}
 	f.AddOutput(`{"subtype":"success","result":"looks bad","total_cost_usd":0.5}`, "claude")
 	e.Config.AI.AnalysisLevel = "thorough"
-	e.AI = &llm.Client{Runner: f, Model: "m", Cache: e.Store, Now: e.Now}
+	e.AI = &llm.Client{Runner: f, Model: "m", Cache: sqlite(e), Now: e.Now}
 	if err := e.Analyze(ctx, res.Run, false); err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +269,7 @@ func TestAnalyze(t *testing.T) {
 	if a == nil || a.Text != "looks bad" || a.Level != "deep" || a.Cached {
 		t.Fatalf("analysis %+v", a)
 	}
-	saved, _ := e.Store.GetRun(ctx, res.Run.ID)
+	saved, _ := sqlite(e).GetRun(ctx, res.Run.ID)
 	if saved.Analysis == nil || saved.Analysis.Text != "looks bad" {
 		t.Error("analysis not persisted")
 	}

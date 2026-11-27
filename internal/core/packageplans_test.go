@@ -75,3 +75,34 @@ func TestRememberNodeMajor(t *testing.T) {
 		t.Errorf("remembered: %v %v %v", ok, err, rts.settings)
 	}
 }
+
+func TestRuntimeCleanupPlanPythons(t *testing.T) {
+	ctx := context.Background()
+	py := packages.RuntimeMeta{Name: packages.RuntimePython, Installs: []packages.PythonInstall{
+		{Version: "3.13.1", Managed: true}, {Version: "3.13.2", Managed: true}, {Version: "3.12.0", Managed: true}, {Version: "3.12.4", Managed: true}}}
+	rts := &memRuntimes{m: map[string]packages.RuntimeMeta{packages.RuntimePython: py}, settings: map[string]string{}}
+	s := &PackagesScanner{ScanEnv: &exec.Env{}, Runtimes: rts}
+	d := packages.Data{Inventories: []packages.Inventory{{Manager: "uv", Available: true,
+		Packages: []packages.Package{{Manager: "uv", Name: "ruff", RuntimeVersion: "3.12.0"}}}}}
+	plan, err := s.RuntimeCleanupPlan(ctx, nil, d)
+	if err != nil || len(plan.Items) != 1 || plan.Items[0].Version != "3.13.1" {
+		t.Errorf("only the superseded python no tool runs on: %v %+v", err, plan.Items)
+	}
+	d.Inventories[0].Available = false
+	if plan, _ = s.RuntimeCleanupPlan(ctx, nil, d); len(plan.Items) != 0 {
+		t.Errorf("without uv no python is planned: %+v", plan.Items)
+	}
+}
+
+type failSetting struct{ memRuntimes }
+
+func (failSetting) SetSetting(context.Context, string, string) error { return errors.New("read-only") }
+
+func TestRememberNodeMajorFailure(t *testing.T) {
+	u := &packages.Update{Items: []packages.UpdateResult{
+		{Kind: packages.KindMigration, Manager: "pnpm", Name: "eslint", Status: packages.UpdateOK}}}
+	after := packages.Data{Runtimes: []packages.RuntimeStatus{{Name: "node", Version: "26.1.0"}}}
+	if ok, err := (&PackagesScanner{Runtimes: &failSetting{}}).RememberNodeMajor(context.Background(), u, after); ok || err == nil {
+		t.Errorf("a failed save is an error: %v %v", ok, err)
+	}
+}
