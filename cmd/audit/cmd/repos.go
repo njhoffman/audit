@@ -283,6 +283,11 @@ saved; --last shows the last sync.`,
 				}
 				return a.lastUpdate(c.Context(), f.json, f.explain, repos.KindSync)
 			}
+			unlock, err := a.lockAction(c, repos.Command)
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			return a.syncRepos(c.Context(), args, f)
 		},
 	}

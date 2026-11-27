@@ -148,7 +148,7 @@ func (e *Engine) Execute(ctx context.Context, s Scanner, rep progress.Reporter) 
 	if rep == nil {
 		rep = progress.Nop
 	}
-	if e.LockDir != "" {
+	if e.LockDir != "" && !held(ctx, s.Command()) {
 		unlock, err := lockCommand(ctx, e.LockDir, s.Command(), rep)
 		if err != nil {
 			return nil, err

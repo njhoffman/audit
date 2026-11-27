@@ -62,7 +62,7 @@ them from being noise (one per check, dismissable like ignore rules).
 
 ## 16. Review findings (2026-11-27)
 
-- [ ] **Actions outside the scan lock.** (p3) [bug] `lockCommand` is taken only
+- [x] **Actions outside the scan lock.** (p3) [bug] `lockCommand` is taken only
   inside `Engine.Execute`, so the apply step of `packages update`, `repos
   sync` and the `clean` actions runs unlocked between its scan and its
   rescan. Two updates at once (a terminal and the dashboard's `a`) both
@@ -70,11 +70,11 @@ them from being noise (one per check, dismissable like ignore rules).
   lock across plan, apply and rescan needs Execute to accept a held lock:
   flock locks belong to the open file, so a second `lockCommand` in the
   same process waits on the first.
-- [ ] **Redraw the fixes screen on resize.** (p3) [bug] The `L` screen renders at
+- [x] **Redraw the fixes screen on resize.** (p3) [bug] The `L` screen renders at
   the width it had when opened; the `WindowSizeMsg` case reloads only
   `screenReport`, so after a resize the totals table keeps its old width
   (cut off, or narrow). Reload it there too.
-- [ ] **Repeated sentence in the todo man entry.** (p3) [docs] `man/audit.1.md`'s
+- [x] **Repeated sentence in the todo man entry.** (p3) [docs] `man/audit.1.md`'s
   `todo` entry says "**F** in the task editor runs the same **audit todo
   fix**, so it asks there too. Closed tasks are refused. **F** in the task
   editor does the same for the selected task." Drop the second F sentence.

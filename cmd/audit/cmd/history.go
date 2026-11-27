@@ -51,6 +51,11 @@ prune, after a private backup beside it whose path is printed.`,
 			if err := a.load(); err != nil {
 				return err
 			}
+			unlock, err := a.lockAction(c, "history")
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			o := core.NewHistory(a.cfg, a.env).Options
 			target := ""
 			if file != "" {
@@ -127,6 +132,11 @@ original history, including any sensitive entries you removed.`,
 			if err := a.load(); err != nil {
 				return err
 			}
+			unlock, err := a.lockAction(c, "history")
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			if last {
 				return a.lastHistory(c.Context(), asJSON)
 			}

@@ -97,6 +97,11 @@ tasks follow, and a failed attempt is noted on the package's outdated task.`,
 					return err
 				}
 			}
+			unlock, err := a.lockAction(c, packages.Command)
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			return a.update(c.Context(), refs, f)
 		},
 	}

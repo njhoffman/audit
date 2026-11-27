@@ -94,6 +94,11 @@ moves them. --last shows the last runtime update or migration.`,
 				}
 				return a.lastUpdate(c.Context(), f.json, f.explain, packages.KindRuntime, packages.KindMigration)
 			}
+			unlock, err := a.lockAction(c, packages.Command)
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			return a.runtimesUpdate(c.Context(), args, f)
 		},
 	}
@@ -139,6 +144,11 @@ given.`,
 			if err := a.load(); err != nil {
 				return err
 			}
+			unlock, err := a.lockAction(c, packages.Command)
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			return a.runtimesMigrate(c.Context(), args, f)
 		},
 	}

@@ -86,6 +86,11 @@ last cleanup (files, configs or containers).`,
 			if f.last {
 				return a.lastUpdate(c.Context(), f.json, f.explain, containers.KindClean)
 			}
+			unlock, err := a.lockAction(c, containers.Command)
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			return a.cleanContainers(c.Context(), args, f)
 		},
 	}

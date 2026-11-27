@@ -102,6 +102,11 @@ never planned. --last shows the last cleanup (files or configs).`,
 			if f.last {
 				return a.lastUpdate(c.Context(), f.json, f.explain, files.KindClean)
 			}
+			unlock, err := a.lockAction(c, configs.Command)
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			return a.cleanConfigs(c.Context(), args, f)
 		},
 	}

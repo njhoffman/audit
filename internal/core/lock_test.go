@@ -131,3 +131,58 @@ func TestExecuteTakesTheLock(t *testing.T) {
 	}
 	r()
 }
+
+func TestLockIsReusedByExecute(t *testing.T) {
+	old := lockPoll
+	lockPoll = 10 * time.Millisecond
+	t.Cleanup(func() { lockPoll = old })
+	e, _ := engine(t)
+	e.LockDir = t.TempDir()
+	ctx, unlock, err := e.Lock(context.Background(), "system", &phases{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A scan under the action's context does not wait on its own lock.
+	s := &countingScanner{fakeScanner: &fakeScanner{command: "system"}}
+	sctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, err := e.Execute(sctx, s, &phases{}); err != nil || s.n.Load() != 1 {
+		t.Fatalf("scan under the held lock: %v, %d scans", err, s.n.Load())
+	}
+	// Locking again under it is a no-op; another command still locks.
+	inner, innerUnlock, err := e.Lock(ctx, "system", &phases{})
+	if err != nil || inner != ctx {
+		t.Fatalf("relock: %v", err)
+	}
+	innerUnlock()
+	both, otherUnlock, err := e.Lock(ctx, "repos", &phases{})
+	if err != nil || !held(both, "system") || !held(both, "repos") {
+		t.Fatalf("second command: %v", err)
+	}
+	otherUnlock()
+
+	// Another process's scan (a context without the lock) waits for it.
+	rep := &phases{}
+	wctx, wcancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer wcancel()
+	if _, err := e.Execute(wctx, s, rep); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("scan outside the action: %v", err)
+	}
+	if !rep.has("waiting for another audit system scan or action") {
+		t.Errorf("phases %v", rep.seen)
+	}
+	unlock()
+	if _, err := e.Execute(context.Background(), s, &phases{}); err != nil {
+		t.Fatalf("after the action: %v", err)
+	}
+}
+
+func TestLockWithoutDir(t *testing.T) {
+	e, _ := engine(t)
+	ctx := context.Background()
+	got, unlock, err := e.Lock(ctx, "system", nil)
+	if err != nil || got != ctx {
+		t.Fatalf("no LockDir: %v", err)
+	}
+	unlock()
+}

@@ -44,7 +44,7 @@ func lockCommand(ctx context.Context, dir, command string, rep progress.Reporter
 		}
 		if !waiting {
 			waiting = true
-			rep.Phase("waiting for another audit "+command+" scan to finish", 0)
+			rep.Phase("waiting for another audit "+command+" scan or action to finish", 0)
 		}
 		select {
 		case <-ctx.Done():
@@ -57,4 +57,39 @@ func lockCommand(ctx context.Context, dir, command string, rep progress.Reporter
 		_ = syscall.Flock(fd, syscall.LOCK_UN)
 		_ = f.Close()
 	}, nil
+}
+
+// heldLocks is the context key of the commands whose lock an action holds.
+type heldLocks struct{}
+
+// held reports whether ctx carries command's lock, taken by Lock.
+func held(ctx context.Context, command string) bool {
+	h, _ := ctx.Value(heldLocks{}).(map[string]bool)
+	return h[command]
+}
+
+// Lock takes command's scan lock for an action that plans, applies and
+// rescans (packages update, repos sync, the cleanups), so another audit
+// process neither scans the command nor runs an action on it meanwhile.
+// Execute under the returned context reuses the lock instead of waiting
+// for it: a second flock in this process would wait on the first. Without
+// a LockDir it takes none.
+func (e *Engine) Lock(ctx context.Context, command string, rep progress.Reporter) (context.Context, func(), error) {
+	if e.LockDir == "" || held(ctx, command) {
+		return ctx, func() {}, nil
+	}
+	if rep == nil {
+		rep = progress.Nop
+	}
+	unlock, err := lockCommand(ctx, e.LockDir, command, rep)
+	if err != nil {
+		return ctx, nil, err
+	}
+	h := map[string]bool{command: true}
+	if old, ok := ctx.Value(heldLocks{}).(map[string]bool); ok {
+		for k := range old {
+			h[k] = true
+		}
+	}
+	return context.WithValue(ctx, heldLocks{}, h), unlock, nil
 }

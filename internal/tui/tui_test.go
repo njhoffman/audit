@@ -50,14 +50,15 @@ type fake struct {
 
 func (f *fake) Packages(context.Context) ([]packages.Annotated, error) { return f.pkgs, nil }
 
-// Action: system's action rescans itself, environment's does not, the rest
-// have none.
 func (f *fake) Fixes(_ context.Context, width int) (string, error) {
 	if f.failAI {
 		return "", errors.New("store gone")
 	}
 	return fmt.Sprintf("Tasks fixed (resolved or done):\nsystem 3 at width %d", width), nil
 }
+
+// Action: system's action rescans itself, environment's does not, the rest
+// have none.
 
 func (f *fake) Action(c string) (string, bool) {
 	switch c {
@@ -965,6 +966,12 @@ func TestFixesScreen(t *testing.T) {
 	v := m.View()
 	if !strings.Contains(v, "audit history runs fixes") || !strings.Contains(v, "system 3 at width 120") {
 		t.Fatalf("fixes screen:\n%s", v)
+	}
+	// A resize renders it again at the new width.
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
+	drive(t, m, cmd)
+	if v := m.View(); !strings.Contains(v, "system 3 at width 90") {
+		t.Errorf("after a resize:\n%s", v)
 	}
 	key(t, m, "esc")
 	if !strings.Contains(m.View(), "dashboard") {

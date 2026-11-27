@@ -81,6 +81,11 @@ confirmed (or --yes); --dry-run changes nothing.`,
 			if err := a.load(); err != nil {
 				return err
 			}
+			unlock, err := a.lockAction(c, "history")
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			bs, err := history.ListBackups(core.NewHistory(a.cfg, a.env).Options)
 			if err != nil {
 				return err
@@ -155,6 +160,11 @@ first: their in-memory history can write the old entries back.`,
 			if err := a.load(); err != nil {
 				return err
 			}
+			unlock, err := a.lockAction(c, "history")
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			o := core.NewHistory(a.cfg, a.env).Options
 			p, err := history.PlanRestore(o, a.env.Expand(args[0]))
 			if err != nil {

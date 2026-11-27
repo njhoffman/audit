@@ -88,6 +88,11 @@ saved; --last shows the last cleanup.`,
 			if f.last {
 				return a.lastUpdate(c.Context(), f.json, f.explain, files.KindClean)
 			}
+			unlock, err := a.lockAction(c, files.Command)
+			if err != nil {
+				return err
+			}
+			defer unlock()
 			return a.cleanFiles(c.Context(), args, f)
 		},
 	}

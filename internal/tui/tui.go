@@ -80,6 +80,15 @@ type fixesMsg struct {
 	err  error
 }
 
+// loadFixes renders the fixes log at the current width.
+func (m *Model) loadFixes() tea.Cmd {
+	width := m.width
+	return func() tea.Msg {
+		text, err := m.b.Fixes(m.ctx, width)
+		return fixesMsg{text, err}
+	}
+}
+
 type actionMsg struct {
 	command string
 	err     error
@@ -471,6 +480,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.screen == screenReport && m.reportCmd != "" {
 			return m, m.loadReport(m.reportCmd)
 		}
+		if m.screen == screenFixes {
+			return m, m.loadFixes()
+		}
 		return m, nil
 	case spinner.TickMsg:
 		if m.busy == "" {
@@ -764,11 +776,7 @@ func (m *Model) dashboardKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.is(k, keys.ShowFixes):
 		m.screen, m.reportLoaded = screenFixes, false
 		m.report.GotoTop()
-		width := m.width
-		return m, func() tea.Msg {
-			text, err := m.b.Fixes(m.ctx, width)
-			return fixesMsg{text, err}
-		}
+		return m, m.loadFixes()
 	case m.is(k, keys.RunAction):
 		if len(m.rows) > 0 {
 			return m, m.runAction(m.rows[m.cursor].Command)

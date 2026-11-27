@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Actions now hold their command's lock from plan to rescan: `packages update`, `packages runtimes update` and `migrate`, `repos sync`, `files clean`, `configs clean`, `containers clean`, and `history prune`, `sync`, `backups clean` and `backups restore`. Two updates started at once (a terminal and the dashboard's `a`) used to plan from the same scan and run the same steps; now the second waits, says so, and can be stopped with ctrl+c. A scan of the command waits for the action too.
+- The dashboard's fixes log (`L`) is drawn again at the new width when the terminal is resized.
+- The `todo` entry in the man page no longer says twice what `F` in the task editor does.
+
 ## [0.69.1] - 2026-11-27
 
 ### Fixed
