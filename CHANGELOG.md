@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-11-26
+
 ### Added
 
 - `audit schedule install` writes and enables a systemd user timer that runs `audit -r -q` on `schedule.calendar` (default daily) for `schedule.commands` (by default every command but packages, which asks the registries); `audit schedule` shows whether it is enabled, the next and last run and the last result, and `audit schedule remove` deletes it. No sudo needed.
