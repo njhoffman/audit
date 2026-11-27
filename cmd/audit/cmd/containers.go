@@ -26,7 +26,7 @@ engine's version, whether it runs rootless, and its system df with what
 it could reclaim. --list shows every stopped container, dangling image and
 unused volume. The scan removes nothing; audit containers clean removes
 what it reported.`,
-		func() (core.Scanner, error) { return core.NewContainers(a.cfg, a.env), nil },
+		func(context.Context) (core.Scanner, error) { return core.NewContainers(a.cfg, a.env), nil },
 		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d containers.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {

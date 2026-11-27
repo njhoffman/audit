@@ -68,7 +68,7 @@ type app struct {
 	// interactive reports whether stdin and stdout are terminals.
 	interactive func() bool
 	// scanner builds a command's scanner with its configured scope.
-	scanner func(command string) (core.Scanner, error)
+	scanner func(ctx context.Context, command string) (core.Scanner, error)
 	// systemAnswer is whether this run's package scans include apt, snap and
 	// flatpak, once --system or a prompt has settled it.
 	systemAnswer *bool
@@ -156,7 +156,7 @@ func (a *app) load() error {
 	if a.runner != nil {
 		a.env.Runner = a.runner
 	}
-	a.engine = &core.Engine{Store: st, Config: cfg, Host: host}
+	a.engine = &core.Engine{Store: st, Config: cfg, Host: host, LockDir: filepath.Join(cfg.DataDir, "locks")}
 	for _, c := range cfg.AI.ReviewOnScan {
 		if !slices.Contains(core.Commands, c) {
 			return fmt.Errorf("ai.review_on_scan: unknown command %q (want %s)", c, strings.Join(core.Commands, ", "))

@@ -30,7 +30,7 @@ deleted, topics) comes from the cache audit repos refresh fills.
 A scan never touches the network: ahead and behind are as of each repo's
 last fetch, which the list shows. --tag, --find, --owner, --dirty and
 --outdated filter the list and imply --list.`,
-		func() (core.Scanner, error) { return a.reposScanner(), nil },
+		func(ctx context.Context) (core.Scanner, error) { return a.reposScanner(ctx), nil },
 		func(ctx context.Context, p *render.Printer, r *run.Run) error {
 			items, err := a.repoItems(ctx, r, q)
 			if err != nil {
@@ -55,10 +55,10 @@ last fetch, which the list shows. --tag, --find, --owner, --dirty and
 	return c
 }
 
-func (a *app) reposScanner() *core.ReposScanner {
+func (a *app) reposScanner(ctx context.Context) *core.ReposScanner {
 	// Which repos are "mine" needs the login; it is asked of gh once and
 	// remembered.
-	s := core.NewRepos(a.cfg, a.env, a.githubUser(context.Background(), true))
+	s := core.NewRepos(a.cfg, a.env, a.githubUser(ctx, true))
 	s.Meta, s.Now = a.store, timeNow()
 	return s
 }
@@ -98,7 +98,7 @@ save a fresh scan so ahead/behind and the GitHub checks are current.`,
 				return err
 			}
 			ctx := c.Context()
-			s := a.reposScanner()
+			s := a.reposScanner(ctx)
 			s.Fetch, s.Lookup, s.LookupForce = !noFetch, true, force
 			f := &scanFlags{rescan: true, report: !list && !asJSON, list: list, json: asJSON,
 				jsonExtra: func(ctx context.Context, r *run.Run) (any, error) { return a.repoItems(ctx, r, repos.Query{}) }}
@@ -302,7 +302,7 @@ saved; --last shows the last sync.`,
 
 func (a *app) syncRepos(ctx context.Context, refs []string, f syncFlags) error {
 	show := !f.json && !a.flags.quiet
-	s := a.reposScanner()
+	s := a.reposScanner(ctx)
 	s.Fetch, s.Lookup = !f.offline, true
 	res, err := a.engine.Execute(ctx, s, a.progress(!f.json))
 	if err != nil {
@@ -328,7 +328,7 @@ func (a *app) syncRepos(ctx context.Context, refs []string, f syncFlags) error {
 	u := &packages.Update{Host: a.engine.Host, StartedAt: timeNow()}
 	u.Items = a.execPlan(ctx, s.FetchEnv(), plan, "syncing repos", f.stopOnError, !f.json, show)
 	if ctx.Err() == nil {
-		s2 := a.reposScanner()
+		s2 := a.reposScanner(ctx)
 		if res2, err := a.engine.Execute(ctx, s2, a.progress(!f.json)); err != nil {
 			a.log.Warn("rescan after the sync", "err", err)
 		} else {

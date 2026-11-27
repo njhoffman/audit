@@ -116,6 +116,37 @@ func TestEveryFlagHasShortForm(t *testing.T) {
 	}
 }
 
+// TestEveryFlagIsInTheManPage keeps man/audit.1.md naming each flag by its
+// long form, not only its letter.
+func TestEveryFlagIsInTheManPage(t *testing.T) {
+	env(t)
+	man, err := os.ReadFile(filepath.Join("..", "..", "..", "man", "audit.1.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := newApp(&bytes.Buffer{}, &bytes.Buffer{})
+	root := newRootCmd(a)
+	cmds := append(root.Commands(), root)
+	missing := map[string]bool{}
+	for i := 0; i < len(cmds); i++ {
+		c := cmds[i]
+		if c != root {
+			cmds = append(cmds, c.Commands()...)
+		}
+		if c.Name() == "help" || c.Name() == "completion" || c.Hidden {
+			continue
+		}
+		c.LocalFlags().VisitAll(func(f *pflag.Flag) {
+			if f.Name != "help" && !f.Hidden && !strings.Contains(string(man), `\-\-`+f.Name+"**") {
+				missing[f.Name] = true
+			}
+		})
+	}
+	for name := range missing {
+		t.Errorf("man/audit.1.md never names --%s", name)
+	}
+}
+
 func TestBareAuditPrintsSummaryWhenNotInteractive(t *testing.T) {
 	env(t)
 	r := runArgs(t)

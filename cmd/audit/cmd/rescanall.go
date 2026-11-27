@@ -201,7 +201,7 @@ func (a *app) rescanAll(ctx context.Context, f rescanFlags) error {
 // review, an AI review of the run follows. A failed review is a warning:
 // the scan itself is saved.
 func (a *app) scanOne(ctx context.Context, command string, rep progress.Reporter, review bool) (int, error) {
-	s, err := a.scanner(command)
+	s, err := a.scanner(ctx, command)
 	if err != nil {
 		return 0, err
 	}

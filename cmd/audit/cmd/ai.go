@@ -335,7 +335,7 @@ func (a *app) fixTask(ctx context.Context, id int64) error {
 		if _, fs, err := a.taskFindings(ctx, id); err == nil && touchesSystemManager(t, fs) {
 			a.setSystemAnswer(true)
 		}
-		s, err := a.defaultScanner(t.Command)
+		s, err := a.defaultScanner(ctx, t.Command)
 		if err != nil {
 			return err
 		}

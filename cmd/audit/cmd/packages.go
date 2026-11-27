@@ -47,9 +47,9 @@ audit packages registry. A scan also looks up the entries older than
 packages.registry.max_age (set packages.registry.refresh_on_scan: false to
 keep scans offline); the saved views only read the cache and show its age. --tag, --find and --outdated filter the inventory and imply
 --list.`,
-		func() (core.Scanner, error) {
+		func(ctx context.Context) (core.Scanner, error) {
 			if len(splitList(managers)) == 0 && !a.systemFlag(cmd, system) {
-				scans, err := a.scanNeeded(context.Background(), packages.Command, sf)
+				scans, err := a.scanNeeded(ctx, packages.Command, sf)
 				if err != nil {
 					return nil, err
 				}

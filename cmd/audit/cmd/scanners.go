@@ -14,7 +14,7 @@ import (
 type scanEntry struct {
 	name    string
 	newCmd  func(*app) *cobra.Command
-	scanner func(*app) (core.Scanner, error)
+	scanner func(*app, context.Context) (core.Scanner, error)
 }
 
 // scanEntries lists every scanning command, in core.Commands order
@@ -22,17 +22,17 @@ type scanEntry struct {
 // command is added here, to core.Commands and, with a scope flag, to
 // core.ScopeFlags.
 var scanEntries = []scanEntry{
-	{"system", newSystemCmd, func(a *app) (core.Scanner, error) { return a.systemScanner(nil) }},
-	{"environment", newEnvironmentCmd, func(a *app) (core.Scanner, error) { return core.NewEnvironment(a.cfg, a.env) }},
-	{"packages", newPackagesCmd, func(a *app) (core.Scanner, error) { return a.packagesScanner(nil) }},
-	{"repos", newReposCmd, func(a *app) (core.Scanner, error) { return a.reposScanner(), nil }},
-	{"files", newFilesCmd, func(a *app) (core.Scanner, error) { return core.NewFiles(a.cfg, a.env), nil }},
-	{"backups", newBackupsCmd, func(a *app) (core.Scanner, error) { return core.NewBackups(a.cfg, a.env), nil }},
-	{"containers", newContainersCmd, func(a *app) (core.Scanner, error) { return core.NewContainers(a.cfg, a.env), nil }},
-	{"configs", newConfigsCmd, func(a *app) (core.Scanner, error) { return a.configsScanner(context.Background()), nil }},
-	{"scripts", newScriptsCmd, func(a *app) (core.Scanner, error) { return a.scriptsScanner(), nil }},
-	{"history", newHistoryCmd, func(a *app) (core.Scanner, error) { return core.NewHistory(a.cfg, a.env), nil }},
-	{"ai", newAICmd, func(a *app) (core.Scanner, error) { return a.aiScanner(false), nil }},
+	{"system", newSystemCmd, func(a *app, _ context.Context) (core.Scanner, error) { return a.systemScanner(nil) }},
+	{"environment", newEnvironmentCmd, func(a *app, _ context.Context) (core.Scanner, error) { return core.NewEnvironment(a.cfg, a.env) }},
+	{"packages", newPackagesCmd, func(a *app, _ context.Context) (core.Scanner, error) { return a.packagesScanner(nil) }},
+	{"repos", newReposCmd, func(a *app, ctx context.Context) (core.Scanner, error) { return a.reposScanner(ctx), nil }},
+	{"files", newFilesCmd, func(a *app, _ context.Context) (core.Scanner, error) { return core.NewFiles(a.cfg, a.env), nil }},
+	{"backups", newBackupsCmd, func(a *app, _ context.Context) (core.Scanner, error) { return core.NewBackups(a.cfg, a.env), nil }},
+	{"containers", newContainersCmd, func(a *app, _ context.Context) (core.Scanner, error) { return core.NewContainers(a.cfg, a.env), nil }},
+	{"configs", newConfigsCmd, func(a *app, ctx context.Context) (core.Scanner, error) { return a.configsScanner(ctx), nil }},
+	{"scripts", newScriptsCmd, func(a *app, _ context.Context) (core.Scanner, error) { return a.scriptsScanner(), nil }},
+	{"history", newHistoryCmd, func(a *app, _ context.Context) (core.Scanner, error) { return core.NewHistory(a.cfg, a.env), nil }},
+	{"ai", newAICmd, func(a *app, _ context.Context) (core.Scanner, error) { return a.aiScanner(false), nil }},
 }
 
 // scanCommands builds the cobra command of every scanning command.
@@ -45,10 +45,10 @@ func scanCommands(a *app) []*cobra.Command {
 }
 
 // defaultScanner builds command's scanner with its configured scope.
-func (a *app) defaultScanner(command string) (core.Scanner, error) {
+func (a *app) defaultScanner(ctx context.Context, command string) (core.Scanner, error) {
 	for _, e := range scanEntries {
 		if e.name == command {
-			return e.scanner(a)
+			return e.scanner(a, ctx)
 		}
 	}
 	return nil, fmt.Errorf("unknown command %q", command)

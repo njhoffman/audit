@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"slices"
 	"strings"
@@ -47,7 +48,7 @@ func TestScanEntriesMatchCommands(t *testing.T) {
 		if flag, ok := core.ScopeFlags[e.name]; ok && c.Flags().Lookup(strings.TrimPrefix(flag, "--")) == nil {
 			t.Errorf("%s: its scope flag %s is not defined", e.name, flag)
 		}
-		s, err := a.defaultScanner(e.name)
+		s, err := a.defaultScanner(context.Background(), e.name)
 		if err != nil {
 			t.Errorf("%s: %v", e.name, err)
 			continue
@@ -59,7 +60,7 @@ func TestScanEntriesMatchCommands(t *testing.T) {
 			t.Errorf("%s: the default scanner is scoped to %q", e.name, s.Scope())
 		}
 	}
-	if _, err := a.defaultScanner("nope"); err == nil {
+	if _, err := a.defaultScanner(context.Background(), "nope"); err == nil {
 		t.Error("an unknown command is an error")
 	}
 }

@@ -33,7 +33,7 @@ directories and broken symlinks.
 
 --list prints the largest directories and every candidate. Nothing is
 deleted here; audit files clean plans the cleanup.`,
-		func() (core.Scanner, error) { return core.NewFiles(a.cfg, a.env), nil },
+		func(context.Context) (core.Scanner, error) { return core.NewFiles(a.cfg, a.env), nil },
 		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d files.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {

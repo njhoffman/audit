@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Two audit processes no longer scan the same command at once: a scan holds a per-command lock under `~/.local/share/audit/locks/`, and a second one (the schedule timer while you rescan, say) waits, shows that it is waiting, and can be stopped with ctrl+c. Before, both did the full work and the last to finish decided the task rows.
+- The man page names 22 flags by their long form too (`--categories`, `--dirty`, `--no-fetch`, `--skip-checksum`, `--init` and others were there only as a letter); a test now fails when a flag is missing from it.
+- ctrl+c now interrupts the first repos scan while it asks `gh` for your GitHub login, and the configs and packages scanner setup, instead of waiting for them.
+
 ## [0.67.6] - 2026-11-27
 
 ### Security

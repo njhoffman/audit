@@ -38,7 +38,7 @@ runs BEGIN blocks.
 
 --list shows every script with its language, description and issue count;
 --find filters it; audit scripts info NAME shows one.`,
-		func() (core.Scanner, error) { return a.scriptsScanner(), nil },
+		func(context.Context) (core.Scanner, error) { return a.scriptsScanner(), nil },
 		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d scripts.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {

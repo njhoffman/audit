@@ -62,7 +62,7 @@ them from being noise (one per check, dismissable like ignore rules).
 
 ## 15. Review findings (2026-11-26, second pass)
 
-- [ ] **Build on a supported Go.** (p1) [security] `govulncheck ./...` reports 36
+- [x] **Build on a supported Go.** (p1) [security] `govulncheck ./...` reports 36
   vulnerabilities reachable from audit's code: most in the standard library
   of go1.25.7 (net/http, html/template, crypto/x509, crypto/tls, net/url;
   `htmlreport.WriteTasks`, the tasks server and `repos.ParseRemote` are on
@@ -80,7 +80,7 @@ them from being noise (one per check, dismissable like ignore rules).
   components the TUI uses), x/ansi v0.12.0, chroma v2.27.0 and gopsutil
   v4.26.10. Update in one change after the Go move, with the TUI tests and a
   look at the dashboard.
-- [ ] **One scan of a command at a time.** (p3) [bug] Nothing stops the schedule
+- [x] **One scan of a command at a time.** (p3) [bug] Nothing stops the schedule
   timer's `audit -r` and a manual scan (or the dashboard's rescan) of the
   same command from overlapping. SQLite's WAL mode and busy timeout keep the
   writes from failing, and the fixes log reads the old status inside the
@@ -90,11 +90,11 @@ them from being noise (one per check, dismissable like ignore rules).
   decides the task rows. A per-command lock (flock on a file in the state
   directory) held across Execute would serialize them, with the waiting run
   saying what it waits for.
-- [ ] **Honor ctrl+c in the GitHub login lookup.** (p3) [bug] `reposScanner`
+- [x] **Honor ctrl+c in the GitHub login lookup.** (p3) [bug] `reposScanner`
   asks `githubUser(context.Background(), true)`, so an interrupt during the
   first repos scan (before the login is remembered) waits up to 15s for `gh`.
   Pass the command's context through `reposScanner`.
-- [ ] **Long flag names in the man page.** (p3) [docs] 21 flags appear in
+- [x] **Long flag names in the man page.** (p3) [docs] 21 flags appear in
   `man/audit.1.md` only by their letter (`-O`, `-s`, `-P`, ...): --categories,
   --dir, --dirty, --hint, --installed, --limit, --lines, --move, --no-fetch,
   --note, --offline, --orphans, --owner, --path, --port, --push, --release,

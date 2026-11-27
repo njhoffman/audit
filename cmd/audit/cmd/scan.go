@@ -116,7 +116,7 @@ func (a *app) scanNeeded(ctx context.Context, command string, f *scanFlags) (boo
 
 // scanCommand builds one scanning subcommand. build turns the parsed flags
 // into a scanner; view prints the command-specific inventory for --list.
-func scanCommand(a *app, use, short, long string, build func() (core.Scanner, error),
+func scanCommand(a *app, use, short, long string, build func(context.Context) (core.Scanner, error),
 	view viewFunc) (*cobra.Command, *scanFlags) {
 	f := &scanFlags{}
 	c := &cobra.Command{
@@ -128,7 +128,7 @@ func scanCommand(a *app, use, short, long string, build func() (core.Scanner, er
 			if err := a.load(); err != nil {
 				return err
 			}
-			s, err := build()
+			s, err := build(c.Context())
 			if err != nil {
 				return err
 			}
@@ -266,7 +266,7 @@ programs (nginx, apache, sshd, postgres, docker, cron).
 
 Results are saved. Without --rescan, saved results younger than the stale
 warn threshold are shown instead of scanning again.`,
-		func() (core.Scanner, error) { return a.systemScanner(splitList(only)) }, nil)
+		func(context.Context) (core.Scanner, error) { return a.systemScanner(splitList(only)) }, nil)
 	c.Flags().StringSliceVarP(&only, "only", "O", nil, "scan only these parts: "+strings.Join(system.Kinds, ", "))
 	return c
 }
@@ -277,7 +277,7 @@ func newEnvironmentCmd(a *app) *cobra.Command {
 resulting environment and any unexpected output, trace which startup files
 are sourced, then check PATH, environment variables and the startup scripts
 (syntax, shellcheck, start-up time).`,
-		func() (core.Scanner, error) { return core.NewEnvironment(a.cfg, a.env) },
+		func(context.Context) (core.Scanner, error) { return core.NewEnvironment(a.cfg, a.env) },
 		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d environment.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {

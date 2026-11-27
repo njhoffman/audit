@@ -29,7 +29,7 @@ Only counts and file:line locations are saved, never command text or pattern
 values. Repeated commands are retained and are not issues. The history summary
 includes histdb total, current-host and current-session entry counts when available.
 No history is changed. Use audit history runs to list saved audit runs.`,
-		func() (core.Scanner, error) { return core.NewHistory(a.cfg, a.env), nil }, nil)
+		func(context.Context) (core.Scanner, error) { return core.NewHistory(a.cfg, a.env), nil }, nil)
 	c.AddCommand(newHistoryRunsCmd(a), newHistoryPruneCmd(a), newHistorySyncCmd(a), newHistoryBackupsCmd(a))
 	return c
 }

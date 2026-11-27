@@ -73,7 +73,7 @@ func (b tuiBackend) Report(ctx context.Context, command string, width int, expan
 }
 
 func (b tuiBackend) Rescan(ctx context.Context, command string) (int, error) {
-	s, err := b.a.defaultScanner(command)
+	s, err := b.a.defaultScanner(ctx, command)
 	if err != nil {
 		return 0, err
 	}

@@ -169,7 +169,7 @@ func (a *app) fzfInteractive(ctx context.Context, op string, args []string) erro
 				return err
 			}
 		}
-		s, err := a.defaultScanner(args[0])
+		s, err := a.defaultScanner(ctx, args[0])
 		if err != nil {
 			return err
 		}
@@ -194,7 +194,7 @@ func (a *app) fzfInteractive(ctx context.Context, op string, args []string) erro
 		if act.Rescans {
 			return nil
 		}
-		s, err := a.defaultScanner(args[0])
+		s, err := a.defaultScanner(ctx, args[0])
 		if err != nil {
 			return err
 		}

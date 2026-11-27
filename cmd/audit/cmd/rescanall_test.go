@@ -55,7 +55,7 @@ func (s recordingScanner) Scan(_ context.Context, rep progress.Reporter) (*core.
 }
 
 func (f *fakeScans) setup(a *app) {
-	a.scanner = func(c string) (core.Scanner, error) { return recordingScanner{c, f}, nil }
+	a.scanner = func(_ context.Context, c string) (core.Scanner, error) { return recordingScanner{c, f}, nil }
 }
 
 func (f *fakeScans) scanned() []string {

@@ -35,7 +35,7 @@ flatpaks, snaps and PATH executables. Entries matching nothing are
 config.orphaned, with an uninstalled apt package of the same name when
 apt-cache knows one. --list shows every entry with its owner; --orphans
 only the orphans. audit configs clean moves orphans to the trash.`,
-		func() (core.Scanner, error) { return a.configsScanner(context.Background()), nil },
+		func(ctx context.Context) (core.Scanner, error) { return a.configsScanner(ctx), nil },
 		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d configs.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {

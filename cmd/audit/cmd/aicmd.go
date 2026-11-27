@@ -47,7 +47,7 @@ func newAICmd(a *app) *cobra.Command {
 
 Nothing is sent to a provider unless --ping is given: then one tiny request
 per logged-in CLI (and ollama's version endpoint) checks that it answers.`,
-		func() (core.Scanner, error) { return a.aiScanner(ping), nil },
+		func(context.Context) (core.Scanner, error) { return a.aiScanner(ping), nil },
 		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d ai.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {

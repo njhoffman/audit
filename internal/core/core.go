@@ -69,6 +69,9 @@ type Engine struct {
 	AI *llm.Client
 	// Reviewer, when set, reviews full scans of ai.review_on_scan commands.
 	Reviewer *llm.Client
+	// LockDir, when set, holds a lock per command that Execute takes, so
+	// two audit processes never scan one command at once; "" takes none.
+	LockDir string
 }
 
 func (e *Engine) now() time.Time {
@@ -144,6 +147,13 @@ func (e *Engine) Saved(ctx context.Context, command, scope string) (*run.Run, er
 func (e *Engine) Execute(ctx context.Context, s Scanner, rep progress.Reporter) (*Result, error) {
 	if rep == nil {
 		rep = progress.Nop
+	}
+	if e.LockDir != "" {
+		unlock, err := lockCommand(ctx, e.LockDir, s.Command(), rep)
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
 	}
 	start := e.now()
 	out, err := s.Scan(ctx, rep)

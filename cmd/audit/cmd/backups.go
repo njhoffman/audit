@@ -22,7 +22,7 @@ when its last backup finished. Findings: no backup at all, one that never
 finished, one older than backups.max_age (an error past four times it),
 Deja Dup not backing up automatically, a backups.paths entry no source
 covers, and a source whose command fails. --list shows each source.`,
-		func() (core.Scanner, error) { return core.NewBackups(a.cfg, a.env), nil },
+		func(context.Context) (core.Scanner, error) { return core.NewBackups(a.cfg, a.env), nil },
 		func(_ context.Context, p *render.Printer, r *run.Run) error {
 			var d backups.Data
 			if err := json.Unmarshal(r.Data, &d); err != nil {
