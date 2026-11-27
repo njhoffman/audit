@@ -16,6 +16,9 @@ const (
 	RegistryGoProxy  = "goproxy"
 	RegistryRubygems = "rubygems"
 	RegistryGitHub   = "github"
+	// RegistryGit is a git remote's branch head, for crates installed with
+	// cargo install --git (a pinned rev or tag has none to follow).
+	RegistryGit = "git"
 )
 
 // ID is the package's identity in its registry: the module path for go,
@@ -49,6 +52,10 @@ func (p Package) Registry() string {
 	case "cargo":
 		if p.Source == "crates.io" {
 			return RegistryCrates
+		}
+		if strings.HasPrefix(p.Source, "git:") && p.Revision != "" && !strings.Contains(p.Source, "?rev=") &&
+			!strings.Contains(p.Source, "?tag=") {
+			return RegistryGit
 		}
 	case "go":
 		if p.Ident != "" && p.Version != "" && p.Version != "(devel)" {
@@ -212,7 +219,7 @@ func Annotate(invs []Inventory, metas map[string]Meta, tags map[string][]string,
 				case m.Local:
 					it.Gap = LocalGap(p.Version, m.Latest)
 				case m.Latest != "":
-					it.Gap = VersionGap(p.Manager, p.Version, m.Latest)
+					it.Gap = p.GapTo(m.Latest)
 				}
 			}
 			it.Tags = mergeTags(AutoTags(p, it.Meta, githubUser), tags[p.Key()])
@@ -459,4 +466,51 @@ func CoverageOf(as []Annotated) Coverage {
 		}
 	}
 	return c
+}
+
+// GitRef is the remote URL a git-installed crate came from and the ref it
+// follows: refs/heads/BRANCH for ?branch=, else HEAD.
+func (p Package) GitRef() (url, ref string) {
+	src := strings.TrimPrefix(p.Source, "git:")
+	url, query, _ := strings.Cut(src, "?")
+	ref = "HEAD"
+	for _, kv := range strings.Split(query, "&") {
+		if b, ok := strings.CutPrefix(kv, "branch="); ok && b != "" {
+			ref = "refs/heads/" + b
+		}
+	}
+	return url, ref
+}
+
+// shortRev is the first 8 characters of a commit.
+func shortRev(r string) string {
+	if len(r) > 8 {
+		return r[:8]
+	}
+	return r
+}
+
+// VersionKey is the version an update must change: a git crate's version
+// with its commit (its version often stays put while the commit moves),
+// else the version.
+func (p Package) VersionKey() string {
+	if p.Revision != "" {
+		return p.Version + "@" + shortRev(p.Revision)
+	}
+	return p.Version
+}
+
+// GapTo is how far p is behind latest: for a git crate, a different
+// commit at the head it follows is an update; otherwise VersionGap.
+func (p Package) GapTo(latest string) Gap {
+	if p.Registry() != RegistryGit {
+		return VersionGap(p.Manager, p.Version, latest)
+	}
+	switch {
+	case latest == "":
+		return GapUnknown
+	case strings.HasPrefix(p.Revision, latest) || strings.HasPrefix(latest, p.Revision):
+		return GapCurrent
+	}
+	return GapUpdate
 }

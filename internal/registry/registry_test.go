@@ -358,3 +358,27 @@ func TestGitHubUser(t *testing.T) {
 		t.Errorf("got %q %v", u, err)
 	}
 }
+
+func TestGitHead(t *testing.T) {
+	f := &exec.Fake{}
+	f.AddOutput("deadbeef0123456789\tHEAD\n", "git", "ls-remote", "https://github.com/o/bottom", "HEAD")
+	f.AddOutput("", "git", "ls-remote", "https://github.com/o/gone", "HEAD")
+	f.Add([]string{"git", "ls-remote", "https://github.com/o/private"}, exec.Result{Code: 128, Stderr: "fatal: could not read Username\n"})
+	c := &Client{Env: &exec.Env{Vars: map[string]string{"PATH": "/bin"}, Runner: f}, Timeout: time.Second}
+	p := packages.Package{Manager: "cargo", Name: "bottom", Source: "git:https://github.com/o/bottom", Revision: "4b6a033f"}
+	m, described, err := c.Lookup(ctx, p, nil, true)
+	if err != nil || described || m.Latest != "deadbeef" || m.Repo != "https://github.com/o/bottom" {
+		t.Fatalf("%+v %v %v", m, described, err)
+	}
+	if opts := f.CallOpts[0]; opts.Timeout != time.Second {
+		t.Errorf("timeout %v", opts.Timeout)
+	}
+	p.Source = "git:https://github.com/o/gone"
+	if _, _, err := c.Lookup(ctx, p, nil, true); !errors.Is(err, ErrNotFound) {
+		t.Errorf("no head: %v", err)
+	}
+	p.Source = "git:https://github.com/o/private"
+	if _, _, err := c.Lookup(ctx, p, nil, true); err == nil || !strings.Contains(err.Error(), "could not read Username") {
+		t.Errorf("a private remote fails without prompting: %v", err)
+	}
+}

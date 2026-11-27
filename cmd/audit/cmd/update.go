@@ -387,7 +387,7 @@ func (a *app) printPlan(plan packages.Plan, dryRun bool) {
 			case it.Gap != packages.GapUnknown:
 				action += " (" + string(it.Gap) + ")"
 			}
-			rows[i] = []string{it.Manager + ":" + it.Name, it.Version, it.Latest, action}
+			rows[i] = []string{it.Manager + ":" + it.Name, it.VersionKey(), it.Latest, action}
 		}
 		first, from, to := "PACKAGE", "INSTALLED", "LATEST"
 		only := func(kind string) bool {

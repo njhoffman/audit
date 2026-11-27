@@ -47,6 +47,15 @@ func describeSource(raw string) string {
 	return raw
 }
 
+// gitRevision is the commit of a git+URL#COMMIT source id, else "".
+func gitRevision(raw string) string {
+	if !strings.HasPrefix(raw, "git+") {
+		return ""
+	}
+	_, rev, _ := strings.Cut(raw, "#")
+	return rev
+}
+
 // parseCrates2 parses .crates2.json. Packages are sorted by name since the
 // file is a JSON object.
 func parseCrates2(text string) ([]Package, error) {
@@ -67,7 +76,7 @@ func parseCrates2(text string) ([]Package, error) {
 		}
 		p := Package{
 			Manager: "cargo", Name: m[1], Version: m[2], Runtime: "rust",
-			Source: describeSource(m[3]), Executables: info.Bins,
+			Source: describeSource(m[3]), Executables: info.Bins, Revision: gitRevision(m[3]),
 		}
 		if rm := rustcRelease.FindStringSubmatch(info.Rustc); rm != nil {
 			p.RuntimeVersion = rm[1]

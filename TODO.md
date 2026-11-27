@@ -274,7 +274,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   already uses the latest full run. Default the saved views to that too, and keep tasks of
   explicitly requested managers open. Check whether `outdated -M` does the same.
 
-- [ ] **Update git-installed crates through cargo-update.** (p3) [feature] `packages update`
+- [x] **Update git-installed crates through cargo-update.** (latest = git ls-remote of the followed branch; updated = the installed commit changed) (p3) [feature] `packages update`
   skips 31 packages installed from git or a path because they have no registry
   version. `cargo install-update -g` can update git crates, but audit has no latest
   version to compare or verify against, so decide how such a package counts as updated.

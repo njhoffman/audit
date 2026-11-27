@@ -135,7 +135,7 @@ func TestParseCrates2(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Package{
-		{Manager: "cargo", Name: "aichat", Version: "0.30.1", Runtime: "rust", Source: "git:https://github.com/me/aichat", Executables: []string{"aichat"}},
+		{Manager: "cargo", Name: "aichat", Version: "0.30.1", Runtime: "rust", Source: "git:https://github.com/me/aichat", Executables: []string{"aichat"}, Revision: "2514c22"},
 		{Manager: "cargo", Name: "ripgrep", Version: "14.1.0", Runtime: "rust", RuntimeVersion: "1.90.0-nightly", Source: "crates.io", Executables: []string{"rg"}},
 	}
 	if !reflect.DeepEqual(pkgs, want) {

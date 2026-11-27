@@ -292,3 +292,53 @@ func TestFailReasonSignals(t *testing.T) {
 		}
 	}
 }
+
+func TestGitCrates(t *testing.T) {
+	g := Package{Manager: "cargo", Name: "bottom", Version: "0.15.0", Source: "git:https://github.com/ClementTsang/bottom", Revision: "4b6a033f1234"}
+	pinned := g
+	pinned.Source += "?rev=4b6a033f"
+	branch := g
+	branch.Source += "?branch=next"
+	path := Package{Manager: "cargo", Name: "alacritty", Version: "0.18.0-dev", Source: "path:/src/alacritty"}
+	if g.Registry() != RegistryGit || pinned.Registry() != "" || path.Registry() != "" || branch.Registry() != RegistryGit {
+		t.Errorf("registries: %q %q %q %q", g.Registry(), pinned.Registry(), path.Registry(), branch.Registry())
+	}
+	if u, r := g.GitRef(); u != "https://github.com/ClementTsang/bottom" || r != "HEAD" {
+		t.Errorf("ref: %s %s", u, r)
+	}
+	if u, r := branch.GitRef(); u != "https://github.com/ClementTsang/bottom" || r != "refs/heads/next" {
+		t.Errorf("branch ref: %s %s", u, r)
+	}
+	if g.GapTo("4b6a033f") != GapCurrent || g.GapTo("deadbeef") != GapUpdate || g.GapTo("") != GapUnknown {
+		t.Errorf("gaps: %v %v %v", g.GapTo("4b6a033f"), g.GapTo("deadbeef"), g.GapTo(""))
+	}
+	if g.VersionKey() != "0.15.0@4b6a033f" || path.VersionKey() != "0.18.0-dev" {
+		t.Errorf("version keys: %q %q", g.VersionKey(), path.VersionKey())
+	}
+	if got := strings.Join(UpdateCommand(branch), " "); got != "cargo install --locked --force --git https://github.com/ClementTsang/bottom --branch next bottom" {
+		t.Errorf("cargo install: %s", got)
+	}
+	if got := strings.Join((UpdateTools{CargoUpdate: true}).Command(g), " "); got != "cargo install-update --git --locked bottom" {
+		t.Errorf("cargo-update: %s", got)
+	}
+
+	metas := map[string]Meta{g.Key(): {Latest: "deadbeef", CheckedAt: time.Now()}}
+	plan := PlanUpdates([]Inventory{{Manager: "cargo", Available: true, Packages: []Package{g, path}}}, metas, PlanOptions{})
+	if len(plan.Runnable()) != 1 || plan.Runnable()[0].Gap != GapUpdate || plan.NotFromRegistry != 1 {
+		t.Fatalf("plan: %+v", plan)
+	}
+
+	// The update counts once the commit moved, even at the same version.
+	rs := []UpdateResult{{Manager: "cargo", Name: "bottom", From: g.VersionKey(), Status: UpdateOK}}
+	moved := g
+	moved.Revision = "deadbeef9999"
+	Verify(rs, []Inventory{{Manager: "cargo", Packages: []Package{moved}}})
+	if rs[0].Status != UpdateOK || rs[0].To != "0.15.0@deadbeef" {
+		t.Errorf("moved: %+v", rs[0])
+	}
+	rs = []UpdateResult{{Manager: "cargo", Name: "bottom", From: g.VersionKey(), Status: UpdateOK}}
+	Verify(rs, []Inventory{{Manager: "cargo", Packages: []Package{g}}})
+	if rs[0].Status != UpdateFailed {
+		t.Errorf("same commit is a failure: %+v", rs[0])
+	}
+}

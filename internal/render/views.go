@@ -209,7 +209,7 @@ func (p *Printer) PackageInfo(it packages.Item, tags []packages.Tag) {
 			rows = append(rows, []string{k, v})
 		}
 	}
-	installed := it.Version
+	installed := it.VersionKey()
 	if at := packages.InstalledReleased(it); !at.IsZero() {
 		installed += "; released " + packages.Age(now.Sub(at)) + " ago"
 	}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"sort"
@@ -193,6 +194,9 @@ func (c *Client) Lookup(ctx context.Context, p packages.Package, prev *packages.
 		return m, true, err
 	case packages.RegistryGitHub:
 		return c.github(ctx, p, describe)
+	case packages.RegistryGit:
+		m, err = c.gitHead(ctx, p)
+		return m, false, err
 	}
 	return m, false, errors.New("not from a registry")
 }
@@ -733,4 +737,33 @@ func GitHubUser(ctx context.Context, env *exec.Env) (string, error) {
 		return "", fmt.Errorf("gh api user: %s", msg)
 	}
 	return strings.TrimSpace(res.Stdout), nil
+}
+
+// gitHead is the commit at the head a git-installed crate follows, by
+// git ls-remote (no clone; a prompt for credentials is refused, so a
+// private remote fails instead of hanging the scan).
+func (c *Client) gitHead(ctx context.Context, p packages.Package) (packages.Meta, error) {
+	if c.Env == nil {
+		return packages.Meta{}, errors.New("git is not available")
+	}
+	url, ref := p.GitRef()
+	vars := maps.Clone(c.Env.Vars)
+	if vars == nil {
+		vars = map[string]string{}
+	}
+	vars["GIT_TERMINAL_PROMPT"] = "0"
+	if vars["GIT_SSH_COMMAND"] == "" {
+		vars["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+	}
+	env := c.Env.WithVars(vars)
+	res := env.Run(ctx, "git", []string{"ls-remote", url, ref}, exec.Options{Timeout: c.Timeout})
+	if !res.OK() {
+		msg, _, _ := strings.Cut(strings.TrimSpace(res.Stderr), "\n")
+		return packages.Meta{}, fmt.Errorf("git ls-remote %s: %s", url, msg)
+	}
+	sha, _, _ := strings.Cut(strings.TrimSpace(res.Stdout), "\t")
+	if len(sha) < 7 {
+		return packages.Meta{}, fmt.Errorf("%w: %s has no %s", ErrNotFound, url, ref)
+	}
+	return packages.Meta{Latest: sha[:min(len(sha), 8)], Repo: url}, nil
 }

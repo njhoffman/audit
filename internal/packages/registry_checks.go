@@ -109,7 +109,7 @@ func outdated(major bool) func(*State) []finding.Finding {
 		var hits []metaItem
 		count := map[string]int{}
 		for _, it := range s.withMeta() {
-			g := VersionGap(it.Manager, it.Version, it.Meta.Latest)
+			g := it.GapTo(it.Meta.Latest)
 			if it.Meta.Local {
 				// The system manager's own word decides, and its version
 				// jumps are vetted upgrades, not major releases to review.
@@ -124,7 +124,7 @@ func outdated(major bool) func(*State) []finding.Finding {
 		}
 		out := make([]finding.Finding, 0, len(hits))
 		for _, it := range hits {
-			gap := string(VersionGap(it.Manager, it.Version, it.Meta.Latest))
+			gap := string(it.GapTo(it.Meta.Latest))
 			if it.Meta.Local {
 				gap = string(LocalGap(it.Version, it.Meta.Latest))
 			}

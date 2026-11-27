@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Crates installed with `cargo install --git` are now checked and updated: the registry lookup reads the head of the branch they follow with `git ls-remote` (no clone, no credential prompt), they show as `version@commit` and are behind when the remote moved on, and `audit packages update` rebuilds them (`cargo install-update --git`, or `cargo install --git URL --force` without cargo-update), counting the update once the installed commit changed. Crates pinned to a rev or tag, and path installs, are still skipped.
+
 ## [0.61.0] - 2026-11-26
 
 ### Added

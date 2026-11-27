@@ -26,6 +26,8 @@ type Package struct {
 	Held bool `json:"held,omitempty"`
 	// Kind is "elf" or "script" for loose binaries.
 	Kind string `json:"kind,omitempty"`
+	// Revision is the commit a git-installed crate was built from.
+	Revision string `json:"revision,omitempty"`
 }
 
 // Runtime is the interpreter or toolchain a manager installs against.

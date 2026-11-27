@@ -30,6 +30,14 @@ func UpdateCommand(p Package) []string {
 	case "pnpm":
 		return []string{"pnpm", "add", "-g", p.Name + "@latest"}
 	case "cargo":
+		if p.Registry() == RegistryGit {
+			url, ref := p.GitRef()
+			cmd := []string{"cargo", "install", "--locked", "--force", "--git", url}
+			if b, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+				cmd = append(cmd, "--branch", b)
+			}
+			return append(cmd, p.Name)
+		}
 		return []string{"cargo", "install", "--locked", p.Name}
 	case "go":
 		pkg := p.Source
@@ -75,6 +83,8 @@ func (t UpdateTools) Command(p Package) []string {
 	switch {
 	case p.Manager == "go" && t.Gup:
 		return []string{"gup", "update", p.Name}
+	case p.Manager == "cargo" && t.CargoUpdate && p.Registry() == RegistryGit:
+		return []string{"cargo", "install-update", "--git", "--locked", p.Name}
 	case p.Manager == "cargo" && t.CargoUpdate:
 		return []string{"cargo", "install-update", "--locked", p.Name}
 	}
@@ -232,7 +242,7 @@ func planOne(p Package, metas map[string]Meta, o PlanOptions, named bool) (Plann
 		return it, named
 	}
 	it.Latest = m.Latest
-	it.Gap = VersionGap(p.Manager, p.Version, m.Latest)
+	it.Gap = p.GapTo(m.Latest)
 	switch {
 	case it.Gap == GapCurrent || it.Gap == GapAhead:
 		it.Skip = "already at the latest release"
@@ -341,7 +351,7 @@ func RunUpdates(ctx context.Context, env *exec.Env, plan Plan, o RunOptions) []U
 	// batches holds the result of each batch command once it ran.
 	batches := map[string]UpdateResult{}
 	for _, it := range plan.Items {
-		r := UpdateResult{Manager: it.Manager, Name: it.Name, ID: it.ID(), From: it.Version, Latest: it.Latest,
+		r := UpdateResult{Manager: it.Manager, Name: it.Name, ID: it.ID(), From: it.VersionKey(), Latest: it.Latest,
 			Status: UpdateSkipped, Command: strings.Join(it.Command, " "), Reason: it.Skip, Kind: it.Kind}
 		if ctx.Err() != nil {
 			stop = "not run: interrupted"
@@ -433,10 +443,10 @@ func Verify(results []UpdateResult, invs []Inventory) {
 			// Some flatpak and snap updates keep the version string; what
 			// counts is that nothing is pending any more.
 			r.To = p.Version
-		case p.Version == r.From:
+		case p.VersionKey() == r.From:
 			r.Status, r.Reason = UpdateFailed, "the command succeeded but the version is still "+r.From
 		default:
-			r.To = p.Version
+			r.To = p.VersionKey()
 		}
 	}
 }
