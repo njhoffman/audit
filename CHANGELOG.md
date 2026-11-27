@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.58.0] - 2026-11-26
+
 ### Added
 
 - `ai.review_on_scan` (empty by default) lists commands whose every full scan gets an AI review. Its points become `ai.review` suggestions (the lowest task priority), and points about a subject a finding already reports are dropped. An unchanged result set is answered from the AI cache at no cost; new calls stop for the day once `ai.review_daily_usd` (default $1) is spent, which is noted on the run. Ignore rules apply to these findings like any other.
