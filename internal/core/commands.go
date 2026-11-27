@@ -16,6 +16,7 @@ import (
 	"github.com/njhoffman/audit/internal/backups"
 	"github.com/njhoffman/audit/internal/config"
 	"github.com/njhoffman/audit/internal/configs"
+	"github.com/njhoffman/audit/internal/containers"
 	"github.com/njhoffman/audit/internal/environment"
 	"github.com/njhoffman/audit/internal/exec"
 	"github.com/njhoffman/audit/internal/files"
@@ -33,7 +34,7 @@ import (
 )
 
 // Commands lists the audit commands in dashboard order.
-var Commands = []string{system.Command, environment.Command, packages.Command, repos.Command, files.Command, backups.Command, configs.Command, scripts.Command, "history", ai.Command}
+var Commands = []string{system.Command, environment.Command, packages.Command, repos.Command, files.Command, backups.Command, containers.Command, configs.Command, scripts.Command, "history", ai.Command}
 
 // Action is a command's built-in fix: an audit subcommand that previews
 // what it will change, asks first and reports failures (and backups).

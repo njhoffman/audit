@@ -67,6 +67,8 @@ audit \- scan system health, the shell environment and installed packages, and t
 
 **audit** **backups** [_scan options_]
 
+**audit** **containers** [_scan options_]
+
 **audit** **files** **clean** [**-C** _categories_] [**-N**] [**-y**] [**-x**] [**-j**|**-e**] [_path_...]
 
 **audit** **files** **clean** **-L** [**-j**|**-e**]
@@ -211,6 +213,9 @@ Without a command, **audit** opens an interactive dashboard when stdin and stdou
 
 **backups**
 :   Checks the workstation's backups: Deja Dup, read from its settings (**gsettings get org.gnome.DejaDup**) when installed (**backups.deja_dup**), and each **backups.sources** entry, a command run through **sh** that prints when its last backup finished (RFC 3339 or Unix seconds; empty output means never), with the paths it **covers**. Findings: **backups.none** (no backup at all; warning), **backups.never** (a source never finished one; warning), **backups.stale** (older than **backups.max_age**, default 7 days; an error past four times it), **backups.unscheduled** (Deja Dup not backing up automatically; notice), **backups.uncovered** (a **backups.paths** entry, default **~**, no source includes; warning) and **backups.error** (a source's command fails or prints no time; error). **\-\-list** shows each source with its last backup, whether it is automatic and what it covers.
+
+**containers**
+:   Asks each installed engine of **containers.engines** (**docker**, **podman**) for its objects, with listing commands only: **containers.stopped** (info) for containers stopped and created longer than **containers.stopped_after** ago (30 days), **containers.dangling_images** (info), **containers.unused_volumes** (notice: volumes no container uses) and **containers.error** (notice: an engine that is not running, or a socket this user may not open). The summary shows each engine's version, whether it is rootless, its stopped containers, dangling images and unused volumes, and its **system df** sizes with what they could reclaim. **\-\-list** shows each object. Nothing is removed; the hints name the prune commands.
 
 **files**
 :   Measures **files.roots** (home by default) in one parallel walk that stays on each root's filesystem and counts allocated blocks, like **du**, and finds space to reclaim: **files.cache** (tool caches with their own cleaners: uv, pip, go build and modules, pnpm store, npm, yarn, cargo registry, thumbnails; apt archives, the systemd journal, disabled snap revisions, docker's reclaimable space; other large children of **~/.cache**), **files.build** (node_modules, target, .venv, venv, .tox, .gradle and .next of projects unchanged for **files.stale_after**; a tool's own install, such as an LSP under ~/.local/share or a gh extension, never counts), **files.orphaned** (children of ~/.local/share and ~/.local/state whose name matches no installed program: PATH executables, apt packages, flatpaks, snaps, desktop entries), **files.large**, **files.downloads** (files in **files.downloads** older than **files.old_downloads**), **files.trash**, **files.duplicates** (same size, then the same hash of both ends, then of the whole file, reading at most **files.hash_limit_gb**), **files.core_dumps**, **files.empty_dirs** and **files.broken_links**. Version-control internals, caches, dependency trees and files inside git working trees are never listed as large files or duplicates. **\-\-list** shows the largest directories and every candidate; nothing is deleted.
@@ -587,6 +592,9 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
     notify:
       enabled: false           # after an unattended audit -r (no terminal, e.g. the schedule timer): notify-send about new or reopened tasks
       min_priority: high       # the least urgent priority that counts
+    containers:
+      engines: [docker, podman]
+      stopped_after: 720h      # stopped containers created longer ago are reported
     backups:
       deja_dup: true           # read Deja Dup's settings when it is installed
       sources: []              # [{name, command (prints the last backup time), covers: [paths]}]
@@ -594,7 +602,7 @@ The first run creates **~/.config/audit.yaml** with every key set to its default
       max_age: 168h            # a last backup older than this is stale
     schedule:
       calendar: daily          # systemd OnCalendar spec for audit schedule install
-      commands: [system, environment, repos, files, backups, configs, scripts, history, ai]   # rescanned when stale; [] for all
+      commands: [system, environment, repos, files, backups, containers, configs, scripts, history, ai]   # rescanned when stale; [] for all
       ai: false                # add -A: an AI review per rescanned command (costs money unless cached)
     todo:
       closed_max_age: 2160h    # done and resolved tasks deleted this long after closing (90 days) at startup; 0 keeps all; won't-do tasks are kept

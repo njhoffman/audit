@@ -50,6 +50,16 @@ type Config struct {
 	Schedule     ScheduleConfig     `mapstructure:"schedule" yaml:"schedule"`
 	Notify       NotifyConfig       `mapstructure:"notify" yaml:"notify"`
 	Backups      BackupsConfig      `mapstructure:"backups" yaml:"backups"`
+	Containers   ContainersConfig   `mapstructure:"containers" yaml:"containers"`
+}
+
+// ContainersConfig configures audit containers.
+type ContainersConfig struct {
+	// Engines are asked when installed: docker, podman.
+	Engines []string `mapstructure:"engines" yaml:"engines"`
+	// StoppedAfter is how long a stopped container may sit before it is
+	// reported.
+	StoppedAfter time.Duration `mapstructure:"stopped_after" yaml:"stopped_after"`
 }
 
 // BackupsConfig configures audit backups.
@@ -527,8 +537,10 @@ func defaults(v *viper.Viper) {
 	v.SetDefault("todo.closed_max_age", 90*24*time.Hour)
 	v.SetDefault("schedule.calendar", "daily")
 	// packages reaches the registries; the others stay local by default.
-	v.SetDefault("schedule.commands", []string{"system", "environment", "repos", "files", "backups", "configs", "scripts", "history", "ai"})
+	v.SetDefault("schedule.commands", []string{"system", "environment", "repos", "files", "backups", "containers", "configs", "scripts", "history", "ai"})
 	v.SetDefault("schedule.ai", false)
+	v.SetDefault("containers.engines", []string{"docker", "podman"})
+	v.SetDefault("containers.stopped_after", 30*24*time.Hour)
 	v.SetDefault("backups.deja_dup", true)
 	v.SetDefault("backups.sources", []BackupSource{})
 	v.SetDefault("backups.paths", []string{"~"})
@@ -782,6 +794,14 @@ func (c *Config) validate() error {
 		}
 		sourceNames[s.Name] = true
 	}
+	for _, e := range c.Containers.Engines {
+		if e != "docker" && e != "podman" {
+			return fmt.Errorf("containers.engines: unknown engine %q (want docker or podman)", e)
+		}
+	}
+	if c.Containers.StoppedAfter < 0 {
+		return fmt.Errorf("containers.stopped_after must be 0 (never) or more, got %s", c.Containers.StoppedAfter)
+	}
 	if c.Backups.MaxAge < 0 {
 		return fmt.Errorf("backups.max_age must be 0 (never stale) or more, got %s", c.Backups.MaxAge)
 	}
@@ -953,8 +973,14 @@ todo:
 # AI review of each rescanned command, which costs money unless cached.
 schedule:
   calendar: daily
-  commands: [system, environment, repos, files, backups, configs, scripts, history, ai]
+  commands: [system, environment, repos, files, backups, containers, configs, scripts, history, ai]
   ai: false
+
+# audit containers: dangling images, volumes no container uses and
+# containers stopped longer than stopped_after, from each installed engine.
+containers:
+  engines: [docker, podman]
+  stopped_after: 720h   # 30 days
 
 # audit backups: when each backup last finished and whether paths are
 # covered. Deja Dup is read from its settings when installed; other tools

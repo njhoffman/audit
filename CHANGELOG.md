@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit containers`: docker and podman containers stopped longer than `containers.stopped_after` (30 days), dangling images, volumes no container uses and engines that cannot be reached, with each engine's version, rootless or rootful, and reclaimable space from `system df`. Listing commands only; the hints name the prune commands. It is on the dashboard and in the schedule timer's default commands.
+
 ## [0.65.0] - 2026-11-26
 
 ### Added

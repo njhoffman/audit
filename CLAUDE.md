@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`, `repos`, `files`, `backups`, `configs`, `scripts`, `ai`, `history`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Some have action subcommands that change the machine (`packages update`, `repos sync`, `files clean`, `configs clean`, `history prune`, `history sync`): planned, confirmed, verified and saved. Bare `audit` is a Bubble Tea dashboard.
+`audit` is a Go CLI for a Linux workstation. Each scanning command (`system`, `environment`, `packages`, `repos`, `files`, `backups`, `containers`, `configs`, `scripts`, `ai`, `history`) produces findings that are saved to SQLite, turned into prioritized tasks, rendered to the terminal, optionally reviewed by an AI CLI (`claude` or `codex`), and optionally written as an HTML report. Some have action subcommands that change the machine (`packages update`, `repos sync`, `files clean`, `configs clean`, `history prune`, `history sync`): planned, confirmed, verified and saved. Bare `audit` is a Bubble Tea dashboard.
 
 Roadmap, open issues and proposals live in `TODO.md`; every open item carries an explicit `(p1)`/`(p2)`/`(p3)` priority and a `[category]`; the global `/todo` and `/todo-pop` commands and SessionStart hook from `~/.shell` read it.
 
@@ -33,6 +33,7 @@ internal/packages/      package-manager collectors (uv, pnpm, cargo, go, gem, gh
                         update plans, runtimes, release-binary install (download, sha256, unpack, atomic replace)
 internal/registry/      PyPI, npm, crates.io, Go proxy, rubygems, GitHub lookups feeding the cached packages.Meta
 internal/repos/         git repo discovery, local-only inspection and checks; GitHub data via gh api graphql; sync plans
+internal/containers/    docker and podman listing: stopped containers, dangling images, unused volumes, system df
 internal/backups/       Deja Dup settings and configured backup commands: last backup age, schedule, path coverage
 internal/files/         disk usage walk, reclaimable space (caches, build dirs, orphaned data, duplicates); clean plans
 internal/configs/       config syntax, program validators, readable credentials, orphaned configs
