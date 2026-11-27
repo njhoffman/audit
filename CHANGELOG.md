@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `audit history prune`, `history sync` and `history backups restore` record what they did to each file (entries before and after, the backup left, the error of a failed file; no command text), so a partial prune can be inspected later: `audit history prune -L` shows the last one, `-L -j` as JSON.
+
 ## [0.52.0] - 2026-11-26
 
 ### Added

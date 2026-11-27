@@ -12,6 +12,7 @@ import (
 	"github.com/njhoffman/audit/internal/core"
 	"github.com/njhoffman/audit/internal/files"
 	"github.com/njhoffman/audit/internal/history"
+	"github.com/njhoffman/audit/internal/packages"
 	"github.com/njhoffman/audit/internal/run"
 )
 
@@ -178,7 +179,10 @@ first: their in-memory history can write the old entries back.`,
 					return err
 				}
 			}
+			t0 := time.Now()
 			made, err := history.ApplyRestore(c.Context(), p)
+			a.recordHistory(c.Context(), t0, []historyOutcome{{action: "restore", path: p.Path, backup: made,
+				before: p.Current, after: p.FromBackup, err: err, took: time.Since(t0)}})
 			if err != nil {
 				return err
 			}
@@ -225,4 +229,71 @@ func (a *app) retainBackups(o history.Options, show bool) {
 	if n := len(pick) - len(errs); n > 0 && show {
 		say(a.out, "Removed %d old backup(s) (shell_history.backup_max_age / backup_keep).\n", n)
 	}
+}
+
+// kindHistory marks the update runs that record history prune, sync and
+// restore outcomes.
+const kindHistory = "history"
+
+// historyOutcome is one file a prune, sync or restore touched: entry counts
+// before and after, the backup it left, and the error when it failed. No
+// command text is kept.
+type historyOutcome struct {
+	action, path, backup string
+	before, after        int
+	err                  error
+	took                 time.Duration
+}
+
+// recordHistory saves outcomes as an update run of kind history, so audit
+// history prune -L can show a partial prune later. A failure to save is a
+// warning: the files are already changed.
+func (a *app) recordHistory(ctx context.Context, started time.Time, outs []historyOutcome) {
+	if len(outs) == 0 {
+		return
+	}
+	u := &packages.Update{Host: a.engine.Host, StartedAt: started, FinishedAt: timeNow()}
+	for _, o := range outs {
+		r := packages.UpdateResult{Manager: kindHistory, Kind: kindHistory, Name: o.path, ID: o.backup, Command: o.action,
+			From: fmt.Sprintf("%d entries", o.before), To: fmt.Sprintf("%d entries", o.after), Status: packages.UpdateOK, Duration: o.took}
+		r.Latest = r.To
+		if o.err != nil {
+			r.Status, r.Reason, r.To = packages.UpdateFailed, o.err.Error(), ""
+		}
+		u.Items = append(u.Items, r)
+	}
+	ctx = context.WithoutCancel(ctx)
+	if err := a.store.SaveUpdate(ctx, u); err != nil {
+		a.log.Warn("record the history change", "err", err)
+		return
+	}
+	if err := a.store.PruneUpdates(ctx, a.cfg.History); err != nil {
+		a.log.Warn("prune updates", "err", err)
+	}
+}
+
+// lastHistory shows the last recorded prune, sync or restore.
+func (a *app) lastHistory(ctx context.Context, asJSON bool) error {
+	u, err := a.store.LastUpdateOf(ctx, kindHistory)
+	if err != nil {
+		return err
+	}
+	if asJSON {
+		return a.writeJSON(u)
+	}
+	if u == nil {
+		sayln(a.out, "No history prune, sync or restore recorded yet.")
+		return nil
+	}
+	rows := make([][]string, len(u.Items))
+	for i, it := range u.Items {
+		status := it.Status
+		if it.Reason != "" {
+			status += ": " + it.Reason
+		}
+		rows[i] = []string{it.Command, it.Name, it.From, it.Latest, status, it.ID}
+	}
+	say(a.out, "History change %s on %s: %s.\n", u.FinishedAt.Local().Format("2006-01-02 15:04"), u.Host, u.Summary())
+	a.printer().Table([]string{"ACTION", "HISTORY", "BEFORE", "AFTER", "STATUS", "BACKUP"}, rows)
+	return nil
 }

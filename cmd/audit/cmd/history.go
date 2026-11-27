@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -86,7 +87,10 @@ prune, after a private backup beside it whose path is printed.`,
 					return nil
 				}
 			}
+			t0 := time.Now()
 			backup, err := history.ApplySync(c.Context(), plan, force)
+			a.recordHistory(c.Context(), t0, []historyOutcome{{action: "sync", path: target, backup: backup,
+				before: plan.File, after: plan.HistDB, err: err, took: time.Since(t0)}})
 			if err != nil {
 				return err
 			}
@@ -103,7 +107,7 @@ prune, after a private backup beside it whose path is printed.`,
 
 func newHistoryPruneCmd(a *app) *cobra.Command {
 	var only []string
-	var dryRun, yes, asJSON bool
+	var dryRun, yes, asJSON, last bool
 	c := &cobra.Command{
 		Use:   "prune [file...]",
 		Short: "Preview and remove duplicate or unwanted shell history entries",
@@ -122,6 +126,9 @@ original history, including any sensitive entries you removed.`,
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := a.load(); err != nil {
 				return err
+			}
+			if last {
+				return a.lastHistory(c.Context(), asJSON)
 			}
 			o := core.NewHistory(a.cfg, a.env).Options
 			if len(args) > 0 {
@@ -197,8 +204,13 @@ original history, including any sensitive entries you removed.`,
 			}
 			results := []result{}
 			var failures []error
+			var outs []historyOutcome
+			started := timeNow()
 			for _, plan := range plans {
+				t0 := time.Now()
 				backup, err := history.ApplyPrune(c.Context(), plan)
+				outs = append(outs, historyOutcome{action: "prune", path: plan.Path, backup: backup,
+					before: plan.Remove + plan.Keep, after: plan.Keep, err: err, took: time.Since(t0)})
 				r := result{Path: plan.Path, Backup: backup}
 				if err != nil {
 					r.Error = err.Error()
@@ -211,6 +223,7 @@ original history, including any sensitive entries you removed.`,
 					say(a.out, "%s: %d entries removed; backup: %s\n", r.Path, r.Removed, backup)
 				}
 			}
+			a.recordHistory(c.Context(), started, outs)
 			a.retainBackups(o, !asJSON)
 			// Reconcile findings and tasks even after a partial prune.
 			_, err = a.engine.Execute(context.WithoutCancel(c.Context()), core.NewHistory(a.cfg, a.env), a.progress(!asJSON))
@@ -229,6 +242,7 @@ original history, including any sensitive entries you removed.`,
 	c.Flags().BoolVarP(&dryRun, "dry-run", "N", false, "preview removals without changing history")
 	c.Flags().BoolVarP(&yes, "yes", "y", false, "prune without asking; keep backups")
 	c.Flags().BoolVarP(&asJSON, "json", "j", false, "print the preview or pruning results as JSON")
+	c.Flags().BoolVarP(&last, "last", "L", false, "show the last recorded prune, sync or restore; change nothing")
 	return c
 }
 

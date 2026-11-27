@@ -301,3 +301,48 @@ func TestHistoryBackupsCommands(t *testing.T) {
 		t.Errorf("one backup left: %v", m)
 	}
 }
+
+func TestHistoryOutcomesRecorded(t *testing.T) {
+	cfgHome, _ := env(t)
+	path := filepath.Join(t.TempDir(), ".bash_history")
+	if err := os.WriteFile(path, []byte("ls\nls\nls\npwd\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgHome, "audit.yaml"), []byte("shell_history:\n  files: ["+path+"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := runArgs(t, "history", "prune", "-L"); r.e != nil || !strings.Contains(r.out, "No history prune, sync or restore recorded yet.") {
+		t.Fatalf("nothing yet: %v %q", r.e, r.out)
+	}
+	if r := runArgs(t, "history", "prune", "-y"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	r := runArgs(t, "history", "prune", "-L")
+	for _, w := range []string{"ACTION", "prune", path, "4 entries", "2 entries", "updated", ".audit-backup-"} {
+		if r.e != nil || !strings.Contains(r.out, w) {
+			t.Errorf("last prune missing %q: %v\n%s", w, r.e, r.out)
+		}
+	}
+	if strings.Contains(r.out, "pwd") {
+		t.Errorf("no command text is recorded:\n%s", r.out)
+	}
+	r = runArgs(t, "history", "prune", "-L", "-j")
+	var u struct {
+		Items []struct {
+			Command, Name, ID, Kind, Status string
+		} `json:"items"`
+	}
+	if r.e != nil || json.Unmarshal([]byte(r.out), &u) != nil || len(u.Items) != 1 || u.Items[0].Kind != "history" || u.Items[0].Command != "prune" {
+		t.Fatalf("json: %v %s", r.e, r.out)
+	}
+	backup := u.Items[0].ID
+	if r := runArgs(t, "history", "backups", "restore", backup, "-y"); r.e != nil {
+		t.Fatal(r.e)
+	}
+	if r := runArgs(t, "history", "prune", "-L"); !strings.Contains(r.out, "restore") || !strings.Contains(r.out, "2 entries  4 entries") {
+		t.Errorf("the restore is the last change:\n%s", r.out)
+	}
+	if r := runArgs(t, "packages", "update", "-L"); strings.Contains(r.out, "history") {
+		t.Errorf("history changes stay out of packages update -L:\n%s", r.out)
+	}
+}

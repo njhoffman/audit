@@ -326,7 +326,7 @@ updates and migrations; and GitHub-tracked loose binaries. Keep these in
   `clean -o/-k` removes by age or count, `restore` previews by counts and replaces under
   prune's locks (backing up first); shell_history.backup_max_age / backup_keep opt in to
   automatic cleanup.
-- [ ] **Record prune outcomes.** (p2) [feature] Split from the backups item. Persist prune
+- [x] **Record prune outcomes.** (update runs of kind history; `history prune -L`) (p2) [feature] Split from the backups item. Persist prune
   counts, backup paths and per-file errors without command text so a partial
   prune can be inspected later; connect this to the action log in section 2.
 - [x] **Normalize configured history paths.** (p2) [bug] `NewHistory` leaves relative
