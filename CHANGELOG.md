@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.70.1] - 2026-11-27
+
+### Changed
+
+- `just test` runs through `~/.shell/scripts/test-progress` when it is installed: results
+  stream with a live view, and each run is kept in `~/.local/state/test-progress`
+  (`TEST_PROGRESS_MODE=pane` or `events just test` picks the view). Without it the recipe
+  runs go test as before.
+
 ## [0.70.0] - 2026-11-27
 
 ### Changed

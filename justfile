@@ -48,12 +48,16 @@ run *args: build
 install:
     go install -trimpath -ldflags '{{ ldflags }}' ./cmd/{{ binary }}
 
+# ~/.shell's test-progress shows the run live and keeps it (~/.local/state/test-progress);
+# without it, the plain runner
+tp := if path_exists(env_var("HOME") / ".shell/scripts/test-progress") == "true" { env_var("HOME") / ".shell/scripts/test-progress run --" } else { "" }
+
 # Run the tests. runner: go, gotestsum, gotestfmt or tparse.
 test runner="go" pkgs="./...":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{ runner }}" in
-      go)        go test {{ test_flags }} {{ pkgs }} ;;
+      go)        {{ tp }} go test {{ test_flags }} {{ pkgs }} ;;
       gotestsum) gotestsum --format pkgname -- {{ test_flags }} {{ pkgs }} ;;
       gotestfmt) go test -json {{ test_flags }} {{ pkgs }} | gotestfmt ;;
       tparse)    go test -json {{ test_flags }} {{ pkgs }} | tparse -all ;;
